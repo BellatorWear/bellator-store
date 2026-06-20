@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "app/**/*.ts": {
+      "runtime": "vercel-node@latest"
+    }
+  }
+}
