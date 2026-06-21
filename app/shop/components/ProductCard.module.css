@@ -1,19 +1,20 @@
 .card {
   border: var(--thick-border);
   padding: 1.5rem;
-  background: white;
+  background: #1a1a1a;        /* Etwas heller als der Body, für Tiefe */
   transition: transform 0.2s;
+  width: 100%;
 }
 
 .card:hover {
   transform: translate(-4px, -4px);
-  box-shadow: 6px 6px 0px var(--ink);
+  box-shadow: 6px 6px 0px var(--accent); /* Akzent-Farbe beim Hover */
 }
 
 .btn {
-  background: var(--ink);
+  background: var(--text);
   color: var(--bg);
-  padding: 0.8rem;
+  padding: 1rem;
   width: 100%;
   border: none;
   cursor: pointer;

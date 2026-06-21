@@ -1,20 +1,25 @@
-/* app/shop/shop-globals.css */
 :root {
-  --bg: #F4F4F1;
-  --ink: #1A1A1A;
-  --blood: #8B0000;
-  --thick-border: 3px solid var(--ink);
+  --bg: #0a0a0a;         /* Tiefschwarz */
+  --text: #f4f4f1;        /* Off-white für den Kontrast */
+  --ink: #f4f4f1;
+  --accent: #8B0000;
+  --thick-border: 3px solid var(--text);
 }
 
 .shop-container {
   background-color: var(--bg);
-  color: var(--ink);
+  color: var(--text);
   min-height: 100vh;
-  padding: 2rem;
+  padding: 4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;    /* Alles zentrieren */
 }
 
 .product-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 2rem;
+  grid-template-columns: 1fr; /* Erstmal nur eine Spalte für das eine Shirt */
+  justify-items: center;      /* Zentriert das Item im Grid */
+  width: 100%;
+  max-width: 400px;           /* Damit das Shirt nicht zu breit wird */
 }
