@@ -19,11 +19,18 @@ export async function handleAction(formData: FormData): Promise<ActionResponse> 
   // --- LOGIN & REQUEST LOGIK ---
   if (actionType === 'login') {
     const key = formData.get('accessKey') as string
+    
+    // 1. Suche den Key in der DB
     const result = await db.select().from(accessKeys).where(eq(accessKeys.key, key))
     
+    // 2. Prüfe, ob der Key existiert
     if (result.length > 0) {
+      // 3. KEY LÖSCHEN, DAMIT ER NUR EINMAL GEHT
+      await db.delete(accessKeys).where(eq(accessKeys.key, key))
+      
       return { success: true }
     }
+    
     return { error: 'Invalid Access Key' }
   }
 
