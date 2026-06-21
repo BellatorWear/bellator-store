@@ -1,16 +1,15 @@
-'use client' // WICHTIG: Das muss nach ganz oben, weil das Teil im Browser laufen soll
+'use client'
 
 import { handleAction } from '../../actions';
 import styles from './ProductCard.module.css';
 
 export default function AddToCartButton({ productId }: { productId: string }) {
-  async function onSubmit(formData: FormData) {
-    await handleAction(formData);
-  }
-
+  // Wir definieren die Action als direkte Form-Action
+  // Next.js erwartet, dass die Funktion, die an action übergeben wird, 
+  // die FormData als erstes Argument akzeptiert.
+  
   return (
-    <form action={onSubmit}>
-      {/* Wir schicken die Daten an die zentrale Server-Action */}
+    <form action={handleAction}>
       <input type="hidden" name="actionType" value="addToCart" />
       <input type="hidden" name="productId" value={productId} />
       
