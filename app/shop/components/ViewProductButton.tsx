@@ -6,7 +6,7 @@ export default function ViewProductButton({ productId }: { productId: string }) 
     <Link 
       href={`/shop/product/${productId}`}
       style={{
-        display: 'block',
+        display: 'inline-block',
         backgroundColor: '#000',
         color: '#fff',
         padding: '1.2rem 2.5rem',
@@ -15,6 +15,8 @@ export default function ViewProductButton({ productId }: { productId: string }) 
         textTransform: 'uppercase',
         textDecoration: 'none',
         border: '2px solid #000',
+        cursor: 'pointer',
+        transition: 'all 0.3s ease',
         textAlign: 'center',
         width: '100%'
       }}
