@@ -1,5 +1,5 @@
-import AddToCartButton from '../../components/AddToCartButton'; // Pfad anpassen, falls nötig
-import './shop-globals.css';
+import AddToCartButton from '../../components/AddToCartButton';
+import '../shop-globals.css';
 
 export default function BasicBellatorPage() {
   const product = {
