@@ -4,8 +4,8 @@ import { db } from '@/db'
 import { accessKeys } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { Resend } from 'resend'
+import { cookies } from 'next/headers'
 
-// Wir definieren einen Rückgabetyp, den das Frontend garantiert versteht
 type ActionResponse = {
   success?: string | boolean;
   error?: string;
@@ -16,6 +16,7 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
 export async function handleAction(formData: FormData): Promise<ActionResponse> {
   const actionType = formData.get('actionType') as string
 
+  // --- LOGIN & REQUEST LOGIK ---
   if (actionType === 'login') {
     const key = formData.get('accessKey') as string
     const result = await db.select().from(accessKeys).where(eq(accessKeys.key, key))
@@ -44,6 +45,23 @@ export async function handleAction(formData: FormData): Promise<ActionResponse> 
     } catch (e) {
       return { error: 'Fehler beim Senden der E-Mail.' }
     }
+  }
+
+  // --- WARENKORB LOGIK ---
+  if (actionType === 'addToCart') {
+    const productId = formData.get('productId') as string
+    const cookieStore = await cookies()
+    const cart = cookieStore.get('cart')?.value
+    const cartItems = cart ? JSON.parse(cart) : []
+    
+    cartItems.push(productId)
+    
+    cookieStore.set('cart', JSON.stringify(cartItems), { 
+      maxAge: 60 * 60 * 24 * 7,
+      httpOnly: true 
+    })
+    
+    return { success: true }
   }
 
   return { error: 'Ungültige Aktion.' }
