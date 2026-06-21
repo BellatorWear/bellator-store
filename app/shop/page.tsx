@@ -10,14 +10,14 @@ function ViewProductButton({ productId }: { productId: string }) {
       style={{
         display: 'block',
         padding: '1.2rem',
-        background: 'transparent', // Transparent für den "Outline"-Look
-        color: '#fff',             // Schrift weiß
+        background: 'transparent',
+        color: '#fff',
         textDecoration: 'none',
         textTransform: 'uppercase',
         fontWeight: '900',
         letterSpacing: '2px',
         textAlign: 'center',
-        border: '2px solid #fff',  // Weißer Rahmen
+        border: '2px solid #fff',
         transition: 'all 0.3s ease',
         marginTop: '1.5rem'
       }}
@@ -44,18 +44,25 @@ export default function ShopPage() {
   };
 
   return (
-    // Ganze Seite schwarz
-    <main style={{ padding: '6rem 2rem', background: '#000', minHeight: '100vh', display: 'flex', justifyContent: 'center' }}>
+    // 100dvh für volle Höhe, flex zur Zentrierung, overflow hidden killt den Scrollbalken
+    <main style={{ 
+      height: '100dvh', 
+      width: '100%', 
+      background: '#000', 
+      display: 'flex', 
+      justifyContent: 'center', 
+      alignItems: 'center',
+      overflow: 'hidden' 
+    }}>
       
-      {/* Produktblock zentriert */}
       <div 
         style={{ 
           maxWidth: '400px', 
-          width: '100%',
-          background: '#111', // Dunkles Grau für Kontrast zum Black-BG
+          width: '90%', // Etwas Spielraum auf kleinen Screens
+          background: '#111',
           padding: '2rem', 
-          border: '2px solid #fff', // Weißer Rahmen
-          boxShadow: '15px 15px 0px 0px #333' // Grauer Schatten für Tiefe
+          border: '2px solid #fff',
+          boxShadow: '15px 15px 0px 0px #333'
         }}
       >
         <div style={{ background: '#000', marginBottom: '1.5rem', overflow: 'hidden' }}>
