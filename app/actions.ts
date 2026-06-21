@@ -1,10 +1,10 @@
-// app/actions.ts
 'use server'
 
 import { db } from '@/db'
 import { accessKeys, accessRequests } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import { Resend } from 'resend'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -12,44 +12,48 @@ const resend = new Resend(process.env.RESEND_API_KEY)
 export async function handleAction(formData: FormData) {
   const actionType = formData.get('actionType') as string
   
-  // LOGIK FÜR LOGIN
   if (actionType === 'login') {
     const key = formData.get('accessKey') as string
     if (!key) return { error: 'Bitte Key eingeben.' }
 
+    // DB Abfrage
     const result = await db.select().from(accessKeys).where(eq(accessKeys.key, key))
     
+    // Validierung
     if (result.length > 0 && !result[0].isUsed) {
       await db.update(accessKeys).set({ isUsed: true }).where(eq(accessKeys.key, key))
+      
+      // Cookie setzen (robust)
+      const cookieStore = await cookies()
+      cookieStore.set('bellator_access', 'true', { 
+        httpOnly: true, 
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/' 
+      })
+
+      // Redirect muss außerhalb von allen try-blocks stehen
       redirect('/shop')
     }
+    
     return { error: 'Key ungültig oder bereits benutzt.' }
   }
 
-  // LOGIK FÜR ANFRAGE
   if (actionType === 'request') {
     const email = formData.get('email') as string
     if (!email || !email.includes('@')) return { error: 'Bitte gültige E-Mail eingeben.' }
     
     try {
-      // 1. In DB speichern
-      await db.insert(accessRequests).values({ 
-        email: email,
-        status: 'pending' 
-      })
-
-      // 2. Mail an dich senden
+      await db.insert(accessRequests).values({ email, status: 'pending' })
       await resend.emails.send({
         from: 'Bellator System <onboarding@resend.dev>',
         to: 'bellator.skatewear@gmail.com',
         subject: 'Neue Early Access Anfrage',
-        text: `Neue Anfrage von: ${email}`
+        text: `Anfrage von: ${email}`
       })
-
-      return { success: 'Anfrage erhalten! Wir melden uns.' }
+      return { success: 'Anfrage erhalten!' }
     } catch (e) {
-      console.error(e)
-      return { error: 'Fehler beim Senden der Anfrage.' }
+      return { error: 'Fehler beim Senden.' }
     }
   }
 }
