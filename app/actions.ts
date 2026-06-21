@@ -1,59 +1,50 @@
 'use server'
 
 import { db } from '@/db'
-import { accessKeys, accessRequests } from '@/db/schema'
+import { accessKeys } from '@/db/schema'
 import { eq } from 'drizzle-orm'
-import { redirect } from 'next/navigation'
-import { cookies } from 'next/headers'
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Wir definieren einen Rückgabetyp, den das Frontend garantiert versteht
+type ActionResponse = {
+  success?: string | boolean;
+  error?: string;
+};
 
-export async function handleAction(formData: FormData) {
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
+
+export async function handleAction(formData: FormData): Promise<ActionResponse> {
   const actionType = formData.get('actionType') as string
-  
+
   if (actionType === 'login') {
     const key = formData.get('accessKey') as string
-    if (!key) return { error: 'Bitte Key eingeben.' }
-
-    // DB Abfrage
     const result = await db.select().from(accessKeys).where(eq(accessKeys.key, key))
     
-    // Validierung
-    if (result.length > 0 && !result[0].isUsed) {
-      await db.update(accessKeys).set({ isUsed: true }).where(eq(accessKeys.key, key))
-      
-      // Cookie setzen (robust)
-      const cookieStore = await cookies()
-      cookieStore.set('bellator_access', 'true', { 
-        httpOnly: true, 
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/' 
-      })
-
-      // Redirect muss außerhalb von allen try-blocks stehen
-      redirect('/shop')
+    if (result.length > 0) {
+      return { success: true }
     }
-    
-    return { error: 'Key ungültig oder bereits benutzt.' }
+    return { error: 'Invalid Access Key' }
   }
 
   if (actionType === 'request') {
     const email = formData.get('email') as string
-    if (!email || !email.includes('@')) return { error: 'Bitte gültige E-Mail eingeben.' }
     
+    if (!resend) {
+      return { error: 'E-Mail Dienst nicht konfiguriert.' }
+    }
+
     try {
-      await db.insert(accessRequests).values({ email, status: 'pending' })
       await resend.emails.send({
-        from: 'Bellator System <onboarding@resend.dev>',
-        to: 'bellator.skatewear@gmail.com',
-        subject: 'Neue Early Access Anfrage',
-        text: `Anfrage von: ${email}`
+        from: 'Bellator <noreply@bellator.store>',
+        to: email,
+        subject: 'Access Requested',
+        text: 'Deine Anfrage für den Bellator Store wurde erhalten.'
       })
       return { success: 'Anfrage erhalten!' }
     } catch (e) {
-      return { error: 'Fehler beim Senden.' }
+      return { error: 'Fehler beim Senden der E-Mail.' }
     }
   }
+
+  return { error: 'Ungültige Aktion.' }
 }
