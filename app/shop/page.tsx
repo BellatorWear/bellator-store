@@ -1,29 +1,36 @@
-'use client' // Wichtig, damit das auch wirklich funktioniert
+'use client'
 
 import React from 'react';
-import styles from './components/ProductCard.module.css';
 import './shop-globals.css';
 
-// Die Komponente direkt hier drin, damit wir keinen Import-Fehler mehr haben
 function ViewProductButton({ productId }: { productId: string }) {
   return (
     <a
-      href={`/shop/product/${productId}`} // HIER: Das '/product/' ergänzt
-      className="view-product-button"
+      href={`/shop/product/${productId}`}
       style={{
-        display: 'inline-block',
-        padding: '1rem 2rem', // etwas größer für "Clickability"
-        background: '#000',
-        color: '#fff',
+        display: 'block',
+        padding: '1.2rem',
+        background: '#fff', // Button in Weiß
+        color: '#000',      // Text in Schwarz
         textDecoration: 'none',
         textTransform: 'uppercase',
-        fontWeight: '800',
-        letterSpacing: '1px',
+        fontWeight: '900',
+        letterSpacing: '2px',
         textAlign: 'center',
-        width: '100%'
+        border: '2px solid #000',
+        transition: 'all 0.2s ease',
+        marginTop: '1rem'
+      }}
+      onMouseOver={(e) => {
+        e.currentTarget.style.background = '#000';
+        e.currentTarget.style.color = '#fff';
+      }}
+      onMouseOut={(e) => {
+        e.currentTarget.style.background = '#fff';
+        e.currentTarget.style.color = '#000';
       }}
     >
-      Details ansehen 🔍
+      Details ansehen
     </a>
   );
 }
@@ -37,18 +44,33 @@ export default function ShopPage() {
   };
 
   return (
-    <main className="product-grid">
-      <div className={styles.card} style={{ padding: '2rem', border: '2px solid #000' }}>
-        <div className={styles.imageFrame} style={{ height: '350px', marginBottom: '1.5rem' }} />
+    <main style={{ padding: '4rem 2rem', background: '#f4f4f4', minHeight: '100vh' }}>
+      <div 
+        style={{ 
+          maxWidth: '400px', 
+          background: '#fff', 
+          padding: '1.5rem', 
+          border: '4px solid #000', // Dickerer Rahmen für den "Zine-Look"
+          boxShadow: '10px 10px 0px 0px #000' // Brutalistischer Shadow-Effekt
+        }}
+      >
+        {/* Bild-Bereich: Hier ist dein Image */}
+        <div style={{ background: '#eee', marginBottom: '1.5rem', overflow: 'hidden' }}>
+          <img 
+            src="/blackshirt-mockup.png" 
+            alt={product.name} 
+            style={{ width: '100%', height: 'auto', display: 'block' }} 
+          />
+        </div>
         
-        <h3 style={{ textTransform: 'uppercase', letterSpacing: '2px', color: '#888', margin: '0' }}>
+        <h3 style={{ textTransform: 'uppercase', letterSpacing: '4px', fontSize: '0.8rem', color: '#666', margin: '0' }}>
           {product.tagline}
         </h3>
-        <h1 style={{ fontSize: '2.5rem', margin: '0.5rem 0 1rem 0', textTransform: 'uppercase' }}>
+        <h1 style={{ fontSize: '2rem', margin: '0.5rem 0 1rem 0', textTransform: 'uppercase', fontWeight: '900' }}>
           {product.name}
         </h1>
         
-        <p style={{ fontSize: '1.5rem', fontWeight: '800', margin: '0 0 2rem 0' }}>
+        <p style={{ fontSize: '1.5rem', fontWeight: '900', margin: '0 0 1rem 0' }}>
           {product.price}
         </p>
         
