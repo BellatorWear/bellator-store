@@ -19,7 +19,7 @@ export default function ViewProductButton({ productId }: { productId: string }) 
         width: '100%'
       }}
     >
-      Mehr Infos & Details 🔍
+      Details ansehen 🔍
     </Link>
   );
 }

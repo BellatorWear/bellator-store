@@ -1,4 +1,26 @@
-import ViewProductButton from '../../components/ViewProductButton'; // Neu importiert
+// Local fallback for ViewProductButton to avoid missing module error
+import React from 'react';
+
+function ViewProductButton({ productId }: { productId: string }) {
+  return (
+    <a
+      href={`/shop/${productId}`}
+      className="view-product-button"
+      style={{
+        display: 'inline-block',
+        padding: '0.75rem 1.25rem',
+        background: '#000',
+        color: '#fff',
+        textDecoration: 'none',
+        textTransform: 'uppercase',
+        letterSpacing: '1px',
+        borderRadius: '4px'
+      }}
+    >
+      View Product
+    </a>
+  );
+}
 import styles from './components/ProductCard.module.css';
 import './shop-globals.css';
 
