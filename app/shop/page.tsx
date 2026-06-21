@@ -19,7 +19,8 @@ function ViewProductButton({ productId }: { productId: string }) {
         textAlign: 'center',
         border: '2px solid #fff',
         transition: 'all 0.3s ease',
-        marginTop: '1.5rem'
+        marginTop: '1.5rem',
+        boxSizing: 'border-box'
       }}
       onMouseOver={(e) => {
         e.currentTarget.style.background = '#fff';
@@ -44,25 +45,27 @@ export default function ShopPage() {
   };
 
   return (
-    // 100dvh für volle Höhe, flex zur Zentrierung, overflow hidden killt den Scrollbalken
     <main style={{ 
       height: '100dvh', 
-      width: '100%', 
+      width: '100vw', 
       background: '#000', 
       display: 'flex', 
       justifyContent: 'center', 
       alignItems: 'center',
-      overflow: 'hidden' 
+      overflow: 'hidden',
+      margin: 0,
+      padding: 0
     }}>
       
       <div 
         style={{ 
           maxWidth: '400px', 
-          width: '90%', // Etwas Spielraum auf kleinen Screens
+          width: '90%',
           background: '#111',
           padding: '2rem', 
           border: '2px solid #fff',
-          boxShadow: '15px 15px 0px 0px #333'
+          boxShadow: '15px 15px 0px 0px #333',
+          boxSizing: 'border-box' // WICHTIG: Verhindert, dass Padding das Div vergrößert
         }}
       >
         <div style={{ background: '#000', marginBottom: '1.5rem', overflow: 'hidden' }}>
