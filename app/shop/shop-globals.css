@@ -1,18 +1,14 @@
 :root {
   --bg: #0a0a0a;
   --text: #f4f4f1;
-  --thick-border: 3px solid var(--text);
 }
 
 body { margin: 0; background-color: var(--bg); color: var(--text); font-family: 'Courier New', monospace; }
 
-.layout-wrapper { min-height: 100vh; display: flex; flex-direction: column; }
-
-/* Header & Footer */
-.main-header { border-bottom: var(--thick-border); padding: 2rem; }
-.nav-container { display: flex; justify-content: space-between; align-items: center; max-width: 1200px; margin: 0 auto; }
-.nav-links { display: flex; gap: 3rem; list-style: none; font-size: 1.2rem; text-transform: uppercase; margin: 0; }
-.main-footer { border-top: var(--thick-border); padding: 3rem; text-align: center; font-size: 0.9rem; margin-top: auto; }
-
-/* Grid */
-.product-grid { display: flex; justify-content: center; padding: 4rem; }
+.product-grid { 
+  display: flex; 
+  justify-content: center; 
+  align-items: center;
+  min-height: 100vh;
+  padding: 2rem;
+}
