@@ -1,5 +1,4 @@
 'use client'
-
 import Link from 'next/link';
 
 export default function ViewProductButton({ productId }: { productId: string }) {
@@ -16,12 +15,11 @@ export default function ViewProductButton({ productId }: { productId: string }) 
         textTransform: 'uppercase',
         textDecoration: 'none',
         border: '2px solid #000',
-        cursor: 'pointer',
         textAlign: 'center',
         width: '100%'
       }}
     >
-      Details ansehen 🔍
+      Mehr Infos & Details 🔍
     </Link>
   );
 }
