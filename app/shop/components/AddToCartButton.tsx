@@ -1,23 +1,25 @@
 'use client'
 
 import { handleAction } from '../../actions';
-import styles from './ProductCard.module.css';
 
 export default function AddToCartButton({ productId }: { productId: string }) {
-  
-  // Der "void" Wrapper: Wir rufen die Action auf, 
-  // aber das "return" landet im Nirgendwo.
-  const handleFormAction = async (formData: FormData): Promise<void> => {
-    await handleAction(formData);
-  };
-
   return (
-    <form action={handleFormAction}>
+    <form action={handleAction}>
       <input type="hidden" name="actionType" value="addToCart" />
       <input type="hidden" name="productId" value={productId} />
       
-      <button type="submit" className={styles.btn}>
-        Add to Bag
+      {/* Test-Button: Wenn der funktioniert, ist dein CSS der Schuldige */}
+      <button 
+        type="submit" 
+        style={{ 
+          background: 'red', 
+          padding: '20px', 
+          cursor: 'pointer',
+          position: 'relative',
+          zIndex: 9999 
+        }}
+      >
+        TEST ADD TO BAG
       </button>
     </form>
   );
