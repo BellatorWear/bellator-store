@@ -10,18 +10,16 @@ function ViewProductButton({ productId }: { productId: string }) {
       style={{
         display: 'block',
         padding: '1.2rem',
-        background: 'transparent',
-        color: '#fff',
+        background: 'transparent', // Transparent für den "Outline"-Look
+        color: '#fff',             // Schrift weiß
         textDecoration: 'none',
         textTransform: 'uppercase',
         fontWeight: '900',
         letterSpacing: '2px',
         textAlign: 'center',
-        border: '2px solid #fff',
+        border: '2px solid #fff',  // Weißer Rahmen
         transition: 'all 0.3s ease',
-        marginTop: '1.5rem',
-        boxSizing: 'border-box',
-        cursor: 'pointer'
+        marginTop: '1.5rem'
       }}
       onMouseOver={(e) => {
         e.currentTarget.style.background = '#fff';
@@ -46,31 +44,18 @@ export default function ShopPage() {
   };
 
   return (
-    // position: fixed sorgt dafür, dass das Element absolut am Viewport klebt
-    <main style={{ 
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      width: '100vw',
-      height: '100vh',
-      background: '#000', 
-      display: 'flex', 
-      justifyContent: 'center', 
-      alignItems: 'center',
-      overflow: 'hidden',
-      margin: 0,
-      padding: 0
-    }}>
+    // Ganze Seite schwarz
+    <main style={{ padding: '6rem 2rem', background: '#000', minHeight: '100vh', display: 'flex', justifyContent: 'center' }}>
       
+      {/* Produktblock zentriert */}
       <div 
         style={{ 
           maxWidth: '400px', 
-          width: '90%',
-          background: '#111',
+          width: '100%',
+          background: '#111', // Dunkles Grau für Kontrast zum Black-BG
           padding: '2rem', 
-          border: '2px solid #fff',
-          boxShadow: '10px 10px 0px 0px #333', 
-          boxSizing: 'border-box'
+          border: '2px solid #fff', // Weißer Rahmen
+          boxShadow: '15px 15px 0px 0px #333' // Grauer Schatten für Tiefe
         }}
       >
         <div style={{ background: '#000', marginBottom: '1.5rem', overflow: 'hidden' }}>
