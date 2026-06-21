@@ -1,23 +1,13 @@
-.card {
-  border: var(--thick-border);
-  padding: 1.5rem;
-  background: #1a1a1a;        /* Etwas heller als der Body, für Tiefe */
-  transition: transform 0.2s;
-  width: 100%;
+.card { border: 3px solid var(--text); padding: 1rem; background: #1a1a1a; width: 100%; max-width: 350px; }
+
+.imageFrame { 
+  width: 100%; aspect-ratio: 1/1; border: 2px solid var(--text); 
+  margin-bottom: 1.5rem; display: flex; align-items: center; 
+  justify-content: center; background: #000; 
 }
 
-.card:hover {
-  transform: translate(-4px, -4px);
-  box-shadow: 6px 6px 0px var(--accent); /* Akzent-Farbe beim Hover */
-}
-
-.btn {
-  background: var(--text);
-  color: var(--bg);
-  padding: 1rem;
-  width: 100%;
-  border: none;
-  cursor: pointer;
-  text-transform: uppercase;
-  font-weight: bold;
+.btn { 
+  background: var(--text); color: var(--bg); padding: 1rem; 
+  width: 100%; border: none; cursor: pointer; 
+  text-transform: uppercase; font-weight: bold; 
 }

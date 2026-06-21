@@ -2,21 +2,27 @@ import styles from './components/ProductCard.module.css';
 import './shop-globals.css';
 
 export default function ShopPage() {
-  // Später ziehen wir hier die Daten via Drizzle
-  const products = [{ id: 1, name: "Oversized Tee", price: "45.00" }];
-
   return (
-    <main className="shop-container">
-      <h1>BELLATOR SHOP</h1>
-      <div className="product-grid">
-        {products.map(p => (
-          <div key={p.id} className={styles.card}>
-            <h2>{p.name}</h2>
-            <p>{p.price} EUR</p>
-            <button className={styles.btn}>Add to Bag</button>
-          </div>
-        ))}
-      </div>
-    </main>
+    <div className="layout-wrapper">
+      <header className="main-header">
+        <nav className="nav-container">
+          <div className="logo">BELLATOR</div>
+          <ul className="nav-links">
+            <li>Shop</li><li>Archive</li><li>Cart (0)</li>
+          </ul>
+        </nav>
+      </header>
+
+      <main className="product-grid">
+        <div className={styles.card}>
+          <div className={styles.imageFrame} />
+          <h2 style={{ margin: '0 0 0.5rem 0' }}>Oversized Tee</h2>
+          <p style={{ margin: '0 0 1.5rem 0' }}>45.00 EUR</p>
+          <button className={styles.btn}>Add to Bag</button>
+        </div>
+      </main>
+
+      <footer className="main-footer">© 2026 BELLATOR — DIY CULTURE</footer>
+    </div>
   );
 }
