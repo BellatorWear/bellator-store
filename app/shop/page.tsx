@@ -46,22 +46,26 @@ export default function ShopPage() {
   };
 
   return (
+    // position: fixed sorgt dafür, dass das Element absolut am Viewport klebt
     <main style={{ 
-      height: '100vh',        // Fest auf 100% Viewport
-      width: '100vw',         // Fest auf 100% Breite
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100vw',
+      height: '100vh',
       background: '#000', 
       display: 'flex', 
       justifyContent: 'center', 
       alignItems: 'center',
-      overflow: 'hidden',     // Verhindert Scrollen absolut
+      overflow: 'hidden',
       margin: 0,
-      padding: 0              // Padding hier weg, das macht das Scrollen
+      padding: 0
     }}>
       
       <div 
         style={{ 
           maxWidth: '400px', 
-          width: '90%',       // Luft zu den Seiten durch 90% statt fester Breite
+          width: '90%',
           background: '#111',
           padding: '2rem', 
           border: '2px solid #fff',

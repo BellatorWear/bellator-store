@@ -1,11 +1,14 @@
-/* Ersetze deinen alten .product-grid Block damit */
-.product-grid { 
-  display: flex; 
-  justify-content: center; 
-  align-items: center;
-  height: 100vh; /* Fest auf Bildschirmhöhe, nicht min-height */
-  width: 100vw;
+html, body {
   margin: 0;
   padding: 0;
-  overflow: hidden; /* Verhindert das Scrollen komplett */
+  width: 100%;
+  height: 100%;
+  overflow: hidden; /* Verhindert Scrollen weltweit */
+  background-color: #000;
+}
+
+/* Dein Container muss sich nicht mehr um die Zentrierung kümmern, das macht das main */
+.product-grid {
+  margin: 0;
+  padding: 0;
 }
