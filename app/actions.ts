@@ -1,7 +1,7 @@
 'use server'
 
 import { db } from '@/db'
-import { accessKeys } from '@/db/schema'
+import { accessKeys, accessRequests } from '@/db/schema' // Importiere beide Tabellen
 import { eq } from 'drizzle-orm'
 import { Resend } from 'resend'
 import { cookies } from 'next/headers'
@@ -16,24 +16,21 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
 export async function handleAction(formData: FormData): Promise<ActionResponse> {
   const actionType = formData.get('actionType') as string
 
-  // --- LOGIN & REQUEST LOGIK ---
+  // --- LOGIN LOGIK ---
   if (actionType === 'login') {
     const key = formData.get('accessKey') as string
     
-    // 1. Suche den Key in der DB
     const result = await db.select().from(accessKeys).where(eq(accessKeys.key, key))
     
-    // 2. Prüfe, ob der Key existiert
     if (result.length > 0) {
-      // 3. KEY LÖSCHEN, DAMIT ER NUR EINMAL GEHT
       await db.delete(accessKeys).where(eq(accessKeys.key, key))
-      
       return { success: true }
     }
     
     return { error: 'Invalid Access Key' }
   }
 
+  // --- REQUEST LOGIK (Hier wurde der DB-Eintrag ergänzt) ---
   if (actionType === 'request') {
     const email = formData.get('email') as string
     
@@ -42,15 +39,24 @@ export async function handleAction(formData: FormData): Promise<ActionResponse> 
     }
 
     try {
+      // 1. Speichere die Anfrage in der Datenbank
+      await db.insert(accessRequests).values({ 
+        email: email,
+        status: 'pending'
+      });
+
+      // 2. Sende die E-Mail
       await resend.emails.send({
         from: 'Bellator <noreply@bellator.store>',
         to: email,
         subject: 'Access Requested',
         text: 'Deine Anfrage für den Bellator Store wurde erhalten.'
       })
+      
       return { success: 'Anfrage erhalten!' }
     } catch (e) {
-      return { error: 'Fehler beim Senden der E-Mail.' }
+      console.error("Fehler beim Request:", e);
+      return { error: 'Fehler beim Speichern oder Senden.' }
     }
   }
 
