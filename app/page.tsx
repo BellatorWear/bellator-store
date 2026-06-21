@@ -10,13 +10,23 @@ export default function Home() {
   async function handleSubmit(formData: FormData) {
     formData.append('actionType', mode)
     const res = await handleAction(formData)
-    if (res?.error) setMsg({ text: res.error, type: 'error' })
-    else if (res?.success) setMsg({ text: res.success, type: 'success' })
+
+    if (res?.error) {
+      setMsg({ text: res.error, type: 'error' })
+    } 
+    // @ts-ignore
+    else if (res?.success === true) {
+      window.location.href = '/shop'
+    } 
+    // @ts-ignore
+    else if (res?.success) {
+      setMsg({ text: res.success, type: 'success' })
+    }
   }
 
   return (
     <main className="relative flex min-h-screen items-center justify-center p-6 text-white overflow-hidden">
-      {/* Bahnhof-Hintergrund mit Graffiti-Vibe */}
+      {/* Bahnhof-Hintergrund */}
       <div 
         className="absolute inset-0 z-0 bg-cover bg-center"
         style={{ backgroundImage: "url('https://images.unsplash.com/photo-1549646487-13350901e138?q=80&w=2000&auto=format&fit=crop')" }}
