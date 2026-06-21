@@ -3,7 +3,6 @@
 import { db } from '@/db'
 import { accessKeys, accessRequests } from '@/db/schema'
 import { eq } from 'drizzle-orm'
-import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import { Resend } from 'resend'
 
@@ -23,7 +22,7 @@ export async function handleAction(formData: FormData) {
     if (result.length > 0 && !result[0].isUsed) {
       await db.update(accessKeys).set({ isUsed: true }).where(eq(accessKeys.key, key))
       
-      // Cookie setzen (robust)
+      // Cookie setzen
       const cookieStore = await cookies()
       cookieStore.set('bellator_access', 'true', { 
         httpOnly: true, 
@@ -32,8 +31,8 @@ export async function handleAction(formData: FormData) {
         path: '/' 
       })
 
-      // Redirect muss außerhalb von allen try-blocks stehen
-      redirect('/shop')
+      // ERFOLG zurückgeben statt redirect()
+      return { success: true }
     }
     
     return { error: 'Key ungültig oder bereits benutzt.' }
