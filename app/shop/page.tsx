@@ -20,7 +20,8 @@ function ViewProductButton({ productId }: { productId: string }) {
         border: '2px solid #fff',
         transition: 'all 0.3s ease',
         marginTop: '1.5rem',
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        cursor: 'pointer'
       }}
       onMouseOver={(e) => {
         e.currentTarget.style.background = '#fff';
@@ -46,26 +47,28 @@ export default function ShopPage() {
 
   return (
     <main style={{ 
-      height: '100dvh', 
-      width: '100vw', 
+      minHeight: '100dvh', 
+      width: '100%', 
       background: '#000', 
       display: 'flex', 
       justifyContent: 'center', 
       alignItems: 'center',
-      overflow: 'hidden',
+      overflow: 'hidden', // Killt Scrollen komplett
       margin: 0,
-      padding: 0
+      padding: '1rem',
+      boxSizing: 'border-box'
     }}>
       
       <div 
         style={{ 
           maxWidth: '400px', 
-          width: '90%',
+          width: '100%',
           background: '#111',
           padding: '2rem', 
           border: '2px solid #fff',
-          boxShadow: '15px 15px 0px 0px #333',
-          boxSizing: 'border-box' // WICHTIG: Verhindert, dass Padding das Div vergrößert
+          // Schatten etwas kleiner gemacht, damit er nicht über die Screenbreite ragt
+          boxShadow: '10px 10px 0px 0px #333', 
+          boxSizing: 'border-box'
         }}
       >
         <div style={{ background: '#000', marginBottom: '1.5rem', overflow: 'hidden' }}>
