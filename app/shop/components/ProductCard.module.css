@@ -1,0 +1,22 @@
+.card {
+  border: var(--thick-border);
+  padding: 1.5rem;
+  background: white;
+  transition: transform 0.2s;
+}
+
+.card:hover {
+  transform: translate(-4px, -4px);
+  box-shadow: 6px 6px 0px var(--ink);
+}
+
+.btn {
+  background: var(--ink);
+  color: var(--bg);
+  padding: 0.8rem;
+  width: 100%;
+  border: none;
+  cursor: pointer;
+  text-transform: uppercase;
+  font-weight: bold;
+}

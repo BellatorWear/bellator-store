@@ -1,0 +1,20 @@
+/* app/shop/shop-globals.css */
+:root {
+  --bg: #F4F4F1;
+  --ink: #1A1A1A;
+  --blood: #8B0000;
+  --thick-border: 3px solid var(--ink);
+}
+
+.shop-container {
+  background-color: var(--bg);
+  color: var(--ink);
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 2rem;
+}
