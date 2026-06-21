@@ -47,26 +47,24 @@ export default function ShopPage() {
 
   return (
     <main style={{ 
-      minHeight: '100dvh', 
-      width: '100%', 
+      height: '100vh',        // Fest auf 100% Viewport
+      width: '100vw',         // Fest auf 100% Breite
       background: '#000', 
       display: 'flex', 
       justifyContent: 'center', 
       alignItems: 'center',
-      overflow: 'hidden', // Killt Scrollen komplett
+      overflow: 'hidden',     // Verhindert Scrollen absolut
       margin: 0,
-      padding: '1rem',
-      boxSizing: 'border-box'
+      padding: 0              // Padding hier weg, das macht das Scrollen
     }}>
       
       <div 
         style={{ 
           maxWidth: '400px', 
-          width: '100%',
+          width: '90%',       // Luft zu den Seiten durch 90% statt fester Breite
           background: '#111',
           padding: '2rem', 
           border: '2px solid #fff',
-          // Schatten etwas kleiner gemacht, damit er nicht über die Screenbreite ragt
           boxShadow: '10px 10px 0px 0px #333', 
           boxSizing: 'border-box'
         }}
