@@ -10,48 +10,40 @@ export default function Home() {
   async function handleSubmit(formData: FormData) {
     formData.append('actionType', mode)
     const res = await handleAction(formData)
-
     if (res?.error) {
       setMsg({ text: res.error, type: 'error' })
-    } 
-    // @ts-ignore
-    else if (res?.success === true) {
+    } else if (res?.success === true) {
       window.location.href = '/shop'
-    } 
-    // @ts-ignore
-    else if (res?.success) {
+    } else if (res?.success) {
       setMsg({ text: res.success, type: 'success' })
     }
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center p-6 text-white overflow-hidden">
-      {/* Bahnhof-Hintergrund */}
+    // 'min-h-[100dvh]' ist der Profi-Trick für Handys (Dynamic Viewport Height)
+    <main className="relative flex min-h-[100dvh] items-center justify-center p-4 text-white overflow-hidden">
+      
+      {/* Hintergrund bleibt fix */}
       <div 
-        className="absolute inset-0 z-0 bg-cover bg-center"
+        className="fixed inset-0 z-0 bg-cover bg-center"
         style={{ backgroundImage: "url('https://images.unsplash.com/photo-1549646487-13350901e138?q=80&w=2000&auto=format&fit=crop')" }}
       />
-      <div className="absolute inset-0 z-0 bg-black/75" />
+      <div className="fixed inset-0 z-0 bg-black/75" />
 
-      <div className="relative z-10 max-w-sm w-full border border-zinc-700 p-8 rounded-none bg-black/60 backdrop-blur-sm">
-        <h1 className="text-4xl font-black mb-8 tracking-tighter text-center uppercase border-b border-zinc-500 pb-4">
+      {/* Hier das entscheidende Padding & Breite-Update für mobile */}
+      <div className="relative z-10 w-full max-w-[320px] sm:max-w-sm border border-zinc-700 p-6 sm:p-8 bg-black/60 backdrop-blur-md">
+        <h1 className="text-3xl sm:text-4xl font-black mb-8 tracking-tighter text-center uppercase border-b border-zinc-500 pb-4">
           Bellator
         </h1>
         
         <form action={handleSubmit} className="space-y-4">
-          {mode === 'login' ? (
-            <input 
-              name="accessKey" required 
-              className="w-full bg-transparent border-b border-zinc-600 p-2 focus:border-white outline-none transition uppercase text-center placeholder:text-zinc-600" 
-              placeholder="ENTER KEY" 
-            />
-          ) : (
-            <input 
-              name="email" type="email" required 
-              className="w-full bg-transparent border-b border-zinc-600 p-2 focus:border-white outline-none transition text-center placeholder:text-zinc-600" 
-              placeholder="EMAIL ADDRESS" 
-            />
-          )}
+          <input 
+            name={mode === 'login' ? 'accessKey' : 'email'} 
+            type={mode === 'login' ? 'text' : 'email'}
+            required 
+            className="w-full bg-transparent border-b border-zinc-600 p-2 focus:border-white outline-none transition uppercase text-center placeholder:text-zinc-600" 
+            placeholder={mode === 'login' ? "ENTER KEY" : "EMAIL ADDRESS"} 
+          />
           
           <button 
             type="submit" 
