@@ -40,7 +40,7 @@ export default function ShopLayout({
       <main className="flex-grow">{children}</main>
 
       {/* FOOTER */}
-      <footer className="border-t border-[#333] p-8 grid grid-cols-2 gap-8 text-[10px] uppercase text-[#666]">
+      <footer className="bg-black border-t border-[#333] p-8 grid grid-cols-2 gap-8 text-[10px] uppercase text-[#666]">
         <div>
           <p className="mb-2">Zahlungsmethoden</p>
           <div className="flex gap-2">
