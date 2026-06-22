@@ -6,9 +6,17 @@ export default function ShopLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen flex flex-col bg-transparent text-[#e0e0e0] font-mono">
+    <div
+      className="min-h-screen flex flex-col text-[#e0e0e0] font-mono"
+      style={{
+        backgroundImage: 'url("/background.png")',
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundAttachment: "fixed",
+      }}
+    >
       {/* HEADER */}
-      <header className="border-b border-[#333] p-6 flex justify-between items-center">
+      <header className="bg-black border-b border-[#333] p-6 flex justify-between items-center">
         <h1 className="text-2xl font-bold tracking-tighter italic">
           BELLATOR.
         </h1>

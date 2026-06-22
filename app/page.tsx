@@ -40,7 +40,7 @@ export default function Home() {
             name={mode === "login" ? "accessKey" : "email"}
             type={mode === "login" ? "text" : "email"}
             required
-            className="w-full bg-transparent border-b border-zinc-600 p-2 focus:border-white outline-none transition uppercase text-center placeholder:text-zinc-600"
+            className="w-full bg-black/80 border-b border-zinc-600 p-2 focus:border-white outline-none transition uppercase text-center placeholder:text-zinc-600 text-white"
             placeholder={mode === "login" ? "ENTER KEY" : "EMAIL ADDRESS"}
           />
 
