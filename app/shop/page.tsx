@@ -80,5 +80,6 @@ export default function ShopPage() {
         <ViewProductButton productId={product.id} />
       </div>
     </main>
+    
   );
 }
