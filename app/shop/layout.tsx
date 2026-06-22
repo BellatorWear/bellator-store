@@ -1,5 +1,5 @@
 import { ShoppingBag, HelpCircle, FileText } from 'lucide-react';
-import CookieBanner from '@/components/CookieBanner'; // Importiere deine Banner-Komponente
+import { CookieBanner } from './components'; // Importiere deine Banner-Komponente
 
 export default function ShopLayout({ children }: { children: React.ReactNode }) {
   return (
