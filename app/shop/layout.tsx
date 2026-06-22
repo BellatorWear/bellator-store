@@ -1,4 +1,4 @@
-import { ShoppingBag, HelpCircle, FileText } from "lucide-react";
+import { User } from "lucide-react";
 
 export default function ShopLayout({
   children,
@@ -20,7 +20,7 @@ export default function ShopLayout({
         <h1 className="text-2xl font-bold tracking-tighter italic">
           BELLATOR.
         </h1>
-        <nav className="flex gap-8 uppercase text-sm">
+        <nav className="flex gap-8 uppercase text-sm items-center">
           <a href="/" className="hover:text-white">
             Startseite
           </a>
@@ -32,6 +32,13 @@ export default function ShopLayout({
           </a>
           <a href="/mehr" className="hover:text-white">
             Mehr
+          </a>
+          <a
+            href="/shop/profil"
+            className="hover:text-white flex items-center gap-1"
+          >
+            <User size={16} />
+            Profil
           </a>
         </nav>
       </header>
@@ -48,8 +55,12 @@ export default function ShopLayout({
           </div>
         </div>
         <div className="text-right">
-          <p className="hover:text-[#e0e0e0] cursor-pointer">Impressum</p>
-          <p className="hover:text-[#e0e0e0] cursor-pointer">Hilfe</p>
+          <a href="/impressum" className="block hover:text-[#e0e0e0] cursor-pointer">
+            Impressum
+          </a>
+          <a href="/shop/profil" className="block hover:text-[#e0e0e0] cursor-pointer">
+            Hilfe
+          </a>
         </div>
       </footer>
     </div>

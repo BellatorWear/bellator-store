@@ -3,15 +3,48 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import { cookies } from "next/headers";
+import { verifySessionToken, SESSION_COOKIE_NAME } from "@/lib/session";
+import { checkLoginRateLimit } from "@/app/utils/ratelimit";
 
 export async function POST(req: NextRequest) {
-  const { email, password } = await req.json();
+  // Vorher wurde hier die Email direkt aus dem Request-Body übernommen und
+  // ungeprüft verwendet, um das Passwort zu setzen. Das bedeutete: JEDE
+  // Person konnte ohne Login mit {"email": "opfer@example.com", "password":
+  // "neu123456"} das Passwort eines beliebigen fremden Accounts überschreiben.
+  // Jetzt wird die Identität ausschließlich aus dem signierten,
+  // httpOnly-Session-Cookie gelesen.
+  const rateLimit = await checkLoginRateLimit();
+  if (!rateLimit.success) {
+    return NextResponse.json(
+      { error: "Zu viele Versuche. Bitte später erneut versuchen." },
+      { status: 429 },
+    );
+  }
 
-  if (!email || !password)
+  const cookieStore = await cookies();
+  const session = verifySessionToken(
+    cookieStore.get(SESSION_COOKIE_NAME)?.value,
+  );
+  if (!session) {
+    return NextResponse.json(
+      { error: "Sitzung abgelaufen. Bitte erneut einloggen." },
+      { status: 401 },
+    );
+  }
+
+  const { password } = await req.json();
+
+  if (!password || typeof password !== "string")
     return NextResponse.json({ error: "Ungültige Eingabe." }, { status: 400 });
   if (password.length < 8)
     return NextResponse.json(
       { error: "Mindestens 8 Zeichen." },
+      { status: 400 },
+    );
+  if (password.length > 72)
+    return NextResponse.json(
+      { error: "Höchstens 72 Zeichen." },
       { status: 400 },
     );
 
@@ -20,7 +53,7 @@ export async function POST(req: NextRequest) {
   await db
     .update(users)
     .set({ passwordHash, mustSetPassword: false })
-    .where(eq(users.email, email));
+    .where(eq(users.id, session.userId));
 
   // Bestätigungs-Email senden
   try {
@@ -29,7 +62,7 @@ export async function POST(req: NextRequest) {
       const resend = new Resend(process.env.RESEND_API_KEY);
       await resend.emails.send({
         from: "Bellator <noreply@mz-dev.de>",
-        to: email,
+        to: session.email,
         subject: "Bellator Store — Dein Account ist bereit!",
         html: `
           <!DOCTYPE html>
@@ -54,7 +87,7 @@ export async function POST(req: NextRequest) {
                 </p>
                 <div class="footer">
                   <p>© ${new Date().getFullYear()} Bellator Streetwear.</p>
-                  <p>Diese Email wurde an ${email} gesendet.</p>
+                  <p>Diese Email wurde an ${session.email} gesendet.</p>
                 </div>
               </div>
             </body>

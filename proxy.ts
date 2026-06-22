@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
+import { verifySessionToken } from "@/lib/session";
+
+// In Next.js 16 heißt diese Datei "proxy.ts" (vorher "middleware.ts") und
+// MUSS im Projekt-Root liegen, also auf derselben Ebene wie der "app"-
+// Ordner — nicht innerhalb von "app/". Genau das war der Bug, durch den
+// /shop bisher ganz ohne Login erreichbar war: middleware.ts lag unter
+// app/middleware.ts und wurde von Next.js deshalb still ignoriert.
 
 // Middleware-level Rate Limiter für allgemeine IP-basierte Protection
 const redis = new Redis({
@@ -16,7 +23,9 @@ const middlewareRatelimit = new Ratelimit({
   prefix: "ratelimit:middleware",
 });
 
-export async function middleware(request: NextRequest) {
+const PROTECTED_PREFIXES = ["/shop"];
+
+export async function proxy(request: NextRequest) {
   // Extrahiere Client IP
   const ip =
     request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
@@ -25,12 +34,11 @@ export async function middleware(request: NextRequest) {
 
   // Prüfe Rate Limit auf Middleware Level
   try {
-    const { success, remaining, reset } = await middlewareRatelimit.limit(
+    const { success, reset } = await middlewareRatelimit.limit(
       `middleware:${ip}`,
     );
 
     if (!success) {
-      // Return 429 Too Many Requests
       return new NextResponse(
         "Zu viele Anfragen. Bitte versuche es später erneut.",
         {
@@ -46,19 +54,27 @@ export async function middleware(request: NextRequest) {
     }
   } catch (error) {
     console.error("Middleware rate limit check failed:", error);
-    // Im Fehlerfall: strict sein
     return new NextResponse("Service temporarily unavailable", {
       status: 503,
     });
   }
 
-  // Schütze alle Pfade, die mit /shop beginnen
-  if (request.nextUrl.pathname.startsWith("/shop")) {
-    const authCookie = request.cookies.get("bellator-access");
+  // Schütze /shop und /profil: nur mit gültiger, signierter Session
+  const isProtected = PROTECTED_PREFIXES.some((prefix) =>
+    request.nextUrl.pathname.startsWith(prefix),
+  );
 
-    // Wenn kein Cookie da ist, schick den User zum Login (Root)
-    if (!authCookie) {
-      return NextResponse.redirect(new URL("/", request.url));
+  if (isProtected) {
+    const token = request.cookies.get("bellator-session")?.value;
+    const session = verifySessionToken(token);
+
+    if (!session) {
+      const loginUrl = new URL("/", request.url);
+      loginUrl.searchParams.set("redirect", request.nextUrl.pathname);
+      const response = NextResponse.redirect(loginUrl);
+      // Ungültigen/abgelaufenen Cookie gleich mit entfernen
+      response.cookies.delete("bellator-session");
+      return response;
     }
   }
 

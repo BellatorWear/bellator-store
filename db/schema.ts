@@ -34,6 +34,8 @@ export const accessKeys = pgTable("access_keys", {
   userId: integer("user_id").references(() => users.id),
   isUsed: boolean("is_used").default(false),
   email: text("email"),
+  expiresAt: timestamp("expires_at"), // Key verfällt nach einiger Zeit (Schutz vor altem, geleaktem Key)
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const accessRequests = pgTable("access_requests", {

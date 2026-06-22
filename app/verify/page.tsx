@@ -28,7 +28,11 @@ function VerifyContent() {
         if (data.success) {
           setEmail(data.email);
           setStatus("success");
-          setShowPasswordModal(true);
+          if (data.mustSetPassword === false) {
+            router.push("/shop");
+          } else {
+            setShowPasswordModal(true);
+          }
         } else {
           setStatus("error");
           setMsg(data.error || "Token ungültig oder abgelaufen.");
@@ -106,7 +110,7 @@ function PasswordModal({
     const res = await fetch("/api/set-password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password: pw }),
+      body: JSON.stringify({ password: pw }),
     });
     const data = await res.json();
     setLoading(false);

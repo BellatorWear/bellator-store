@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { emailVerifications, users, accessKeys } from "@/db/schema";
+import { emailVerifications, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
+import {
+  createSessionToken,
+  SESSION_COOKIE_NAME,
+  sessionCookieOptions,
+} from "@/lib/session";
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
@@ -41,15 +46,24 @@ export async function GET(req: NextRequest) {
     .set({ emailVerified: true })
     .where(eq(users.email, verification.email));
 
-  // Auth Cookie setzen
-  const cookieStore = await cookies();
-  cookieStore.set("bellator-access", "authorized", {
-    maxAge: 60 * 60 * 24 * 7,
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    sameSite: "strict",
-  });
+  const userResult = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, verification.email));
+  if (userResult.length === 0) {
+    return NextResponse.json({ error: "Account nicht gefunden." }, { status: 404 });
+  }
+  const user = userResult[0];
 
-  return NextResponse.json({ success: true, email: verification.email });
+  // Signierte Session setzen (statt eines unsignierten "authorized"-Strings,
+  // der von jedem Browser selbst gesetzt werden konnte)
+  const cookieStore = await cookies();
+  const sessionToken = createSessionToken(user.id, user.email);
+  cookieStore.set(SESSION_COOKIE_NAME, sessionToken, sessionCookieOptions());
+
+  return NextResponse.json({
+    success: true,
+    email: user.email,
+    mustSetPassword: user.mustSetPassword ?? false,
+  });
 }

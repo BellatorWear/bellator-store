@@ -32,8 +32,7 @@ export default function Home() {
       setMsg({ text: res.error, type: "error" });
     } else if (res?.success === true) {
       if (res.mustSetPassword) {
-        const email = formData.get("email") as string;
-        setCurrentEmail(email || "");
+        setCurrentEmail(res.email || (formData.get("email") as string) || "");
         setShowPasswordModal(true);
       } else {
         router.push("/shop");
@@ -167,6 +166,13 @@ export default function Home() {
           }}
         />
       )}
+
+      <a
+        href="/impressum"
+        className="fixed bottom-4 right-4 text-[10px] text-zinc-600 uppercase tracking-widest hover:text-white transition z-20"
+      >
+        Impressum
+      </a>
     </>
   );
 }
@@ -198,7 +204,6 @@ function PasswordModal({
     setLoading(true);
     const fd = new FormData();
     fd.append("actionType", "setPassword");
-    fd.append("email", email);
     fd.append("password", pw);
     const res = await handleAction(fd);
     setLoading(false);
@@ -217,7 +222,8 @@ function PasswordModal({
           Passwort setzen
         </h2>
         <p className="text-xs text-zinc-500 uppercase tracking-widest mb-6">
-          Lege jetzt dein persönliches Passwort fest.
+          Lege jetzt dein persönliches Passwort fest
+          {email ? ` für ${email}` : ""}.
         </p>
         <form onSubmit={submit} className="space-y-4">
           <input
