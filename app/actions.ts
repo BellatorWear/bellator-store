@@ -98,7 +98,7 @@ export async function handleAction(
 
     try {
       const emailResponse = await resend.emails.send({
-        from: "Bellator <onboarding@resend.dev>",
+        from: "Bellator <noreply@mz-dev.de>",
         to: email,
         subject: "Dein Zugang zum Bellator Store - Anfrage erhalten",
         html: `
