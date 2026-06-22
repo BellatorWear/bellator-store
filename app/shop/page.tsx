@@ -28,7 +28,7 @@ export default function ShopPage() {
         Die Card: Border dicker gemacht [3px]
         Shadows: Schatten jetzt in "Bellator-Weiß" statt grau für mehr Kontrast 
       */}
-      <div className="w-full max-w-[400px] bg-[#0a0a0a] p-6 border-[3px] border-white shadow-[10px_10px_0px_0px_white] md:shadow-[15px_15px_0px_0px_white]">
+      <div className="w-full max-w-[400px]">
         <div className="bg-black mb-6 overflow-hidden border-[1px] border-zinc-800">
           <img
             src="/blackshirt-mockup.png"
@@ -37,19 +37,21 @@ export default function ShopPage() {
           />
         </div>
 
-        <h3 className="text-[0.6rem] uppercase tracking-[0.4em] text-zinc-500 mb-1">
-          {product.tagline}
-        </h3>
+        <div className="bg-black/95 p-6 border-[3px] border-white shadow-[10px_10px_0px_0px_white] md:shadow-[15px_15px_0px_0px_white]">
+          <h3 className="text-[0.6rem] uppercase tracking-[0.4em] text-zinc-500 mb-1">
+            {product.tagline}
+          </h3>
 
-        <h1 className="text-3xl font-black uppercase text-white mb-2 leading-[0.9]">
-          {product.name}
-        </h1>
+          <h1 className="text-3xl font-black uppercase text-white mb-2 leading-[0.9]">
+            {product.name}
+          </h1>
 
-        <p className="text-xl font-black text-white mb-4 border-l-4 border-red-600 pl-3">
-          {product.price}
-        </p>
+          <p className="text-xl font-black text-white mb-4 border-l-4 border-red-600 pl-3">
+            {product.price}
+          </p>
 
-        <ViewProductButton productId={product.id} />
+          <ViewProductButton productId={product.id} />
+        </div>
       </div>
     </main>
   );
