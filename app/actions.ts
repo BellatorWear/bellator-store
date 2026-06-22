@@ -97,11 +97,6 @@ export async function handleAction(
     }
 
     try {
-      await db.insert(accessRequests).values({
-        email: email,
-        status: "pending",
-      });
-
       const emailResponse = await resend.emails.send({
         from: "Bellator <onboarding@resend.dev>",
         to: email,
@@ -161,6 +156,12 @@ export async function handleAction(
           error: `Email konnte nicht versendet werden: ${emailResponse.error.message || "Unbekannter Fehler"}`,
         };
       }
+
+      // NUR wenn Email erfolgreich: dann in DB speichern
+      await db.insert(accessRequests).values({
+        email: email,
+        status: "pending",
+      });
 
       return {
         success: "Anfrage erhalten! Eine Bestätigungs-Email wurde versendet.",
