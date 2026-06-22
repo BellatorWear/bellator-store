@@ -4,7 +4,7 @@ import "./globals.css";
 // Hier importieren wir unseren Wrapper
 import { Providers } from "./providers"; 
 // Import für den Cookie-Banner (Pfad anpassen, falls er woanders liegt)
-import CookieBanner from ./components/CookieBanner;
+import CookieBanner from "./components/CookieBanner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
