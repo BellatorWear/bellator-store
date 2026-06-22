@@ -1,7 +1,7 @@
 'use server'
 
 import { db } from '@/db'
-import { accessKeys, accessRequests } from '@/db/schema' // Importiere beide Tabellen
+import { accessKeys, accessRequests } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { Resend } from 'resend'
 import { cookies } from 'next/headers'
@@ -24,13 +24,23 @@ export async function handleAction(formData: FormData): Promise<ActionResponse> 
     
     if (result.length > 0) {
       await db.delete(accessKeys).where(eq(accessKeys.key, key))
+      
+      // Cookie setzen für den Zugriffsschutz
+      const cookieStore = await cookies()
+      cookieStore.set('bellator-access', 'authorized', {
+        maxAge: 60 * 60 * 24 * 7, // 7 Tage gültig
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+      })
+      
       return { success: true }
     }
     
     return { error: 'Invalid Access Key' }
   }
 
-  // --- REQUEST LOGIK (Hier wurde der DB-Eintrag ergänzt) ---
+  // --- REQUEST LOGIK ---
   if (actionType === 'request') {
     const email = formData.get('email') as string
     
@@ -39,13 +49,11 @@ export async function handleAction(formData: FormData): Promise<ActionResponse> 
     }
 
     try {
-      // 1. Speichere die Anfrage in der Datenbank
       await db.insert(accessRequests).values({ 
         email: email,
         status: 'pending'
       });
 
-      // 2. Sende die E-Mail
       await resend.emails.send({
         from: 'Bellator <noreply@bellator.store>',
         to: email,
