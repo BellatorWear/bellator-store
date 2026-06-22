@@ -19,8 +19,23 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Bellator Streetwear Store - Offizieller Shop für exklusive Streetwear",
   description: "240g Heavy Cotton. Oversized Fit. Ohne Kompromisse. Bellator ist kein Trend, sondern eine Einstellung. Hol dir den ersten Drop.",
+  openGraph: {
+    title: "Bellator Streetwear Store",
+    description: "240g Heavy Cotton. Oversized Fit. Ohne Kompromisse. Bellator ist kein Trend, sondern eine Einstellung.",
+    url: 'https://bellator-store.vercel.app/', // Hier deine Domain eintragen
+    siteName: 'Bellator',
+    images: [
+      {
+        url: '/logowhite.png', // Das Bild muss in deinem /public Ordner liegen
+        width: 1200,
+        height: 630,
+        alt: 'Bellator Streetwear Logo',
+      },
+    ],
+    locale: 'de_DE',
+    type: 'website',
+  },
 };
-
 export default function RootLayout({
   children,
 }: Readonly<{
