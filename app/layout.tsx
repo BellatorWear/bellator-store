@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bellator",
-  description: "Streetwear Brand",
+  title: "Bellator Streetwear Store - Offizieller Shop für exklusive Streetwear",
+  description: "240g Heavy Cotton. Oversized Fit. Ohne Kompromisse. Bellator ist kein Trend, sondern eine Einstellung. Hol dir den ersten Drop.",
 };
 
 export default function RootLayout({
