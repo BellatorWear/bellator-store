@@ -3,17 +3,28 @@
   --text: #f4f4f1;
 }
 
-body { margin: 0; background-color: var(--bg); color: var(--text); font-family: 'Courier New', monospace; }
+body {
+  margin: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: "Courier New", monospace;
+}
 
-.product-grid { 
-  display: flex; 
-  justify-content: center; 
+.product-grid {
+  display: flex;
+  justify-content: center;
   align-items: center;
   min-height: 100vh;
   padding: 2rem;
 }
 @keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.03); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
