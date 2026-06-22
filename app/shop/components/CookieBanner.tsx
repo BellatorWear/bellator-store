@@ -6,7 +6,6 @@ export default function CookieBanner() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    // Prüfen, ob der User bereits zugestimmt hat
     const consent = localStorage.getItem('cookie-consent');
     if (!consent) {
       setIsVisible(true);
@@ -15,6 +14,11 @@ export default function CookieBanner() {
 
   const acceptCookies = () => {
     localStorage.setItem('cookie-consent', 'true');
+    setIsVisible(false);
+  };
+
+  const declineCookies = () => {
+    localStorage.setItem('cookie-consent', 'false');
     setIsVisible(false);
   };
 
@@ -34,23 +38,39 @@ export default function CookieBanner() {
       fontFamily: 'Courier New, monospace',
       boxShadow: '10px 10px 0px 0px #333'
     }}>
-      <p style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>
+      <p style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', lineHeight: '1.4' }}>
         Wir nutzen Cookies für den Shop-Vibe. Akzeptier das, damit alles läuft.
       </p>
-      <button 
-        onClick={acceptCookies}
-        style={{
-          background: '#fff',
-          color: '#000',
-          border: 'none',
-          padding: '0.8rem 1.5rem',
-          fontWeight: '900',
-          textTransform: 'uppercase',
-          cursor: 'pointer'
-        }}
-      >
-        Alles klar, akzeptieren
-      </button>
+      <div style={{ display: 'flex', gap: '10px' }}>
+        <button 
+          onClick={acceptCookies}
+          style={{
+            background: '#fff',
+            color: '#000',
+            border: 'none',
+            padding: '0.8rem 1.5rem',
+            fontWeight: '900',
+            textTransform: 'uppercase',
+            cursor: 'pointer'
+          }}
+        >
+          Akzeptieren
+        </button>
+        <button 
+          onClick={declineCookies}
+          style={{
+            background: 'transparent',
+            color: '#fff',
+            border: '1px solid #fff',
+            padding: '0.8rem 1.5rem',
+            fontWeight: '900',
+            textTransform: 'uppercase',
+            cursor: 'pointer'
+          }}
+        >
+          Ablehnen
+        </button>
+      </div>
     </div>
   );
 }

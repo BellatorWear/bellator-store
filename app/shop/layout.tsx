@@ -1,5 +1,4 @@
 import { ShoppingBag, HelpCircle, FileText } from 'lucide-react';
-import { CookieBanner } from './components'; // Importiere deine Banner-Komponente
 
 export default function ShopLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -24,7 +23,7 @@ export default function ShopLayout({ children }: { children: React.ReactNode }) 
         <div>
           <p className="mb-2">Zahlungsmethoden</p>
           <div className="flex gap-2">
-             <span>PAYPAL</span> <span>KLARNA</span> <span>VISA</span>
+            <span>PAYPAL</span> <span>KLARNA</span> <span>VISA</span>
           </div>
         </div>
         <div className="text-right">
@@ -32,9 +31,6 @@ export default function ShopLayout({ children }: { children: React.ReactNode }) 
           <p className="hover:text-[#e0e0e0] cursor-pointer">Hilfe</p>
         </div>
       </footer>
-
-      {/* COOKIE BANNER - Hier wird er global eingebunden */}
-      <CookieBanner />
     </div>
   );
 }

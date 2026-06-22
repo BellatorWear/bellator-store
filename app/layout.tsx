@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 // Hier importieren wir unseren Wrapper
 import { Providers } from "./providers"; 
+// Import für den Cookie-Banner (Pfad anpassen, falls er woanders liegt)
+import CookieBanner from ./components/CookieBanner;
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,7 +32,9 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        {/* Hier wickeln wir alles in die Provider ein */}
+        {/* Banner direkt unter Body, damit es immer als Erstes da ist */}
+        <CookieBanner />
+        
         <Providers>
           {children}
         </Providers>
