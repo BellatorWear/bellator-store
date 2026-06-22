@@ -79,7 +79,7 @@ export default function Home() {
                 required
                 maxLength={10}
                 className="w-full bg-black/80 border-b border-zinc-600 p-2 focus:border-white outline-none transition uppercase text-center placeholder:text-zinc-600 text-white tracking-widest"
-                placeholder="ACCESS KEY"
+                placeholder="ACCESS-KEY"
               />
             )}
 
@@ -90,7 +90,7 @@ export default function Home() {
                 type="email"
                 required
                 className="w-full bg-black/80 border-b border-zinc-600 p-2 focus:border-white outline-none transition uppercase text-center placeholder:text-zinc-600 text-white"
-                placeholder="EMAIL ADDRESS"
+                placeholder="E-MAIL ADDRESS"
               />
             )}
 
@@ -105,7 +105,7 @@ export default function Home() {
                   ? "Einloggen"
                   : mode === "key"
                     ? "Enter Key"
-                    : "Zugang Anfordern"}
+                    : "Registrieren"}
             </button>
           </form>
 
@@ -140,7 +140,7 @@ export default function Home() {
                   }}
                   className="w-full text-[10px] text-zinc-400 uppercase tracking-widest hover:text-white transition"
                 >
-                  Zugang anfordern
+                  Registrieren
                 </button>
               </>
             )}
