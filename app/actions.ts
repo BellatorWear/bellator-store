@@ -102,8 +102,8 @@ export async function handleAction(
         status: "pending",
       });
 
-      await resend.emails.send({
-        from: "Bellator <noreply@bellator.store>",
+      const emailResponse = await resend.emails.send({
+        from: "Bellator <onboarding@resend.dev>",
         to: email,
         subject: "Dein Zugang zum Bellator Store - Anfrage erhalten",
         html: `
@@ -155,9 +155,21 @@ export async function handleAction(
         `,
       });
 
-      return { success: "Anfrage erhalten!" };
+      if (emailResponse.error) {
+        console.error("Resend Email Error:", emailResponse.error);
+        return {
+          error: `Email konnte nicht versendet werden: ${emailResponse.error.message || "Unbekannter Fehler"}`,
+        };
+      }
+
+      return {
+        success: "Anfrage erhalten! Eine Bestätigungs-Email wurde versendet.",
+      };
     } catch (e) {
       console.error("Fehler beim Request:", e);
+      if (e instanceof Error) {
+        return { error: `Fehler: ${e.message}` };
+      }
       return { error: "Fehler beim Speichern oder Senden." };
     }
   }
