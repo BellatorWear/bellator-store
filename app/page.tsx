@@ -2,35 +2,40 @@
 
 import { useState } from 'react'
 import { handleAction } from './actions'
+import { setAuthKey } from './utils/auth' // Import deiner Auth-Utility
+import { useRouter } from 'next/navigation' // Router für den Redirect
 
 export default function Home() {
   const [mode, setMode] = useState<'login' | 'request'>('login')
   const [msg, setMsg] = useState<{ text: string, type: 'success' | 'error' } | null>(null)
+  const router = useRouter()
 
   async function handleSubmit(formData: FormData) {
     formData.append('actionType', mode)
     const res = await handleAction(formData)
+    
     if (res?.error) {
       setMsg({ text: res.error, type: 'error' })
     } else if (res?.success === true) {
-      window.location.href = '/shop'
+      // Wenn das Backend das Passwort akzeptiert:
+      setAuthKey("authorized") // Cookie wird gesetzt (7 Tage gültig)
+      router.push('/shop') // Redirect zur Shop-Seite
     } else if (res?.success) {
       setMsg({ text: res.success, type: 'success' })
     }
   }
 
   return (
-    // 'min-h-[100dvh]' ist der Profi-Trick für Handys (Dynamic Viewport Height)
     <main className="relative flex min-h-[100dvh] items-center justify-center p-4 text-white overflow-hidden">
       
-      {/* Hintergrund bleibt fix */}
+      {/* Hintergrund */}
       <div 
         className="fixed inset-0 z-0 bg-cover bg-center"
         style={{ backgroundImage: "url('https://images.unsplash.com/photo-1549646487-13350901e138?q=80&w=2000&auto=format&fit=crop')" }}
       />
       <div className="fixed inset-0 z-0 bg-black/75" />
 
-      {/* Hier das entscheidende Padding & Breite-Update für mobile */}
+      {/* Login Box */}
       <div className="relative z-10 w-full max-w-[320px] sm:max-w-sm border border-zinc-700 p-6 sm:p-8 bg-black/60 backdrop-blur-md">
         <h1 className="text-3xl sm:text-4xl font-black mb-8 tracking-tighter text-center uppercase border-b border-zinc-500 pb-4">
           Bellator
