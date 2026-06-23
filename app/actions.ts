@@ -58,6 +58,8 @@ export async function getCurrentUser() {
     email: user.email,
     emailVerified: user.emailVerified,
     createdAt: user.createdAt,
+    points: user.points ?? 0,
+    theme: user.theme ?? "dark",
   };
 }
 
@@ -422,5 +424,76 @@ export async function handleAction(
     return { success: true };
   }
 
+
+
+  // --- PASSWORT VERIFIZIEREN (für Belege-Seite) ---
+  if (actionType === "verifyPassword") {
+    const session = await getCurrentSession();
+    if (!session) return { error: "Nicht eingeloggt." };
+
+    const password = formData.get("password") as string;
+    if (!password) return { error: "Passwort erforderlich." };
+
+    const result = await db.select().from(users).where(eq(users.id, session.userId));
+    if (result.length === 0) return { error: "Account nicht gefunden." };
+
+    const user = result[0];
+    if (!user.passwordHash) return { error: "Kein Passwort gesetzt." };
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) return { error: "Falsches Passwort." };
+
+    return { success: true };
+  }
+
+  // --- GAST LOGIN ---
+  if (actionType === "guestLogin") {
+    const cookieStore = await cookies();
+    cookieStore.set("bellator-guest", "true", {
+      maxAge: 60 * 60 * 24, // 1 Tag
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      sameSite: "strict",
+    });
+    return { success: true };
+  }
+
+  // --- ACCOUNT LÖSCHEN ---
+  if (actionType === "deleteAccount") {
+    const session = await getCurrentSession();
+    if (!session) return { error: "Nicht eingeloggt." };
+
+    // Alle zugehörigen Daten löschen
+    await db.delete(emailVerifications).where(eq(emailVerifications.email, session.email));
+    await db.delete(accessKeys).where(eq(accessKeys.userId, session.userId));
+    await db.delete(users).where(eq(users.id, session.userId));
+
+    const cookieStore = await cookies();
+    cookieStore.delete(SESSION_COOKIE_NAME);
+    return { success: true };
+  }
+
+  // --- THEME SETZEN ---
+  if (actionType === "setTheme") {
+    const session = await getCurrentSession();
+    if (!session) return { error: "Nicht eingeloggt." };
+    const theme = formData.get("theme") as string;
+    if (theme !== "dark" && theme !== "light") return { error: "Ungültiges Theme." };
+    await db.update(users).set({ theme }).where(eq(users.id, session.userId));
+    // Theme-Cookie setzen damit es beim Seitenaufruf sofort verfügbar ist
+    const cookieStore = await cookies();
+    cookieStore.set("bellator-theme", theme, {
+      maxAge: 60 * 60 * 24 * 365,
+      httpOnly: false, // Muss vom JS lesbar sein
+      path: "/",
+      sameSite: "strict",
+    });
+    return { success: true };
+  }
+
   return { error: "Ungültige Aktion." };
 }
+
+// Diese Exports werden am Ende der Datei ergänzt (nach handleAction)
+// Sie werden direkt nach handleAction eingefügt wenn die Datei kompiliert wird

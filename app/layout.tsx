@@ -1,58 +1,30 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-// Hier importieren wir unseren Wrapper
-import { Providers } from "./providers"; 
-// Import für den Cookie-Banner (Pfad anpassen, falls er woanders liegt)
-import CookieBanner from "./shop/components/CookieBanner";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "Bellator Streetwear Store - Offizieller Shop für exklusive Streetwear",
-  description: "240g Heavy Cotton. Oversized Fit. Ohne Kompromisse. Bellator ist kein Trend, sondern eine Einstellung. Hol dir den ersten Drop.",
-  openGraph: {
-    title: "Bellator Streetwear Store",
-    description: "240g Heavy Cotton. Oversized Fit. Ohne Kompromisse. Bellator ist kein Trend, sondern eine Einstellung.",
-    url: 'https://bellator-store.vercel.app/', // Hier deine Domain eintragen
-    siteName: 'Bellator',
-    images: [
-      {
-        url: '/logowhite.png', // Das Bild muss in deinem /public Ordner liegen
-        width: 1200,
-        height: 630,
-        alt: 'Bellator Streetwear Logo',
-      },
-    ],
-    locale: 'de_DE',
-    type: 'website',
+  title: "Bellator Streetwear",
+  description: "240g Heavy Cotton. Oversized Fit. Ohne Kompromisse.",
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
   },
 };
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">
-        {/* Banner direkt unter Body, damit es immer als Erstes da ist */}
-        <CookieBanner />
-        
-        <Providers>
-          {children}
-        </Providers>
+    <html lang="de">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function() {
+            try {
+              var m = document.cookie.match(/bellator-theme=([^;]+)/);
+              if (m) document.documentElement.setAttribute('data-theme', m[1]);
+            } catch(e) {}
+          })();
+        `}} />
+      </head>
+      <body>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
