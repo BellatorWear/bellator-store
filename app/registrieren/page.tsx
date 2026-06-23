@@ -3,7 +3,10 @@ import { useState } from "react";
 import { handleAction } from "../actions";
 
 export default function RegistrierenPage() {
-  const [msg, setMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [msg, setMsg] = useState<{
+    text: string;
+    type: "success" | "error";
+  } | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(formData: FormData) {
@@ -13,7 +16,8 @@ export default function RegistrierenPage() {
     const res = await handleAction(formData);
     setLoading(false);
     if (res?.error) setMsg({ text: res.error, type: "error" });
-    else if (res?.success) setMsg({ text: res.success as string, type: "success" });
+    else if (res?.success)
+      setMsg({ text: res.success as string, type: "success" });
   }
 
   return (
@@ -24,21 +28,35 @@ export default function RegistrierenPage() {
             Bellator
           </h1>
         </a>
-        <p className="text-[10px] text-zinc-500 uppercase tracking-widest text-center mb-6">Zugang anfordern</p>
+        <p className="text-[10px] text-zinc-500 uppercase tracking-widest text-center mb-6">
+          Registrieren
+        </p>
         <form action={handleSubmit} className="space-y-4">
-          <input name="email" type="email" required
+          <input
+            name="email"
+            type="email"
+            required
             className="w-full bg-black/80 border-b border-zinc-600 p-2 focus:border-white outline-none transition uppercase text-center placeholder:text-zinc-600 text-white"
-            placeholder="E-MAIL ADRESSE" />
-          <button type="submit" disabled={loading}
-            className="w-full border border-zinc-500 py-3 font-bold text-xs uppercase tracking-widest hover:bg-white hover:text-black transition-all disabled:opacity-50">
+            placeholder="E-MAIL ADRESSE"
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full border border-zinc-500 py-3 font-bold text-xs uppercase tracking-widest hover:bg-white hover:text-black transition-all disabled:opacity-50"
+          >
             {loading ? "..." : "Zugang anfordern"}
           </button>
         </form>
-        <a href="/login" className="mt-6 block w-full text-[10px] text-zinc-500 uppercase tracking-widest hover:text-white transition text-center">
+        <a
+          href="/login"
+          className="mt-6 block w-full text-[10px] text-zinc-500 uppercase tracking-widest hover:text-white transition text-center"
+        >
           ← Zurück zum Login
         </a>
         {msg && (
-          <p className={`mt-4 text-[10px] text-center uppercase tracking-widest ${msg.type === "error" ? "text-red-600" : "text-green-500"}`}>
+          <p
+            className={`mt-4 text-[10px] text-center uppercase tracking-widest ${msg.type === "error" ? "text-red-600" : "text-green-500"}`}
+          >
             {msg.text}
           </p>
         )}
