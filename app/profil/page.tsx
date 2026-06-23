@@ -69,6 +69,18 @@ export default async function ProfilPage() {
               <span className="text-zinc-500 uppercase text-xs tracking-widest">Punkte</span>
               <span className="text-yellow-400 font-bold">{user.points ?? 0} Pkt.</span>
             </div>
+            {discount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-zinc-500 uppercase text-xs tracking-widest">Treuerabatt</span>
+                <span className="text-green-400 font-bold">{discount}% auf alle Bestellungen</span>
+              </div>
+            )}
+            {isAdmin && (
+              <div className="flex justify-between text-sm">
+                <span className="text-zinc-500 uppercase text-xs tracking-widest">Rolle</span>
+                <span className="text-purple-400 font-bold uppercase tracking-widest">Admin</span>
+              </div>
+            )}
           </section>
 
           {/* Bestellhistorie */}

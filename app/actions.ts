@@ -6,6 +6,8 @@ import {
   accessRequests,
   users,
   emailVerifications,
+  newsletter,
+  orders,
 } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { Resend } from "resend";
@@ -49,7 +51,10 @@ export async function getCurrentUser() {
   const session = await getCurrentSession();
   if (!session) return null;
 
-  const result = await db.select().from(users).where(eq(users.id, session.userId));
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, session.userId));
   if (result.length === 0) return null;
   const user = result[0];
   // Passwort-Hash niemals an den Client geben
@@ -60,6 +65,9 @@ export async function getCurrentUser() {
     createdAt: user.createdAt,
     points: user.points ?? 0,
     theme: user.theme ?? "dark",
+    isAdmin: user.isAdmin ?? false,
+    discountPercent: user.discountPercent ?? 0,
+    orderCount: user.orderCount ?? 0,
   };
 }
 
@@ -156,7 +164,8 @@ export async function handleAction(
     }
     if (accessKey.expiresAt && new Date() > accessKey.expiresAt) {
       return {
-        error: "Dieser Access Key ist abgelaufen. Bitte fordere einen neuen an.",
+        error:
+          "Dieser Access Key ist abgelaufen. Bitte fordere einen neuen an.",
       };
     }
     if (!accessKey.userId || !accessKey.email) {
@@ -395,10 +404,7 @@ export async function handleAction(
     if (!valid) return { error: "Aktuelles Passwort ist falsch." };
 
     const passwordHash = await bcrypt.hash(newPassword, 12);
-    await db
-      .update(users)
-      .set({ passwordHash })
-      .where(eq(users.id, user.id));
+    await db.update(users).set({ passwordHash }).where(eq(users.id, user.id));
 
     return { success: "Passwort wurde geändert." };
   }
@@ -424,8 +430,6 @@ export async function handleAction(
     return { success: true };
   }
 
-
-
   // --- PASSWORT VERIFIZIEREN (für Belege-Seite) ---
   if (actionType === "verifyPassword") {
     const session = await getCurrentSession();
@@ -434,7 +438,10 @@ export async function handleAction(
     const password = formData.get("password") as string;
     if (!password) return { error: "Passwort erforderlich." };
 
-    const result = await db.select().from(users).where(eq(users.id, session.userId));
+    const result = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, session.userId));
     if (result.length === 0) return { error: "Account nicht gefunden." };
 
     const user = result[0];
@@ -465,7 +472,9 @@ export async function handleAction(
     if (!session) return { error: "Nicht eingeloggt." };
 
     // Alle zugehörigen Daten löschen
-    await db.delete(emailVerifications).where(eq(emailVerifications.email, session.email));
+    await db
+      .delete(emailVerifications)
+      .where(eq(emailVerifications.email, session.email));
     await db.delete(accessKeys).where(eq(accessKeys.userId, session.userId));
     await db.delete(users).where(eq(users.id, session.userId));
 
@@ -479,7 +488,8 @@ export async function handleAction(
     const session = await getCurrentSession();
     if (!session) return { error: "Nicht eingeloggt." };
     const theme = formData.get("theme") as string;
-    if (theme !== "dark" && theme !== "light") return { error: "Ungültiges Theme." };
+    if (theme !== "dark" && theme !== "light")
+      return { error: "Ungültiges Theme." };
     await db.update(users).set({ theme }).where(eq(users.id, session.userId));
     // Theme-Cookie setzen damit es beim Seitenaufruf sofort verfügbar ist
     const cookieStore = await cookies();
@@ -492,8 +502,24 @@ export async function handleAction(
     return { success: true };
   }
 
+  // --- NEWSLETTER SUBSCRIBE ---
+  if (actionType === "subscribeNewsletter") {
+    const email = formData.get("email") as string;
+    if (!email) return { error: "Email erforderlich." };
+    try {
+      await db.insert(newsletter).values({ email }).onConflictDoNothing();
+    } catch {
+      return { error: "Fehler beim Eintragen." };
+    }
+    return { success: "Eingetragen!" };
+  }
+
+  // --- PUSH AKTIVIEREN ---
+  if (actionType === "enablePush") {
+    // Placeholder: erfordert VAPID-Keys und Service Worker
+    // Subscription wird vom Client-Browser geliefert
+    return { success: true };
+  }
+
   return { error: "Ungültige Aktion." };
 }
-
-// Diese Exports werden am Ende der Datei ergänzt (nach handleAction)
-// Sie werden direkt nach handleAction eingefügt wenn die Datei kompiliert wird

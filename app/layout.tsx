@@ -10,18 +10,26 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="de">
+    <html lang="de" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: `
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
           (function() {
             try {
               var m = document.cookie.match(/bellator-theme=([^;]+)/);
               if (m) document.documentElement.setAttribute('data-theme', m[1]);
             } catch(e) {}
           })();
-        `}} />
+        `,
+          }}
+        />
       </head>
       <body>
         <Providers>{children}</Providers>
