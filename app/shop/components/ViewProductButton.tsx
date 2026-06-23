@@ -1,28 +1,24 @@
-"use client";
-import Link from "next/link";
+'use client'
+import Link from 'next/link';
 
-export default function ViewProductButton({
-  productId,
-}: {
-  productId: string;
-}) {
+export default function ViewProductButton({ productId }: { productId: string }) {
   return (
-    <Link
+    <Link 
       href={`/shop/product/${productId}`}
       style={{
-        display: "inline-block",
-        backgroundColor: "#000",
-        color: "#fff",
-        padding: "1.2rem 2.5rem",
-        fontSize: "1.2rem",
-        fontWeight: "800",
-        textTransform: "uppercase",
-        textDecoration: "none",
-        border: "2px solid #000",
-        cursor: "pointer",
-        transition: "all 0.3s ease",
-        textAlign: "center",
-        width: "100%",
+        display: 'inline-block',
+        backgroundColor: '#000',
+        color: '#fff',
+        padding: '1.2rem 2.5rem',
+        fontSize: '1.2rem',
+        fontWeight: '800',
+        textTransform: 'uppercase',
+        textDecoration: 'none',
+        border: '2px solid #000',
+        cursor: 'pointer',
+        transition: 'all 0.3s ease',
+        textAlign: 'center',
+        width: '100%'
       }}
     >
       Details ansehen 🔍

@@ -76,7 +76,11 @@ export default function LoginPage() {
     const fd = new FormData();
     fd.append("actionType", "guestLogin");
     const res = await handleAction(fd);
-    if (res?.success) router.push("/shop");
+    if (res?.success) {
+      // Vollständiger Seitenaufruf statt client-seitigem Router damit
+      // der Cookie sicher gesetzt ist bevor die Middleware prüft
+      window.location.href = "/shop";
+    }
   }
 
   return (
