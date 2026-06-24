@@ -7,10 +7,10 @@ export default function ImpressumPage() {
         <a href="/shop" className="text-2xl font-bold tracking-tighter italic hover:opacity-80 transition">BELLATOR.</a>
         <a href="/shop" className="text-[10px] text-zinc-500 uppercase tracking-widest hover:text-white transition">← Zurück</a>
       </header>
-      <div className="flex justify-center p-6 md:p-16">
+      <div className="flex justify-center p-4 sm:p-6 md:p-16">
         <div className="w-full max-w-2xl space-y-6">
           <div className="bg-black/90 p-4">
-            <h1 className="text-3xl font-black uppercase tracking-tighter mb-1">Impressum</h1>
+            <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter mb-1">Impressum</h1>
             <p className="text-xs text-zinc-500 uppercase tracking-widest">Angaben gemäß § 5 TMG</p>
           </div>
           <div className="border border-zinc-700 bg-black/90 p-6 space-y-6 text-sm leading-relaxed">

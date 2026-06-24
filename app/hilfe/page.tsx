@@ -14,10 +14,10 @@ export default function HilfePage() {
         <a href="/shop" className="text-2xl font-bold tracking-tighter italic hover:opacity-80 transition">BELLATOR.</a>
         <a href="/shop" className="text-[10px] text-zinc-500 uppercase tracking-widest hover:text-white transition">← Zurück zum Shop</a>
       </header>
-      <div className="flex justify-center p-6 md:p-16">
+      <div className="flex justify-center p-4 sm:p-6 md:p-16">
         <div className="w-full max-w-xl space-y-8">
           <div className="bg-black/80 p-4">
-            <h1 className="text-3xl font-black uppercase tracking-tighter mb-1">Hilfe & FAQ</h1>
+            <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter mb-1">Hilfe & FAQ</h1>
             <p className="text-xs text-zinc-500 uppercase tracking-widest">Häufig gestellte Fragen</p>
           </div>
           <div className="space-y-4">

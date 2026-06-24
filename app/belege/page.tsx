@@ -9,23 +9,51 @@ export default async function BelegePage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const userOrders = await db.select().from(orders).where(eq(orders.userId, user.id));
+  let ordersWithItems: Array<{
+    id: number;
+    total: number;
+    status: string | null;
+    createdAt: Date | null;
+    items: Array<{ id: number; productName: string; price: number; quantity: number }>;
+  }> = [];
 
-  // Für jede Bestellung die Positionen laden
-  const ordersWithItems = await Promise.all(
-    userOrders.map(async (order) => {
-      const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
-      return { ...order, items };
-    })
-  );
+  try {
+    const userOrders = await db.select().from(orders).where(eq(orders.userId, user.id));
+    ordersWithItems = await Promise.all(
+      userOrders.map(async (order) => {
+        let items: Array<{ id: number; productName: string; price: number; quantity: number }> = [];
+        try {
+          items = await db.select({
+            id: orderItems.id,
+            productName: orderItems.productName,
+            price: orderItems.price,
+            quantity: orderItems.quantity,
+          }).from(orderItems).where(eq(orderItems.orderId, order.id));
+        } catch {}
+        return {
+          id: order.id,
+          total: order.total,
+          status: order.status,
+          createdAt: order.createdAt,
+          items,
+        };
+      })
+    );
+  } catch (e) {
+    console.error("Belege Fehler:", e);
+  }
 
   return (
-    <main className="min-h-screen text-[#e0e0e0] font-mono" style={{ backgroundImage: 'url("/background.png")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
-      <header className="bg-black border-b border-[#333] px-6 py-4 flex justify-between items-center">
-        <a href="/shop" className="text-2xl font-bold tracking-tighter italic hover:opacity-80 transition">BELLATOR.</a>
-        <a href="/profil" className="text-[10px] text-zinc-500 uppercase tracking-widest hover:text-white transition">← Zurück zum Profil</a>
+    <main className="min-h-screen t-text font-mono"
+      style={{ backgroundImage: 'url("/background.png")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
+      <div className="fixed inset-0 bg-black/50 pointer-events-none z-0" />
+      <header className="relative z-10 t-header border-b px-4 sm:px-6 py-4 flex justify-between items-center">
+        <a href="/shop" className="text-xl sm:text-2xl font-black tracking-tighter italic t-text hover:opacity-70 transition">BELLATOR.</a>
+        <a href="/profil" className="text-[10px] t-muted uppercase tracking-widest hover:t-text transition">← Zurück zum Profil</a>
       </header>
-      <BelegeClient orders={ordersWithItems} userEmail={user.email} />
+      <div className="relative z-10">
+        <BelegeClient orders={ordersWithItems} userEmail={user.email} />
+      </div>
     </main>
   );
 }

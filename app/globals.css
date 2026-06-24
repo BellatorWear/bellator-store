@@ -99,3 +99,24 @@ html, body {
 .t-card, .t-input, .t-header, .t-footer, .t-btn-primary, .t-btn-outline {
   transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
 }
+
+/* ===== MOBILE FIXES ===== */
+@media (max-width: 640px) {
+  /* Verhindert horizontales Scrollen */
+  body { overflow-x: hidden; }
+
+  /* Kleinere Headings auf Mobile */
+  h1 { word-break: break-word; }
+
+  /* Tabellen scrollbar auf Mobile */
+  .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+}
+
+/* Alle Seiten mit Background haben Overlay */
+.page-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  pointer-events: none;
+  z-index: 0;
+}

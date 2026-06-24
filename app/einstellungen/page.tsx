@@ -16,11 +16,11 @@ export default async function EinstellungenPage() {
         <a href="/shop" className="text-[10px] t-muted uppercase tracking-widest hover:t-text transition">← Zurück zum Shop</a>
       </header>
 
-      <div className="relative z-10 flex justify-center p-6 md:p-16">
+      <div className="relative z-10 flex justify-center p-4 sm:p-6 md:p-16">
         <div className="w-full max-w-xl space-y-6">
 
           <div className="t-card border p-4">
-            <h1 className="text-3xl font-black uppercase tracking-tighter mb-1">Einstellungen</h1>
+            <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter mb-1">Einstellungen</h1>
             <p className="text-xs t-muted uppercase tracking-widest">App-Einstellungen verwalten</p>
           </div>
 

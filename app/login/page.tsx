@@ -119,7 +119,7 @@ export default function LoginPage() {
         {/* Overlay für Kontrast */}
         <div className="absolute inset-0 bg-black/60 z-0" />
 
-        <div className="relative z-10 w-full max-w-[320px] sm:max-w-sm border border-white/20 p-6 sm:p-8 bg-black/75 backdrop-blur-md">
+        <div className="relative z-10 w-full max-w-[320px] sm:max-w-sm border border-white/20 p-5 sm:p-8 bg-black/75 backdrop-blur-md">
           <a href="/shop">
             <h1 className="text-3xl sm:text-4xl font-black mb-8 tracking-tighter text-center uppercase border-b border-white/30 pb-4 text-white hover:opacity-80 transition">
               BELLATOR.
