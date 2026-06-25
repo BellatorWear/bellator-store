@@ -1,12 +1,15 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  // Das hier sagt Next.js, wo der echte Root ist
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
   experimental: {
-    // Falls du Turbopack nutzt:
-    // turbopack: {
-    //   root: "./"
-    // },
+    serverActions: {
+      bodySizeLimit: "250mb",
+    },
   },
+};
+
+export default nextConfig;
+
 
   async headers() {
     const csp = [
@@ -47,15 +50,3 @@ const nextConfig = {
 };
 
 module.exports = nextConfig;
-
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  experimental: {
-    serverActions: {
-      bodySizeLimit: "250mb",
-    },
-  },
-};
-
-export default nextConfig;
