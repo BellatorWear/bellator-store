@@ -4,12 +4,6 @@ const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
       bodySizeLimit: "250mb",
-    },
-  },
-};
-
-export default nextConfig;
-
 
   async headers() 
   {
@@ -47,5 +41,9 @@ export default nextConfig;
         ],
       },
     ];
-  }
+  };
+      },
+  },
+};
 module.exports = nextConfig;
+export default nextConfig;
