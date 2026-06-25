@@ -179,3 +179,33 @@ button:active, a[role="button"]:active {
 @keyframes shimmer {
   100% { transform: translateX(100%); }
 }
+
+/* ===== BUTTON HOVER ANIMATIONS ===== */
+button, a[class*="border"], a[class*="btn"] {
+  transition: all 0.2s ease;
+}
+
+/* Alle Buttons mit border bekommen eine einheitliche Hover-Animation */
+.t-btn-primary {
+  position: relative;
+  overflow: hidden;
+}
+.t-btn-primary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.05);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.t-btn-primary:hover::after {
+  opacity: 1;
+}
+.t-btn-outline:hover {
+  transform: translateY(-1px);
+}
+
+/* File Input komplett verstecken - wird durch Label ersetzt */
+input[type="file"].hidden {
+  display: none;
+}

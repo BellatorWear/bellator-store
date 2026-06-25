@@ -42,15 +42,12 @@ export default function CartClient({ initialCart }: { initialCart: CartItem[] })
     setErr("");
     const res = await createCheckoutSession();
     setLoading(false);
-    if (res.error) {
-      setErr(res.error);
-      return;
-    }
+    if (res.error) { setErr(res.error); return; }
     if (res.url) window.location.href = res.url;
   }
 
   return (
-    <main className="flex justify-center p-6 md:p-16">
+    <main className="flex justify-center p-4 sm:p-6 md:p-16">
       <div className="w-full max-w-xl space-y-6">
         <div className="t-card border p-4">
           <h1 className="text-3xl font-black uppercase tracking-tighter mb-1 t-text">Warenkorb</h1>
@@ -58,31 +55,37 @@ export default function CartClient({ initialCart }: { initialCart: CartItem[] })
         </div>
 
         {cart.length === 0 ? (
-          <p className="text-xs t-faint uppercase tracking-widest">Dein Warenkorb ist leer.</p>
+          <div className="bg-black/80 border border-zinc-700 p-6 text-center">
+            <p className="text-xs text-zinc-400 uppercase tracking-widest">Dein Warenkorb ist leer.</p>
+            <a href="/shop" className="mt-4 inline-block border border-zinc-600 px-4 py-2 text-[10px] uppercase tracking-widest text-zinc-400 hover:border-white hover:text-white transition">
+              Zum Shop →
+            </a>
+          </div>
         ) : (
           <>
             <div className="space-y-3">
               {cart.map((item) => (
-                <div key={item.id} className="t-card border t-border p-4 flex gap-4 items-center">
+                <div key={item.id} className="t-card border t-border p-4 flex gap-4 items-center relative">
                   {item.image && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={item.image} alt={item.name} className="w-16 h-16 object-cover border t-border-s shrink-0" />
                   )}
-                  <div className="flex-1">
-                    <p className="text-sm font-bold uppercase tracking-widest t-text">{item.name}</p>
-                    <p className="text-xs t-muted">
-                      {[item.variantLabel, item.dropLabel].filter(Boolean).join(" · ") || null}
-                    </p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold uppercase tracking-widest t-text truncate">{item.name}</p>
+                    <p className="text-xs t-muted">{[item.variantLabel, item.dropLabel].filter(Boolean).join(" · ") || null}</p>
                     <p className="text-xs t-muted mt-1">{(item.unitPriceCents / 100).toFixed(2)} €</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <button onClick={() => updateQty(item.id, item.quantity - 1)}
-                      className="border t-border w-7 h-7 flex items-center justify-center hover:bg-white hover:text-black transition t-text">−</button>
+                      className="border t-border w-7 h-7 flex items-center justify-center hover:bg-white hover:text-black transition t-text font-bold">−</button>
                     <span className="w-6 text-center text-sm t-text">{item.quantity}</span>
                     <button onClick={() => updateQty(item.id, item.quantity + 1)}
-                      className="border t-border w-7 h-7 flex items-center justify-center hover:bg-white hover:text-black transition t-text">+</button>
+                      className="border t-border w-7 h-7 flex items-center justify-center hover:bg-white hover:text-black transition t-text font-bold">+</button>
                   </div>
-                  <button onClick={() => remove(item.id)} className="text-red-500 hover:text-red-400 text-xs ml-2">✕</button>
+                  <button onClick={() => remove(item.id)}
+                    className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center text-zinc-500 hover:text-red-400 transition text-xs border border-zinc-700 hover:border-red-500">
+                    ✕
+                  </button>
                 </div>
               ))}
             </div>
@@ -92,14 +95,14 @@ export default function CartClient({ initialCart }: { initialCart: CartItem[] })
               <span className="text-xl font-black t-text">{(total / 100).toFixed(2)} €</span>
             </div>
             <p className="text-[10px] t-faint uppercase tracking-widest -mt-2">
-              Versandkosten werden im nächsten Schritt bei Stripe berechnet und angezeigt.
+              Versandkosten werden im nächsten Schritt bei Stripe berechnet.
             </p>
 
             {err && <p className="text-xs text-red-500 uppercase tracking-widest">{err}</p>}
 
             <button onClick={checkout} disabled={loading}
               className="w-full t-btn-primary py-4 font-black text-sm uppercase tracking-widest transition-all disabled:opacity-50">
-              {loading ? "..." : "Zur Kasse"}
+              {loading ? "..." : "Zur Kasse →"}
             </button>
           </>
         )}
