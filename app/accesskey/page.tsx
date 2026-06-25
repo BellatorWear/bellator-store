@@ -2,11 +2,13 @@
 import { useState } from "react";
 import { handleAction } from "../actions";
 import { useRouter } from "next/navigation";
+import SetUsernameModal from "../SetUsernameModal";
 
 export default function AccessKeyPage() {
   const [msg, setMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [currentEmail, setCurrentEmail] = useState("");
   const router = useRouter();
 
@@ -63,7 +65,12 @@ export default function AccessKeyPage() {
       </main>
       {showPasswordModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <PasswordModal email={currentEmail} onDone={() => { setShowPasswordModal(false); router.push("/shop"); }} />
+          <PasswordModal email={currentEmail} onDone={() => { setShowPasswordModal(false); setShowUsernameModal(true); }} />
+        </div>
+      )}
+      {showUsernameModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <SetUsernameModal onDone={() => router.push("/shop")} />
         </div>
       )}
     </>

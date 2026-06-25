@@ -23,7 +23,8 @@ const middlewareRatelimit = new Ratelimit({
   prefix: "ratelimit:middleware",
 });
 
-const PROTECTED_PREFIXES = ["/shop"];
+const PROTECTED_PREFIXES = ["/shop", "/admin"]; // Login ODER Gast erlaubt
+const LOGIN_ONLY_PREFIXES = ["/profil", "/einstellungen", "/belege"]; // NUR echter Login (kein Gast)
 
 export async function proxy(request: NextRequest) {
   // Extrahiere Client IP
@@ -82,9 +83,29 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  // /profil, /einstellungen, /belege: hier reicht ein Gast-Cookie NICHT -
+  // diese Seiten brauchen einen echten Account. Vorher liefen diese Routen
+  // nur über die page-level Prüfung (redirect in der Komponente selbst);
+  // jetzt zusätzlich auf Middleware-Ebene abgesichert ("auth middleware
+  // auf jeder Route").
+  const isLoginOnly = LOGIN_ONLY_PREFIXES.some((prefix) =>
+    request.nextUrl.pathname.startsWith(prefix),
+  );
+  if (isLoginOnly) {
+    const token = request.cookies.get("bellator-session")?.value;
+    const session = verifySessionToken(token);
+    if (!session) {
+      const loginUrl = new URL("/", request.url);
+      loginUrl.searchParams.set("redirect", request.nextUrl.pathname);
+      const response = NextResponse.redirect(loginUrl);
+      response.cookies.delete("bellator-session");
+      return response;
+    }
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/shop/:path*", "/api/:path*"],
+  matcher: ["/shop/:path*", "/admin/:path*", "/profil/:path*", "/einstellungen/:path*", "/belege/:path*", "/api/:path*"],
 };

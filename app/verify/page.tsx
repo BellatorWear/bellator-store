@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense } from "react";
+import { Eye, EyeOff } from "lucide-react";
+import SetUsernameModal from "../SetUsernameModal";
 
 function VerifyContent() {
   const searchParams = useSearchParams();
@@ -12,6 +14,7 @@ function VerifyContent() {
   );
   const [msg, setMsg] = useState("");
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [email, setEmail] = useState("");
 
   useEffect(() => {
@@ -45,7 +48,19 @@ function VerifyContent() {
   }, [searchParams]);
 
   if (showPasswordModal) {
-    return <PasswordModal email={email} onDone={() => router.push("/shop")} />;
+    return (
+      <PasswordModal
+        email={email}
+        onDone={() => {
+          setShowPasswordModal(false);
+          setShowUsernameModal(true);
+        }}
+      />
+    );
+  }
+
+  if (showUsernameModal) {
+    return <SetUsernameModal onDone={() => router.push("/shop")} />;
   }
 
   return (
@@ -93,6 +108,8 @@ function PasswordModal({
   const [pw2, setPw2] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPw, setShowPw] = useState(false);
+  const [showPw2, setShowPw2] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -135,22 +152,32 @@ function PasswordModal({
           Email bestätigt! Lege jetzt dein Passwort fest.
         </p>
         <form onSubmit={submit} className="space-y-4">
-          <input
-            type="password"
-            value={pw}
-            onChange={(e) => setPw(e.target.value)}
-            placeholder="NEUES PASSWORT"
-            required
-            className="w-full bg-zinc-900 border-b border-zinc-600 p-2 focus:border-white outline-none transition text-center placeholder:text-zinc-600 text-white"
-          />
-          <input
-            type="password"
-            value={pw2}
-            onChange={(e) => setPw2(e.target.value)}
-            placeholder="PASSWORT BESTÄTIGEN"
-            required
-            className="w-full bg-zinc-900 border-b border-zinc-600 p-2 focus:border-white outline-none transition text-center placeholder:text-zinc-600 text-white"
-          />
+          <div className="pw-wrap">
+            <input
+              type={showPw ? "text" : "password"}
+              value={pw}
+              onChange={(e) => setPw(e.target.value)}
+              placeholder="NEUES PASSWORT"
+              required
+              className="w-full bg-zinc-900 border-b border-zinc-600 p-2 focus:border-white outline-none transition text-center placeholder:text-zinc-600 text-white"
+            />
+            <button type="button" className="pw-eye" onClick={() => setShowPw((s) => !s)} tabIndex={-1}>
+              {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          <div className="pw-wrap">
+            <input
+              type={showPw2 ? "text" : "password"}
+              value={pw2}
+              onChange={(e) => setPw2(e.target.value)}
+              placeholder="PASSWORT BESTÄTIGEN"
+              required
+              className="w-full bg-zinc-900 border-b border-zinc-600 p-2 focus:border-white outline-none transition text-center placeholder:text-zinc-600 text-white"
+            />
+            <button type="button" className="pw-eye" onClick={() => setShowPw2((s) => !s)} tabIndex={-1}>
+              {showPw2 ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
           {err && (
             <p className="text-red-500 text-[10px] uppercase tracking-widest text-center">
               {err}

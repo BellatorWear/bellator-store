@@ -13,8 +13,12 @@ import {
   pointTransactions,
   rewards,
   userRewards,
+  cartItems,
 } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
+import { sanitizeText, isSuspiciousInput } from "./utils/inputSafety";
+import { USERNAME_RE, daysUntilUsernameChangeAllowed } from "./utils/username";
+import { isTrustedOrigin } from "./utils/origin";
 import { Resend } from "resend";
 import { cookies } from "next/headers";
 import { checkLoginRateLimit, checkEmailRateLimit } from "./utils/ratelimit";
@@ -33,6 +37,7 @@ type ActionResponse = {
   retryAfter?: number;
   mustSetPassword?: boolean;
   email?: string;
+  guestName?: string;
 };
 
 // Liest die aktuell eingeloggte, verifizierte Session aus dem Cookie.
@@ -75,6 +80,8 @@ export async function getCurrentUser() {
     orderCount: user.orderCount ?? 0,
     pushEnabled: user.pushEnabled ?? false,
     newsletterOptIn: user.newsletterOptIn ?? false,
+    username: user.username ?? null,
+    usernameChangedAt: user.usernameChangedAt ?? null,
   };
 }
 
@@ -82,7 +89,7 @@ export async function getCurrentUser() {
 // Punkte zurück — aber nur, wenn sie noch nicht abgeschlossen wurde.
 // Wird sowohl von automatisch erkannten Challenges (Newsletter, Push, Theme)
 // als auch vom manuellen "Erledigt"-Button genutzt.
-async function awardChallengeByType(userId: number, type: string) {
+export async function awardChallengeByType(userId: number, type: string) {
   const found = await db
     .select()
     .from(challenges)
@@ -146,6 +153,14 @@ export async function handleAction(
 ): Promise<ActionResponse> {
   const actionType = formData.get("actionType") as string;
 
+  // Quelle prüfen, bevor IRGENDEINE Aktion ausgeführt wird - schützt alle
+  // state-ändernden Server Actions zentral statt einzeln (war vorher als
+  // Utility nur gebaut aber nirgendwo tatsächlich verdrahtet).
+  if (!(await isTrustedOrigin())) {
+    console.warn(`Blockierte Action von untrusted Origin: ${actionType}`);
+    return { error: "Anfrage von nicht vertrauenswürdiger Quelle abgelehnt." };
+  }
+
   // --- LOGIN MIT EMAIL + PASSWORT ---
   if (actionType === "login") {
     const rateLimit = await checkLoginRateLimit();
@@ -161,6 +176,8 @@ export async function handleAction(
 
     if (!email || !password)
       return { error: "Email und Passwort erforderlich." };
+    if (email.length > 254 || password.length > 200)
+      return { error: "Ungültige Eingabe." };
 
     const result = await db.select().from(users).where(eq(users.email, email));
     if (result.length === 0) return { error: "Ungültige Anmeldedaten." };
@@ -258,6 +275,7 @@ export async function handleAction(
 
     if (!email || typeof email !== "string")
       return { error: "Ungültige Eingabe" };
+    if (email.length > 254) return { error: "Ungültige E-Mail Adresse" };
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) return { error: "Ungültige E-Mail Adresse" };
 
@@ -413,6 +431,12 @@ export async function handleAction(
       .set({ passwordHash, mustSetPassword: false })
       .where(eq(users.id, session.userId));
 
+    // "Unter den ersten 100" Challenge - nutzt die User-ID als Beitritts-
+    // Reihenfolge (serial, fortlaufend vergeben).
+    if (session.userId <= 100) {
+      await awardChallengeByType(session.userId, "first_100");
+    }
+
     return { success: true };
   }
 
@@ -466,18 +490,8 @@ export async function handleAction(
   }
 
   // --- WARENKORB ---
-  if (actionType === "addToCart") {
-    const productId = formData.get("productId") as string;
-    const cookieStore = await cookies();
-    const cart = cookieStore.get("cart")?.value;
-    const cartItems = cart ? JSON.parse(cart) : [];
-    cartItems.push(productId);
-    cookieStore.set("cart", JSON.stringify(cartItems), {
-      maxAge: 60 * 60 * 24 * 7,
-      httpOnly: true,
-    });
-    return { success: true };
-  }
+  // (Der alte cookie-basierte "addToCart"-Stub wurde entfernt - der echte,
+  // DB-gestützte Warenkorb lebt jetzt in app/cart.ts)
 
   // --- PASSWORT VERIFIZIEREN (für Belege-Seite) ---
   if (actionType === "verifyPassword") {
@@ -512,7 +526,24 @@ export async function handleAction(
       path: "/",
       sameSite: "strict",
     });
-    return { success: true };
+
+    // "Gast" + 4-6 zufällige Ziffern, damit man Gäste klar voneinander
+    // unterscheiden kann (z.B. im Warenkorb/Bestellungen). Nicht
+    // sicherheitsrelevant, daher kein httpOnly nötig — aber trotzdem über
+    // den Server gesetzt, damit es nicht vom Client manipuliert werden kann.
+    const digitCount = 4 + Math.floor(Math.random() * 3); // 4,5 oder 6
+    const max = 10 ** digitCount;
+    const randomDigits = crypto.randomInt(0, max).toString().padStart(digitCount, "0");
+    const guestName = `Gast${randomDigits}`;
+    cookieStore.set("bellator-guest-name", guestName, {
+      maxAge: 60 * 60 * 24,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      sameSite: "strict",
+    });
+
+    return { success: true, guestName };
   }
 
   // --- ACCOUNT LÖSCHEN ---
@@ -520,7 +551,16 @@ export async function handleAction(
     const session = await getCurrentSession();
     if (!session) return { error: "Nicht eingeloggt." };
 
-    // Alle zugehörigen Daten löschen
+    // Alle zugehörigen Daten löschen (DSGVO Art. 17 "Recht auf Löschung").
+    // Ausnahme: Bestellungen (orders) werden NICHT gelöscht, weil dafür in
+    // Deutschland eine gesetzliche Aufbewahrungspflicht von 10 Jahren gilt
+    // (§ 147 AO / § 257 HGB, Rechnungs-/Buchhaltungsunterlagen). Das ist
+    // eine bewusste Entscheidung, kein Versehen.
+    await db.delete(cartItems).where(eq(cartItems.ownerKey, `user:${session.userId}`));
+    await db.delete(userChallenges).where(eq(userChallenges.userId, session.userId));
+    await db.delete(pointTransactions).where(eq(pointTransactions.userId, session.userId));
+    await db.delete(userRewards).where(eq(userRewards.userId, session.userId));
+    await db.delete(newsletter).where(eq(newsletter.email, session.email));
     await db
       .delete(emailVerifications)
       .where(eq(emailVerifications.email, session.email));
@@ -721,6 +761,64 @@ export async function handleAction(
     });
 
     return { success: code ? `Eingelöst! Dein Code: ${code}` : "Eingelöst!" };
+  }
+
+  // --- BENUTZERNAME SETZEN/ÄNDERN ---
+  if (actionType === "setUsername") {
+    const session = await getCurrentSession();
+    if (!session) return { error: "Nicht eingeloggt." };
+
+    const raw = (formData.get("username") as string) ?? "";
+    const username = sanitizeText(raw, 20);
+
+    if (isSuspiciousInput(raw)) {
+      return { error: "Ungültige Eingabe." };
+    }
+    if (!USERNAME_RE.test(username)) {
+      return {
+        error: "3-20 Zeichen, nur Buchstaben, Zahlen, Punkt und Unterstrich.",
+      };
+    }
+
+    const userResult = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, session.userId));
+    if (userResult.length === 0) return { error: "Account nicht gefunden." };
+    const current = userResult[0];
+
+    // Cooldown nur bei einer ÄNDERUNG (nicht beim allerersten Setzen)
+    if (current.username) {
+      const cooldownDays = daysUntilUsernameChangeAllowed(
+        current.usernameChangedAt,
+      );
+      if (cooldownDays > 0) {
+        return {
+          error: `Du kannst deinen Namen erst in ${cooldownDays} Tag(en) wieder ändern.`,
+        };
+      }
+    }
+
+    // Eindeutigkeit prüfen (case-insensitive wäre noch besser, aber so
+    // bleibt es konsistent mit der DB-UNIQUE-Constraint)
+    const existing = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, username));
+    if (existing.length > 0 && existing[0].id !== session.userId) {
+      return { error: "Dieser Benutzername ist schon vergeben." };
+    }
+
+    try {
+      await db
+        .update(users)
+        .set({ username, usernameChangedAt: new Date() })
+        .where(eq(users.id, session.userId));
+    } catch {
+      return { error: "Dieser Benutzername ist schon vergeben." };
+    }
+
+    return { success: true };
   }
 
   return { error: "Ungültige Aktion." };

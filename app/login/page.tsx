@@ -3,6 +3,7 @@ import { useState } from "react";
 import { handleAction } from "../actions";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
+import SetUsernameModal from "../SetUsernameModal";
 
 function PasswordInput({ name, placeholder }: { name: string; placeholder: string }) {
   const [show, setShow] = useState(false);
@@ -80,6 +81,7 @@ function PasswordModal({ email, onDone }: { email: string; onDone: () => void })
 export default function LoginPage() {
   const [msg, setMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [currentEmail, setCurrentEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
@@ -143,6 +145,9 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-6 space-y-3 border-t border-white/20 pt-4">
+            <a href="/" className="block w-full text-[11px] text-white/60 uppercase tracking-widest hover:text-white transition text-center">
+              ← Andere Methode wählen
+            </a>
             <a href="/accesskey" className="block w-full text-[11px] text-white/60 uppercase tracking-widest hover:text-white transition text-center">
               Mit Access Key einloggen
             </a>
@@ -167,7 +172,10 @@ export default function LoginPage() {
       </main>
 
       {showPasswordModal && (
-        <PasswordModal email={currentEmail} onDone={() => { setShowPasswordModal(false); router.push("/shop"); }} />
+        <PasswordModal email={currentEmail} onDone={() => { setShowPasswordModal(false); setShowUsernameModal(true); }} />
+      )}
+      {showUsernameModal && (
+        <SetUsernameModal onDone={() => router.push("/shop")} />
       )}
     </>
   );

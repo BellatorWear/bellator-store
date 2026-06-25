@@ -48,6 +48,13 @@ html, body {
 .t-input     { background-color: var(--bg-input); border-color: var(--border); color: var(--text); }
 .t-header    { background-color: var(--bg-header); border-color: var(--border); }
 .t-footer    { background-color: var(--bg-footer); border-color: var(--border); }
+/* Header/Footer haben in beiden Themes einen dunklen Hintergrund (Branding) -
+   der Text darin darf deshalb NICHT der normalen Theme-Textfarbe folgen
+   (die im Light Mode dunkel ist und auf dem dunklen Header unlesbar wurde). */
+.t-header, .t-footer { --text-on-dark: #f0f0f0; --text-on-dark-muted: #999999; }
+.t-header .t-text, .t-footer .t-text { color: var(--text-on-dark); }
+.t-header .t-muted, .t-footer .t-muted { color: var(--text-on-dark-muted); }
+.t-header .t-muted:hover, .t-footer .t-muted:hover { color: var(--text-on-dark); }
 .t-text      { color: var(--text); }
 .t-muted     { color: var(--text-muted); }
 .t-faint     { color: var(--text-faint); }
@@ -110,6 +117,14 @@ html, body {
 
   /* Tabellen scrollbar auf Mobile */
   .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+
+  /* background-attachment: fixed sorgt auf mobilen Browsern (v.a. iOS
+     Safari/Chrome) dafür, dass das Hintergrundbild relativ zum größeren
+     virtuellen Viewport (inkl. ein-/ausblendender Adressleiste) berechnet
+     wird - dadurch wirkt es vergrößert/gezoomt. "scroll" behebt das.
+     !important ist hier nötig, weil die Hintergrundbilder per Inline-Style
+     gesetzt sind (höhere Spezifität als eine normale Klasse). */
+  * { background-attachment: scroll !important; }
 }
 
 /* Alle Seiten mit Background haben Overlay */
@@ -119,4 +134,48 @@ html, body {
   background: rgba(0,0,0,0.5);
   pointer-events: none;
   z-index: 0;
+}
+
+/* ===== FONT-WEIGHT SYSTEM =====
+   Einheitliche Gewichtungen statt wild gemischter font-bold/font-black:
+   - Überschriften / Markenname:  font-black (900)
+   - Buttons / wichtige Labels:   font-bold  (700)
+   - Fließtext / Beschreibungen:  font-normal (400)
+   - Feine Hinweise/Meta:         font-medium (500), kleinere Größe statt Gewicht */
+.t-heading { font-weight: 900; }
+.t-label   { font-weight: 700; }
+.t-body    { font-weight: 400; }
+.t-meta    { font-weight: 500; }
+
+/* ===== BUTTON PRESS ANIMATION ===== */
+button, a[role="button"], .t-btn-primary, .t-btn-outline {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
+}
+button:active, a[role="button"]:active {
+  transform: scale(0.96);
+}
+@media (prefers-reduced-motion: reduce) {
+  button:active, a[role="button"]:active { transform: none; }
+}
+
+/* ===== SKELETON LOADER (Shimmer) ===== */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--border);
+  border-radius: 2px;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  animation: shimmer 1.4s infinite;
+}
+[data-theme="light"] .skeleton::after {
+  background: linear-gradient(90deg, transparent, rgba(0,0,0,0.08), transparent);
+}
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
 }

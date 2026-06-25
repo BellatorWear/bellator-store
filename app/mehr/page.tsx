@@ -19,6 +19,8 @@ export default function MehrPage() {
           <section className="border border-zinc-700 bg-black/80 p-6 space-y-3 text-sm">
             <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400 mb-2">Links</h2>
             <a href="/impressum" className="block text-zinc-400 hover:text-white transition uppercase text-xs tracking-widest">→ Impressum</a>
+            <a href="/datenschutz" className="block text-zinc-400 hover:text-white transition uppercase text-xs tracking-widest">→ Datenschutzerklärung</a>
+            <a href="/agb" className="block text-zinc-400 hover:text-white transition uppercase text-xs tracking-widest">→ AGB</a>
             <a href="/hilfe" className="block text-zinc-400 hover:text-white transition uppercase text-xs tracking-widest">→ Hilfe & FAQ</a>
           </section>
         </div>

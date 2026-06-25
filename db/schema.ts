@@ -18,6 +18,8 @@ export const users = pgTable("users", {
   pushSubscription: text("push_subscription"), // JSON Web Push subscription
   pushEnabled: boolean("push_enabled").default(false),
   newsletterOptIn: boolean("newsletter_opt_in").default(false),
+  username: text("username").unique(),
+  usernameChangedAt: timestamp("username_changed_at"),
 });
 
 export const emailVerifications = pgTable("email_verifications", {
@@ -46,15 +48,10 @@ export const accessRequests = pgTable("access_requests", {
   status: text("status").default("pending"),
 });
 
-export const products = pgTable("products", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  description: text("description"),
-  price: integer("price").notNull(),
-  imageUrl: text("image_url"),
-  stock: integer("stock").default(10), // Limited to 10
-  soldOut: boolean("sold_out").default(false),
-});
+// (Hinweis: hier gab es vorher eine zweite, nie genutzte "products"-Tabelle
+// als Platzhalter - wurde entfernt und durch die vollständige Version mit
+// Varianten/Bildern/Drop-Limit weiter unten ersetzt, um Namenskollisionen
+// zu vermeiden.)
 
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
@@ -125,4 +122,39 @@ export const userRewards = pgTable("user_rewards", {
   rewardId: integer("reward_id").references(() => rewards.id),
   code: text("code"), // Einlöse-Code für physische Prämien
   redeemedAt: timestamp("redeemed_at").defaultNow(),
+});
+
+// Produkte (Admin-verwaltet)
+export const products = pgTable("products", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  priceCents: integer("price_cents").notNull(),
+  images: text("images").array(), // Base64 Data-URLs oder externe URLs
+  dropLabel: text("drop_label"), // z.B. "Drop #2" - rein informativ
+  dropLimit: integer("drop_limit"), // null = unlimitiert
+  soldCount: integer("sold_count").default(0),
+  active: boolean("active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Varianten (z.B. Größe/Farbe) - optional pro Produkt
+export const productVariants = pgTable("product_variants", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").references(() => products.id),
+  label: text("label").notNull(), // z.B. "M / Schwarz"
+  stock: integer("stock"), // null = unlimitiert
+  priceCentsOverride: integer("price_cents_override"),
+});
+
+// Warenkorb-Einträge. ownerKey ist entweder "user:<id>" (eingeloggt) oder
+// "guest:<uuid>" (Gast-Cookie) - so funktioniert der Warenkorb für beide.
+export const cartItems = pgTable("cart_items", {
+  id: serial("id").primaryKey(),
+  ownerKey: text("owner_key").notNull(),
+  productId: integer("product_id").references(() => products.id),
+  variantId: integer("variant_id").references(() => productVariants.id),
+  quantity: integer("quantity").default(1),
+  addedAt: timestamp("added_at").defaultNow(),
 });

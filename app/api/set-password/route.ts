@@ -2,12 +2,28 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { awardChallengeByType } from "@/app/actions";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { verifySessionToken, SESSION_COOKIE_NAME } from "@/lib/session";
 import { checkLoginRateLimit } from "@/app/utils/ratelimit";
 
 export async function POST(req: NextRequest) {
+  // Origin-Check: schützt auch diesen Route Handler vor Anfragen aus
+  // nicht vertrauenswürdigen Quellen (gleiche Logik wie bei den Server
+  // Actions in actions.ts).
+  const origin = req.headers.get("origin");
+  const host = req.headers.get("host");
+  if (origin && host) {
+    try {
+      if (new URL(origin).host !== host) {
+        return NextResponse.json({ error: "Anfrage abgelehnt." }, { status: 403 });
+      }
+    } catch {
+      return NextResponse.json({ error: "Anfrage abgelehnt." }, { status: 403 });
+    }
+  }
+
   // Vorher wurde hier die Email direkt aus dem Request-Body übernommen und
   // ungeprüft verwendet, um das Passwort zu setzen. Das bedeutete: JEDE
   // Person konnte ohne Login mit {"email": "opfer@example.com", "password":
@@ -54,6 +70,14 @@ export async function POST(req: NextRequest) {
     .update(users)
     .set({ passwordHash, mustSetPassword: false })
     .where(eq(users.id, session.userId));
+
+  if (session.userId <= 100) {
+    try {
+      await awardChallengeByType(session.userId, "first_100");
+    } catch (e) {
+      console.error("first_100 challenge award error:", e);
+    }
+  }
 
   // Bestätigungs-Email senden
   try {

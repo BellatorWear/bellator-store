@@ -116,7 +116,7 @@ export default function BelegeClient({ orders, userEmail }: { orders: Order[]; u
                 onChange={e => setPassword(e.target.value)}
                 placeholder="PASSWORT"
                 required
-                className="w-full t-input border-b p-2 focus:border-white outline-none transition text-center placeholder:text-zinc-600 text-sm tracking-widest"
+                className="w-full t-input border-b p-2 focus:border-white outline-none transition text-center text-sm tracking-widest"
               />
               <button type="button" className="pw-eye" onClick={() => setShowPw(s => !s)} tabIndex={-1}>
                 {showPw ? <EyeOff size={16} /> : <Eye size={16} />}

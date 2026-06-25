@@ -72,6 +72,12 @@ export default async function ProfilPage() {
           {/* Accountdaten */}
           <section className="t-card border p-5 sm:p-6 space-y-3">
             <h2 className="text-xs font-bold uppercase tracking-widest t-muted mb-2">Accountdaten</h2>
+            {user.username && (
+              <div className="flex justify-between text-sm gap-4">
+                <span className="t-muted uppercase text-xs tracking-widest shrink-0">Benutzername</span>
+                <span className="text-right break-all">@{user.username}</span>
+              </div>
+            )}
             <div className="flex justify-between text-sm gap-4">
               <span className="t-muted uppercase text-xs tracking-widest shrink-0">Email</span>
               <span className="text-right break-all">{user.email}</span>

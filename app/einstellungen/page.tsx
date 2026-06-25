@@ -1,12 +1,15 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/app/actions";
+import { daysUntilUsernameChangeAllowed } from "@/app/utils/username";
 import ThemeToggle from "./ThemeToggle";
 import NotificationToggle from "./NotificationToggle";
 import NewsletterToggle from "./NewsletterToggle";
+import UsernameEditor from "./UsernameEditor";
 
 export default async function EinstellungenPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  const usernameCooldownDays = daysUntilUsernameChangeAllowed(user.usernameChangedAt);
 
   return (
     <main className="min-h-screen font-mono t-text"
@@ -63,6 +66,7 @@ export default async function EinstellungenPage() {
 
           <section className="t-card border p-6 space-y-3">
             <h2 className="text-xs font-bold uppercase tracking-widest t-muted">Account</h2>
+            <UsernameEditor currentUsername={user.username} cooldownDays={usernameCooldownDays} />
             <a href="/profil" className="block text-xs t-muted uppercase tracking-widest hover:t-text transition">→ Profil & Accountdaten</a>
             <a href="/belege" className="block text-xs t-muted uppercase tracking-widest hover:t-text transition">→ Meine Belege</a>
             <a href="/shop/challenges" className="block text-xs t-muted uppercase tracking-widest hover:t-text transition">→ Challenges & Punkte</a>

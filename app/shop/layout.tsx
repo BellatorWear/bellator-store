@@ -1,9 +1,13 @@
-import { User, Settings, Trophy, MessageCircle } from "lucide-react";
+import Link from "next/link";
+import { User, Settings, Trophy, ShoppingBag } from "lucide-react";
 import { getCurrentUser } from "@/app/actions";
+import { getCart } from "@/app/cart";
 import EngagementPopup from "./components/EngagementPopup";
 
 export default async function ShopLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
+  const cart = await getCart();
+  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <div className="min-h-screen flex flex-col font-mono"
@@ -19,17 +23,17 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
       <div className="fixed inset-0 bg-black/50 z-0 pointer-events-none" />
 
       <header className="relative z-10 t-header border-b px-4 sm:px-6 py-4 flex justify-between items-center">
-        <a href="/shop" className="text-xl sm:text-2xl font-black tracking-tighter italic t-text hover:opacity-70 transition">
+        <Link href="/shop" className="text-xl sm:text-2xl font-black tracking-tighter italic t-text hover:opacity-70 transition">
           BELLATOR.
-        </a>
+        </Link>
         <nav className="flex gap-2 sm:gap-3 items-center">
-          <a href="/shop" className="hidden md:block text-xs uppercase tracking-widest t-muted hover:t-text transition px-2">Shop</a>
-          <a href="/mehr" className="hidden md:block text-xs uppercase tracking-widest t-muted hover:t-text transition px-2">Mehr</a>
+          <Link href="/shop" className="hidden md:block text-xs uppercase tracking-widest t-muted hover:t-text transition px-2">Shop</Link>
+          <Link href="/mehr" className="hidden md:block text-xs uppercase tracking-widest t-muted hover:t-text transition px-2">Mehr</Link>
 
           {/* Challenges Icon */}
-          <a href="/shop/challenges" className="t-muted hover:t-text flex items-center" title="Challenges">
+          <Link href="/shop/challenges" className="t-muted hover:t-text flex items-center" title="Challenges">
             <span className="border t-border p-1.5 hover:border-white transition"><Trophy size={14} /></span>
-          </a>
+          </Link>
           {/* Discord Icon */}
           <a href="https://discord.gg/T4RwVJRyRp" target="_blank" rel="noopener noreferrer"
             className="t-muted hover:text-[#5865F2] flex items-center" title="Discord">
@@ -40,13 +44,25 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
             </span>
           </a>
           {/* Einstellungen Icon */}
-          <a href="/einstellungen" className="t-muted hover:t-text flex items-center" title="Einstellungen">
+          <Link href="/einstellungen" className="t-muted hover:t-text flex items-center" title="Einstellungen">
             <span className="border t-border p-1.5 hover:border-white transition"><Settings size={14} /></span>
-          </a>
+          </Link>
+          {/* Warenkorb Icon */}
+          <Link href="/shop/warenkorb" className="t-muted hover:t-text flex items-center relative" title="Warenkorb">
+            <span className="border t-border p-1.5 hover:border-white transition"><ShoppingBag size={14} /></span>
+            {cartCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                {cartCount}
+              </span>
+            )}
+          </Link>
           {/* Profil Icon */}
-          <a href="/profil" className="t-muted hover:t-text flex items-center" title="Profil">
+          <Link href="/profil" className="t-muted hover:t-text flex items-center" title="Profil">
             <span className="border t-border p-1.5 hover:border-white transition"><User size={14} /></span>
-          </a>
+          </Link>
+          {user?.isAdmin && (
+            <Link href="/admin" className="hidden md:block text-xs uppercase tracking-widest text-yellow-400 hover:text-yellow-300 transition px-2">Admin</Link>
+          )}
         </nav>
       </header>
 
@@ -100,8 +116,8 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
           <div className="sm:w-1/3 sm:text-right">
             <p className="t-muted mb-4 tracking-widest font-bold">Links</p>
             <div className="space-y-2">
-              <a href="/impressum" className="block t-muted hover:t-text transition">Impressum</a>
-              <a href="/hilfe" className="block t-muted hover:t-text transition">Hilfe & FAQ</a>
+              <Link href="/impressum" className="block t-muted hover:t-text transition">Impressum</Link>
+              <Link href="/hilfe" className="block t-muted hover:t-text transition">Hilfe & FAQ</Link>
               <a href="https://discord.gg/T4RwVJRyRp" target="_blank" rel="noopener noreferrer"
                 className="block t-muted hover:text-[#5865F2] transition">Discord</a>
             </div>

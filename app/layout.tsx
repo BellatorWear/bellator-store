@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
+import CookieBanner from "./shop/components/CookieBanner";
+import ThemeScript from "./ThemeScript";
 
 export const metadata: Metadata = {
   title: "Bellator Streetwear",
@@ -10,29 +12,13 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="de" suppressHydrationWarning>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-          (function() {
-            try {
-              var m = document.cookie.match(/bellator-theme=([^;]+)/);
-              if (m) document.documentElement.setAttribute('data-theme', m[1]);
-            } catch(e) {}
-          })();
-        `,
-          }}
-        />
-      </head>
       <body>
+        <ThemeScript />
         <Providers>{children}</Providers>
+        <CookieBanner />
       </body>
     </html>
   );

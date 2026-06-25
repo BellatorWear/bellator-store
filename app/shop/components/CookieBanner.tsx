@@ -1,74 +1,56 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
+
+const CONSENT_COOKIE = "bellator-cookie-consent";
+
+function getCookie(name: string): string | undefined {
+  return document.cookie
+    .split("; ")
+    .find((row) => row.startsWith(`${name}=`))
+    ?.split("=")[1];
+}
+
+function setConsentCookie(value: "all" | "essential") {
+  document.cookie = `${CONSENT_COOKIE}=${value}; max-age=${60 * 60 * 24 * 365}; path=/; samesite=strict`;
+}
 
 export default function CookieBanner() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    const consent = localStorage.getItem('cookie-consent');
-    if (!consent) {
-      setIsVisible(true);
-    }
+    if (!getCookie(CONSENT_COOKIE)) setIsVisible(true);
   }, []);
 
-  const acceptCookies = () => {
-    localStorage.setItem('cookie-consent', 'true');
+  function accept() {
+    setConsentCookie("all");
     setIsVisible(false);
-  };
+  }
 
-  const declineCookies = () => {
-    localStorage.setItem('cookie-consent', 'false');
+  function essentialOnly() {
+    setConsentCookie("essential");
     setIsVisible(false);
-  };
+  }
 
   if (!isVisible) return null;
 
   return (
-    <div style={{
-      position: 'fixed',
-      bottom: '20px',
-      left: '20px',
-      right: '20px',
-      background: '#000',
-      border: '2px solid #fff',
-      padding: '1.5rem',
-      color: '#fff',
-      zIndex: 9999,
-      fontFamily: 'Courier New, monospace',
-      boxShadow: '10px 10px 0px 0px #333'
-    }}>
-      <p style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', lineHeight: '1.4' }}>
-        Wir nutzen Cookies für den Shop-Vibe. Akzeptier das, damit alles läuft.
+    <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-sm z-[9999] t-card border p-5 sm:p-6"
+      style={{ boxShadow: "10px 10px 0px 0px var(--shadow)" }}>
+      <p className="text-xs t-text leading-relaxed mb-4">
+        Wir verwenden technisch notwendige Cookies (Login, Warenkorb, Theme).
+        Mit deiner Einwilligung nutzen wir zusätzlich Cookies für Statistik/Analyse.
+        Mehr dazu in unserer{" "}
+        <a href="/datenschutz" className="underline hover:t-text t-muted">Datenschutzerklärung</a>.
       </p>
-      <div style={{ display: 'flex', gap: '10px' }}>
-        <button 
-          onClick={acceptCookies}
-          style={{
-            background: '#fff',
-            color: '#000',
-            border: 'none',
-            padding: '0.8rem 1.5rem',
-            fontWeight: '900',
-            textTransform: 'uppercase',
-            cursor: 'pointer'
-          }}
-        >
-          Akzeptieren
+      <div className="flex gap-2 flex-wrap">
+        <button onClick={accept}
+          className="border t-border px-4 py-2 text-[10px] uppercase tracking-widest font-bold hover:bg-white hover:text-black transition t-text">
+          Alle akzeptieren
         </button>
-        <button 
-          onClick={declineCookies}
-          style={{
-            background: 'transparent',
-            color: '#fff',
-            border: '1px solid #fff',
-            padding: '0.8rem 1.5rem',
-            fontWeight: '900',
-            textTransform: 'uppercase',
-            cursor: 'pointer'
-          }}
-        >
-          Ablehnen
+        <button onClick={essentialOnly}
+          className="border t-border px-4 py-2 text-[10px] uppercase tracking-widest font-bold t-muted hover:t-text transition">
+          Nur notwendige
         </button>
       </div>
     </div>
