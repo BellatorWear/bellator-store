@@ -2,35 +2,20 @@
 import { useState } from "react";
 import { handleAction } from "@/app/actions";
 
-export default function NotificationToggle({ initialEnabled }: { initialEnabled: boolean }) {
+export default function NewsletterToggle({ initialEnabled }: { initialEnabled: boolean }) {
   const [enabled, setEnabled] = useState(initialEnabled);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
 
   async function toggle() {
-    if (!enabled && !("Notification" in window)) {
-      setMsg("Dein Browser unterstützt keine Push-Benachrichtigungen.");
-      return;
-    }
     setLoading(true);
     setMsg("");
-
-    if (!enabled) {
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        setMsg("Berechtigung verweigert.");
-        setLoading(false);
-        return;
-      }
-    }
-
     const fd = new FormData();
-    fd.append("actionType", "togglePush");
+    fd.append("actionType", "toggleNewsletter");
     fd.append("enable", String(!enabled));
     await handleAction(fd);
-
     setEnabled(!enabled);
-    setMsg(!enabled ? "Push-Benachrichtigungen aktiviert!" : "Push-Benachrichtigungen deaktiviert.");
+    setMsg(!enabled ? "Newsletter abonniert!" : "Newsletter abbestellt.");
     setLoading(false);
   }
 

@@ -59,7 +59,10 @@ export async function proxy(request: NextRequest) {
     });
   }
 
-  // Schütze /shop und /profil: nur mit gültiger, signierter Session
+  // Schütze /shop und /profil: gültige, signierte Session ODER Gast-Zugang.
+  // Vorher wurde hier nur die Session geprüft — das Gast-Cookie aus dem
+  // "Als Gast fortfahren"-Button (gesetzt in actions.ts) wurde komplett
+  // ignoriert, wodurch Gäste sofort wieder zur Anmeldeseite geschickt wurden.
   const isProtected = PROTECTED_PREFIXES.some((prefix) =>
     request.nextUrl.pathname.startsWith(prefix),
   );
@@ -67,8 +70,9 @@ export async function proxy(request: NextRequest) {
   if (isProtected) {
     const token = request.cookies.get("bellator-session")?.value;
     const session = verifySessionToken(token);
+    const isGuest = !!request.cookies.get("bellator-guest")?.value;
 
-    if (!session) {
+    if (!session && !isGuest) {
       const loginUrl = new URL("/", request.url);
       loginUrl.searchParams.set("redirect", request.nextUrl.pathname);
       const response = NextResponse.redirect(loginUrl);

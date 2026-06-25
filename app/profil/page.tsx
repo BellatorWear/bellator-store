@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/app/actions";
 import { db } from "@/db";
-import { orders, userChallenges, challenges } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { orders, userChallenges, challenges, userRewards, rewards } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
 import LogoutButton from "./LogoutButton";
 import ChangePasswordForm from "./ChangePasswordForm";
 import DeleteAccountButton from "./DeleteAccountButton";
@@ -38,6 +38,17 @@ export default async function ProfilPage() {
       .from(userChallenges)
       .innerJoin(challenges, eq(userChallenges.challengeId, challenges.id))
       .where(eq(userChallenges.userId, user.id));
+  } catch {}
+
+  // Abzeichen (Badge-Prämien) - mit Fehlerbehandlung
+  let badges: Array<{ id: number; title: string; description: string }> = [];
+  try {
+    const badgeRewards = await db
+      .select({ reward: rewards })
+      .from(userRewards)
+      .innerJoin(rewards, eq(userRewards.rewardId, rewards.id))
+      .where(and(eq(userRewards.userId, user.id), eq(rewards.type, "badge")));
+    badges = badgeRewards.map(b => b.reward);
   } catch {}
 
   return (
@@ -141,6 +152,19 @@ export default async function ProfilPage() {
                 ))}
               </div>
             )}
+            {badges.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-4">
+                {badges.map(b => (
+                  <span key={b.id} title={b.description}
+                    className="border border-yellow-800 bg-yellow-900/10 text-yellow-400 text-[10px] uppercase tracking-widest font-bold px-3 py-1.5">
+                    🏅 {b.title}
+                  </span>
+                ))}
+              </div>
+            )}
+            <a href="/shop/challenges" className="inline-block mt-4 text-xs underline hover:t-text transition t-muted">
+              → Alle Challenges & Prämien ansehen
+            </a>
           </section>
 
           {/* Passwort ändern */}

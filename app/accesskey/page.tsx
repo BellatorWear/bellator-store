@@ -25,7 +25,16 @@ export default function AccessKeyPage() {
 
   return (
     <>
-      <main className="relative flex min-h-[100dvh] items-center justify-center p-4 text-white">
+      <main
+        className="relative flex min-h-[100dvh] items-center justify-center p-4 text-white"
+        style={{
+          backgroundImage: 'url("/background.png")',
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundAttachment: "fixed",
+        }}
+      >
+        <div className="absolute inset-0 bg-black/60 z-0" />
         <div className="relative z-10 w-full max-w-[320px] sm:max-w-sm border border-zinc-700 p-6 sm:p-8 bg-black/60 backdrop-blur-md">
           <a href="/login">
             <h1 className="text-3xl sm:text-4xl font-black mb-2 tracking-tighter text-center uppercase border-b border-zinc-500 pb-4 hover:opacity-80 transition">

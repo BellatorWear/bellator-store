@@ -8,8 +8,13 @@ import {
   emailVerifications,
   newsletter,
   orders,
+  challenges,
+  userChallenges,
+  pointTransactions,
+  rewards,
+  userRewards,
 } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { Resend } from "resend";
 import { cookies } from "next/headers";
 import { checkLoginRateLimit, checkEmailRateLimit } from "./utils/ratelimit";
@@ -68,7 +73,51 @@ export async function getCurrentUser() {
     isAdmin: user.isAdmin ?? false,
     discountPercent: user.discountPercent ?? 0,
     orderCount: user.orderCount ?? 0,
+    pushEnabled: user.pushEnabled ?? false,
+    newsletterOptIn: user.newsletterOptIn ?? false,
   };
+}
+
+// Schreibt eine Challenge als abgeschlossen gut und gibt die gewonnenen
+// Punkte zurück — aber nur, wenn sie noch nicht abgeschlossen wurde.
+// Wird sowohl von automatisch erkannten Challenges (Newsletter, Push, Theme)
+// als auch vom manuellen "Erledigt"-Button genutzt.
+async function awardChallengeByType(userId: number, type: string) {
+  const found = await db
+    .select()
+    .from(challenges)
+    .where(and(eq(challenges.type, type), eq(challenges.active, true)));
+  if (found.length === 0) return null;
+  const challenge = found[0];
+
+  const already = await db
+    .select()
+    .from(userChallenges)
+    .where(
+      and(
+        eq(userChallenges.userId, userId),
+        eq(userChallenges.challengeId, challenge.id),
+      ),
+    );
+  if (already.length > 0) return null; // schon erledigt
+
+  await db.insert(userChallenges).values({ userId, challengeId: challenge.id });
+  await db
+    .update(users)
+    .set({ points: (await getPoints(userId)) + challenge.pointReward })
+    .where(eq(users.id, userId));
+  await db.insert(pointTransactions).values({
+    userId,
+    points: challenge.pointReward,
+    reason: `Challenge: ${challenge.title}`,
+  });
+
+  return challenge.pointReward;
+}
+
+async function getPoints(userId: number): Promise<number> {
+  const result = await db.select().from(users).where(eq(users.id, userId));
+  return result[0]?.points ?? 0;
 }
 
 const resend = process.env.RESEND_API_KEY
@@ -491,6 +540,9 @@ export async function handleAction(
     if (theme !== "dark" && theme !== "light")
       return { error: "Ungültiges Theme." };
     await db.update(users).set({ theme }).where(eq(users.id, session.userId));
+    if (theme === "light") {
+      await awardChallengeByType(session.userId, "theme_explorer");
+    }
     // Theme-Cookie setzen damit es beim Seitenaufruf sofort verfügbar ist
     const cookieStore = await cookies();
     cookieStore.set("bellator-theme", theme, {
@@ -502,7 +554,43 @@ export async function handleAction(
     return { success: true };
   }
 
-  // --- NEWSLETTER SUBSCRIBE ---
+  // --- NEWSLETTER ANMELDEN/ABMELDEN (Popup + Einstellungen) ---
+  if (actionType === "toggleNewsletter") {
+    const session = await getCurrentSession();
+    if (!session) return { error: "Nicht eingeloggt." };
+
+    const enable = formData.get("enable") === "true";
+
+    await db
+      .update(users)
+      .set({ newsletterOptIn: enable })
+      .where(eq(users.id, session.userId));
+
+    try {
+      if (enable) {
+        await db
+          .insert(newsletter)
+          .values({ email: session.email })
+          .onConflictDoUpdate({
+            target: newsletter.email,
+            set: { active: true },
+          });
+        await awardChallengeByType(session.userId, "newsletter");
+      } else {
+        await db
+          .update(newsletter)
+          .set({ active: false })
+          .where(eq(newsletter.email, session.email));
+      }
+    } catch (e) {
+      console.error("Newsletter-Fehler:", e);
+    }
+
+    return { success: true };
+  }
+
+  // Alter Name bleibt erhalten für das Sold-Out-Formular auf der Shop-Seite,
+  // das auch von Gästen (ohne Account) genutzt werden kann.
   if (actionType === "subscribeNewsletter") {
     const email = formData.get("email") as string;
     if (!email) return { error: "Email erforderlich." };
@@ -514,11 +602,125 @@ export async function handleAction(
     return { success: "Eingetragen!" };
   }
 
-  // --- PUSH AKTIVIEREN ---
-  if (actionType === "enablePush") {
-    // Placeholder: erfordert VAPID-Keys und Service Worker
-    // Subscription wird vom Client-Browser geliefert
+  // --- PUSH AKTIVIEREN/DEAKTIVIEREN ---
+  if (actionType === "togglePush") {
+    const session = await getCurrentSession();
+    if (!session) return { error: "Nicht eingeloggt." };
+
+    const enable = formData.get("enable") === "true";
+    await db
+      .update(users)
+      .set({ pushEnabled: enable })
+      .where(eq(users.id, session.userId));
+
+    if (enable) {
+      // Placeholder: erfordert VAPID-Keys und Service Worker für echte
+      // Web-Push-Subscriptions. Hier wird nur der Wunsch des Users gespeichert.
+      await awardChallengeByType(session.userId, "push");
+    }
+
     return { success: true };
+  }
+
+  // --- CHALLENGE MANUELL ALS ERLEDIGT MARKIEREN ---
+  // Nur für Challenges, die wir nicht automatisch verifizieren können
+  // (z.B. "Discord beitreten" — wir haben keinen Bot, der das prüft).
+  if (actionType === "completeChallenge") {
+    const session = await getCurrentSession();
+    if (!session) return { error: "Nicht eingeloggt." };
+
+    const challengeId = Number(formData.get("challengeId"));
+    if (!challengeId) return { error: "Ungültige Challenge." };
+
+    const SELF_REPORT_TYPES = ["discord_join", "review", "referral"];
+
+    const found = await db
+      .select()
+      .from(challenges)
+      .where(eq(challenges.id, challengeId));
+    if (found.length === 0) return { error: "Challenge nicht gefunden." };
+    const challenge = found[0];
+
+    if (!SELF_REPORT_TYPES.includes(challenge.type)) {
+      return { error: "Diese Challenge wird automatisch erkannt." };
+    }
+
+    const already = await db
+      .select()
+      .from(userChallenges)
+      .where(
+        and(
+          eq(userChallenges.userId, session.userId),
+          eq(userChallenges.challengeId, challenge.id),
+        ),
+      );
+    if (already.length > 0) return { error: "Challenge bereits erledigt." };
+
+    const awarded = await awardChallengeByType(session.userId, challenge.type);
+    if (!awarded) return { error: "Challenge bereits erledigt." };
+
+    return { success: `+${awarded} Punkte erhalten!` };
+  }
+
+  // --- PRÄMIE MIT PUNKTEN EINLÖSEN (kein echtes Geld) ---
+  if (actionType === "redeemReward") {
+    const session = await getCurrentSession();
+    if (!session) return { error: "Nicht eingeloggt." };
+
+    const rewardId = Number(formData.get("rewardId"));
+    if (!rewardId) return { error: "Ungültige Prämie." };
+
+    const rewardResult = await db
+      .select()
+      .from(rewards)
+      .where(eq(rewards.id, rewardId));
+    if (rewardResult.length === 0 || !rewardResult[0].active) {
+      return { error: "Prämie nicht verfügbar." };
+    }
+    const reward = rewardResult[0];
+
+    const userResult = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, session.userId));
+    if (userResult.length === 0) return { error: "Account nicht gefunden." };
+    const user = userResult[0];
+    const currentPoints = user.points ?? 0;
+
+    if (currentPoints < reward.costPoints) {
+      return { error: "Nicht genug Punkte." };
+    }
+
+    // Punkte abziehen
+    await db
+      .update(users)
+      .set({ points: currentPoints - reward.costPoints })
+      .where(eq(users.id, session.userId));
+    await db.insert(pointTransactions).values({
+      userId: session.userId,
+      points: -reward.costPoints,
+      reason: `Prämie: ${reward.title}`,
+    });
+
+    // Effekt je nach Prämien-Typ anwenden
+    let code: string | null = null;
+    if (reward.type === "discount") {
+      const newDiscount = Math.min((user.discountPercent ?? 0) + 5, 30);
+      await db
+        .update(users)
+        .set({ discountPercent: newDiscount })
+        .where(eq(users.id, session.userId));
+    } else if (reward.type === "physical") {
+      code = "BLT-" + crypto.randomBytes(4).toString("hex").toUpperCase();
+    }
+
+    await db.insert(userRewards).values({
+      userId: session.userId,
+      rewardId: reward.id,
+      code,
+    });
+
+    return { success: code ? `Eingelöst! Dein Code: ${code}` : "Eingelöst!" };
   }
 
   return { error: "Ungültige Aktion." };

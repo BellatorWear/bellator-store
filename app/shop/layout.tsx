@@ -1,9 +1,20 @@
 import { User, Settings, Trophy, MessageCircle } from "lucide-react";
+import { getCurrentUser } from "@/app/actions";
+import EngagementPopup from "./components/EngagementPopup";
 
-export default function ShopLayout({ children }: { children: React.ReactNode }) {
+export default async function ShopLayout({ children }: { children: React.ReactNode }) {
+  const user = await getCurrentUser();
+
   return (
     <div className="min-h-screen flex flex-col font-mono"
       style={{ backgroundImage: 'url("/background.png")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
+
+      {user && (
+        <EngagementPopup
+          initialNewsletterOptIn={user.newsletterOptIn ?? false}
+          initialPushEnabled={user.pushEnabled ?? false}
+        />
+      )}
 
       <div className="fixed inset-0 bg-black/50 z-0 pointer-events-none" />
 

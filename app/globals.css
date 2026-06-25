@@ -80,7 +80,7 @@ html, body {
 
 /* Password eye toggle */
 .pw-wrap { position: relative; }
-.pw-wrap input { padding-right: 2.5rem; }
+.pw-wrap input { padding-left: 2.5rem; padding-right: 2.5rem; }
 .pw-eye {
   position: absolute;
   right: 0.5rem;

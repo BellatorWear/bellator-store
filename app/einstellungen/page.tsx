@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/app/actions";
 import ThemeToggle from "./ThemeToggle";
 import NotificationToggle from "./NotificationToggle";
+import NewsletterToggle from "./NewsletterToggle";
 
 export default async function EinstellungenPage() {
   const user = await getCurrentUser();
@@ -42,14 +43,14 @@ export default async function EinstellungenPage() {
                 <p className="text-sm font-bold uppercase tracking-widest">Push-Benachrichtigungen</p>
                 <p className="text-xs t-muted mt-0.5">Werde bei neuen Drops und Aktionen benachrichtigt.</p>
               </div>
-              <NotificationToggle />
+              <NotificationToggle initialEnabled={user.pushEnabled ?? false} />
             </div>
-            <div className="py-2">
-              <p className="text-sm font-bold uppercase tracking-widest mb-0.5">Werbe-Emails</p>
-              <p className="text-xs t-muted mb-2">
-                Verwalte deine Email-Einstellungen in deinem{" "}
-                <a href="/profil" className="underline hover:t-text transition">Profil →</a>
-              </p>
+            <div className="flex justify-between items-center py-2">
+              <div>
+                <p className="text-sm font-bold uppercase tracking-widest">Werbe-Emails / Newsletter</p>
+                <p className="text-xs t-muted mt-0.5">Verpasse keinen Drop und keine Aktion per Email.</p>
+              </div>
+              <NewsletterToggle initialEnabled={user.newsletterOptIn ?? false} />
             </div>
           </section>
 

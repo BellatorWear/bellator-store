@@ -146,7 +146,7 @@ export default function LoginPage() {
             <a href="/accesskey" className="block w-full text-[11px] text-white/60 uppercase tracking-widest hover:text-white transition text-center">
               Mit Access Key einloggen
             </a>
-            <a href="/registrieren" className="block w-full text-[11px] text-white/80 uppercase tracking-widest hover:text-white transition text-center font-bold">
+            <a href="/registrieren" className="block w-full text-[11px] text-white/80 uppercase tracking-widest hover:text-white transition text-center">
               Noch kein Account? → Registrieren
             </a>
             <button onClick={handleGuest} className="w-full text-[11px] text-white/50 uppercase tracking-widest hover:text-white/80 transition">

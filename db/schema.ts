@@ -16,6 +16,8 @@ export const users = pgTable("users", {
   orderCount: integer("order_count").default(0),
   discountPercent: integer("discount_percent").default(0), // Rabatt in % (berechnet)
   pushSubscription: text("push_subscription"), // JSON Web Push subscription
+  pushEnabled: boolean("push_enabled").default(false),
+  newsletterOptIn: boolean("newsletter_opt_in").default(false),
 });
 
 export const emailVerifications = pgTable("email_verifications", {
@@ -104,4 +106,23 @@ export const newsletter = pgTable("newsletter", {
   email: text("email").notNull().unique(),
   subscribedAt: timestamp("subscribed_at").defaultNow(),
   active: boolean("active").default(true),
+});
+
+// Prämien, die man sich mit Punkten holen kann (kein echtes Geld)
+export const rewards = pgTable("rewards", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  costPoints: integer("cost_points").notNull(),
+  type: text("type").notNull(), // "discount" | "physical" | "badge"
+  active: boolean("active").default(true),
+});
+
+// Welche Prämien hat ein User eingelöst
+export const userRewards = pgTable("user_rewards", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
+  rewardId: integer("reward_id").references(() => rewards.id),
+  code: text("code"), // Einlöse-Code für physische Prämien
+  redeemedAt: timestamp("redeemed_at").defaultNow(),
 });
