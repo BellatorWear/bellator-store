@@ -11,7 +11,8 @@ const nextConfig: NextConfig = {
 export default nextConfig;
 
 
-  async headers() {
+  async headers() 
+  {
     const csp = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://www.googletagmanager.com https://www.google-analytics.com",
@@ -46,7 +47,5 @@ export default nextConfig;
         ],
       },
     ];
-  },
-};
-
+  }
 module.exports = nextConfig;
