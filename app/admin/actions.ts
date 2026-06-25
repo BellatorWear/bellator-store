@@ -2,14 +2,29 @@
 import { db } from "@/db";
 import { products, productVariants } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { del } from "@vercel/blob";
 import { getCurrentUser } from "@/app/actions";
 import { sanitizeText, isSuspiciousInput } from "@/app/utils/inputSafety";
 import { isTrustedOrigin } from "@/app/utils/origin";
 
 const MAX_IMAGES_PER_PRODUCT = 4;
-// Grobe Obergrenze pro Bild (Base64 ist ca. 1.37x größer als die Rohdatei).
-// Verhindert, dass jemand riesige Dateien in die DB drückt.
-const MAX_IMAGE_BASE64_LENGTH = 2_000_000; // ~1.4 MB Rohbild
+
+// Bilder werden jetzt direkt vom Browser zu Vercel Blob hochgeladen (siehe
+// app/api/admin/upload/route.ts) - hier kommt nur noch die fertige URL an,
+// kein Base64 mehr. Wir prüfen, dass es WIRKLICH eine URL aus unserem
+// eigenen Blob-Store ist, damit niemand beliebige externe Bild-URLs
+// einschleusen kann (z.B. um andere User auf fremde Server zu locken).
+function isOwnBlobUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === "https:" &&
+      parsed.hostname.endsWith(".public.blob.vercel-storage.com")
+    );
+  } catch {
+    return false;
+  }
+}
 
 async function requireAdmin() {
   if (!(await isTrustedOrigin())) return null;
@@ -47,8 +62,7 @@ export async function createProduct(formData: FormData) {
   const images: string[] = [];
   for (const entry of formData.getAll("images")) {
     if (typeof entry !== "string" || !entry) continue;
-    if (!entry.startsWith("data:image/")) continue; // nur Bilder, kein beliebiger Text
-    if (entry.length > MAX_IMAGE_BASE64_LENGTH) continue; // zu groß, überspringen
+    if (!isOwnBlobUrl(entry)) continue; // nur echte Blob-URLs, keine fremden/beliebigen
     if (images.length < MAX_IMAGES_PER_PRODUCT) images.push(entry);
   }
 
@@ -110,8 +124,21 @@ export async function deleteProduct(formData: FormData) {
   const id = Number(formData.get("id"));
   if (!id) return { error: "Ungültiges Produkt." };
 
+  const existing = await db.select().from(products).where(eq(products.id, id));
+
   await db.delete(productVariants).where(eq(productVariants.productId, id));
   await db.delete(products).where(eq(products.id, id));
+
+  // Zugehörige Bilder im Blob-Store auch löschen, sonst sammeln sich dort
+  // verwaiste Dateien an (kostet Speicherplatz).
+  const images = existing[0]?.images ?? [];
+  for (const url of images) {
+    try {
+      await del(url);
+    } catch (e) {
+      console.error("Konnte Blob nicht löschen:", url, e);
+    }
+  }
 
   return { success: true };
 }

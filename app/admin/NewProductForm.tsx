@@ -1,12 +1,15 @@
 "use client";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { upload } from "@vercel/blob/client";
 import { createProduct } from "./actions";
 
 const MAX_IMAGES = 4;
 
+type PendingImage = { url: string; uploading: boolean; error?: string };
+
 export default function NewProductForm() {
-  const [images, setImages] = useState<string[]>([]);
+  const [images, setImages] = useState<PendingImage[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [success, setSuccess] = useState(false);
@@ -15,26 +18,44 @@ export default function NewProductForm() {
   const router = useRouter();
 
   async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    const next: string[] = [...images];
-    for (const file of files) {
-      if (next.length >= MAX_IMAGES) break;
-      if (!file.type.startsWith("image/")) continue;
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      next.push(dataUrl);
+    const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/"));
+    const room = MAX_IMAGES - images.length;
+    const toUpload = files.slice(0, Math.max(0, room));
+
+    // Sofort Platzhalter anzeigen, damit man sieht dass der Upload läuft -
+    // die Datei geht direkt vom Browser zu Vercel Blob, NICHT über unseren
+    // Server (sonst würde Vercels 4,5-MB-Limit pro Function greifen).
+    const placeholders = toUpload.map(() => ({ url: "", uploading: true }) as PendingImage);
+    setImages((prev) => [...prev, ...placeholders]);
+
+    for (let i = 0; i < toUpload.length; i++) {
+      const file = toUpload[i];
+      const indexInState = images.length + i;
+      try {
+        const blob = await upload(file.name, file, {
+          access: "public",
+          handleUploadUrl: "/api/admin/upload",
+        });
+        setImages((prev) =>
+          prev.map((img, idx) => (idx === indexInState ? { url: blob.url, uploading: false } : img)),
+        );
+      } catch (uploadErr) {
+        setImages((prev) =>
+          prev.map((img, idx) =>
+            idx === indexInState
+              ? { url: "", uploading: false, error: "Upload fehlgeschlagen" }
+              : img,
+          ),
+        );
+        console.error(uploadErr);
+      }
     }
-    setImages(next);
-    // Input zurücksetzen damit man dieselbe Datei nochmal wählen kann
+
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   function removeImage(i: number) {
-    setImages(prev => prev.filter((_, idx) => idx !== i));
+    setImages((prev) => prev.filter((_, idx) => idx !== i));
   }
 
   async function submit(e: React.FormEvent) {
@@ -42,12 +63,17 @@ export default function NewProductForm() {
     if (loading) return;
     setErr("");
     setSuccess(false);
+
+    if (images.some((img) => img.uploading)) {
+      setErr("Bitte warten, bis alle Bilder hochgeladen sind.");
+      return;
+    }
+
     setLoading(true);
     try {
       const fd = new FormData(formRef.current!);
-      // Bilder separat anhängen da sie nicht im normalen FormData sind
-      fd.delete("images"); // falls was drin ist
-      images.forEach((img) => fd.append("images", img));
+      fd.delete("images");
+      images.filter((img) => img.url).forEach((img) => fd.append("images", img.url));
       const res = await createProduct(fd);
       if (res.error) {
         setErr(res.error);
@@ -86,10 +112,10 @@ export default function NewProductForm() {
       <input name="dropLabel" placeholder="Drop-Bezeichnung (z.B. 'Drop #2', optional)" maxLength={40}
         className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white placeholder:text-zinc-600 hover:border-zinc-500 focus:border-white outline-none transition" />
 
-      {/* Bilder Upload */}
+      {/* Bilder Upload - geht direkt zu Vercel Blob, nicht über den Server */}
       <div>
         <label className="block text-[10px] text-zinc-500 uppercase tracking-widest mb-2">
-          Bilder (max. {MAX_IMAGES})
+          Bilder (max. {MAX_IMAGES}, hochauflösend möglich)
         </label>
         <label className="flex items-center gap-2 cursor-pointer">
           <span className="border border-zinc-600 px-3 py-2 text-[10px] uppercase tracking-widest text-zinc-400 hover:border-white hover:text-white transition font-bold">
@@ -111,9 +137,15 @@ export default function NewProductForm() {
         {images.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-3">
             {images.map((img, i) => (
-              <div key={i} className="relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={img} alt="" className="w-16 h-16 object-cover border border-zinc-700" />
+              <div key={i} className="relative w-16 h-16 border border-zinc-700 flex items-center justify-center bg-zinc-900">
+                {img.uploading ? (
+                  <span className="text-[8px] text-zinc-500 uppercase tracking-widest text-center px-1">Lädt...</span>
+                ) : img.error ? (
+                  <span className="text-[8px] text-red-500 uppercase tracking-widest text-center px-1">Fehler</span>
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={img.url} alt="" className="w-full h-full object-cover" />
+                )}
                 <button
                   type="button"
                   onClick={() => removeImage(i)}

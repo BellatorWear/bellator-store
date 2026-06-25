@@ -126,9 +126,9 @@ export async function createCheckoutSession() {
           unit_amount: item.unitPriceCents,
           product_data: {
             name: item.variantLabel ? `${item.name} (${item.variantLabel})` : item.name,
-            // Hinweis: Stripe akzeptiert hier nur echte https-URLs, keine
-            // Base64-Data-URLs (so speichern wir unsere Produktbilder).
-            // Bilder werden deshalb bewusst nicht mitgeschickt.
+            // Bilder sind jetzt echte https-URLs (Vercel Blob), nicht mehr
+            // Base64 - Stripe akzeptiert nur echte URLs, das geht jetzt.
+            images: item.image ? [item.image] : undefined,
           },
         },
       })),
