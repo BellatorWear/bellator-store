@@ -53,7 +53,7 @@ export default async function ProfilPage() {
 
   return (
     <main className="min-h-screen t-text font-mono"
-      style={{ backgroundImage: 'url("/background.png")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
+      style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
       <div className="fixed inset-0 bg-black/50 pointer-events-none z-0" />
 
       <header className="relative z-10 t-header border-b px-4 sm:px-6 py-4 flex justify-between items-center">
@@ -101,9 +101,11 @@ export default async function ProfilPage() {
               </div>
             )}
             {isAdmin && (
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-sm items-center">
                 <span className="t-muted uppercase text-xs tracking-widest">Rolle</span>
-                <span className="text-purple-400 font-bold uppercase tracking-widest">Admin</span>
+                <a href="/admin" className="text-purple-400 font-bold uppercase tracking-widest hover:underline">
+                  Admin →
+                </a>
               </div>
             )}
           </section>

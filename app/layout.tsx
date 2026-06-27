@@ -3,6 +3,9 @@ import "./globals.css";
 import { Providers } from "./providers";
 import CookieBanner from "./shop/components/CookieBanner";
 import ThemeScript from "./ThemeScript";
+import { getCurrentUser } from "./actions";
+import ProfileSetupGuard from "./ProfileSetupGuard";
+import CustomValidationMessages from "./CustomValidationMessages";
 
 export const metadata: Metadata = {
   title: "Bellator Streetwear",
@@ -12,13 +15,23 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const user = await getCurrentUser();
+
   return (
     <html lang="de" suppressHydrationWarning>
       <body>
         <ThemeScript />
+        <CustomValidationMessages />
         <Providers>{children}</Providers>
         <CookieBanner />
+        {user && (
+          <ProfileSetupGuard
+            mustSetPassword={user.mustSetPassword}
+            hasUsername={!!user.username}
+            email={user.email}
+          />
+        )}
       </body>
     </html>
   );

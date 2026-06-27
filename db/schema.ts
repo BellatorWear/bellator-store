@@ -4,6 +4,10 @@ import {
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
+  // Zweite, eigenständig hochzählende ID (unabhängig von der primären id).
+  // Zeigt fortlaufend an, der wievielte registrierte User jemand ist - z.B.
+  // für die Admin-Anzeige "X registrierte User" oder "Mitglied #N".
+  memberNo: serial("member_no"),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash"),
   emailVerified: boolean("email_verified").default(false),
@@ -60,6 +64,9 @@ export const orders = pgTable("orders", {
   total: integer("total").notNull(),
   discountApplied: integer("discount_applied").default(0), // Rabatt in %
   status: text("status").default("pending"),
+  // Stripe Checkout Session ID - verhindert, dass derselbe Webhook-Event
+  // (Stripe sendet bei Netzwerkproblemen Retries) die Bestellung doppelt anlegt.
+  stripeSessionId: text("stripe_session_id").unique(),
   createdAt: timestamp("created_at").defaultNow(),
   receiptData: text("receipt_data"),
 });
@@ -112,6 +119,7 @@ export const rewards = pgTable("rewards", {
   description: text("description").notNull(),
   costPoints: integer("cost_points").notNull(),
   type: text("type").notNull(), // "discount" | "physical" | "badge"
+  discountPercent: integer("discount_percent"), // nur relevant bei type="discount"
   active: boolean("active").default(true),
 });
 
@@ -131,6 +139,9 @@ export const products = pgTable("products", {
   name: text("name").notNull(),
   description: text("description").notNull(),
   priceCents: integer("price_cents").notNull(),
+  // Wenn gesetzt: der alte/durchgestrichene Preis. priceCents ist dann der
+  // reduzierte Preis. null = kein Rabatt, normaler Preis.
+  compareAtPriceCents: integer("compare_at_price_cents"),
   images: text("images").array(), // Base64 Data-URLs oder externe URLs
   dropLabel: text("drop_label"), // z.B. "Drop #2" - rein informativ
   dropLimit: integer("drop_limit"), // null = unlimitiert
@@ -157,4 +168,43 @@ export const cartItems = pgTable("cart_items", {
   variantId: integer("variant_id").references(() => productVariants.id),
   quantity: integer("quantity").default(1),
   addedAt: timestamp("added_at").defaultNow(),
+});
+
+// Einzelne Key/Value Einstellungen, die der Admin im Panel ändert und die
+// für ALLE Besucher gelten sollen (z.B. Countdown). Vorher lag sowas in
+// localStorage im Browser des Admins - das sah dann für jeden Besucher
+// anders aus (bzw. einfach den Default), weil es nie im Server/DB lag.
+export const siteSettings = pgTable("site_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(), // JSON-String
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Rabattcodes: sowohl die "ersten N Bestellungen"-Codes (vom Admin
+// konfiguriert) als auch die per Punkte-Shop eingelösten Einzel-Codes
+// (automatisch über die Stripe API als echte Stripe Promotion Codes
+// erzeugt) landen hier, damit wir Übersicht/Limits zentral verwalten.
+export const discountCodes = pgTable("discount_codes", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  percentOff: integer("percent_off").notNull(),
+  source: text("source").notNull(), // "exclusive_first_orders" | "reward_redemption" | "admin"
+  userId: integer("user_id").references(() => users.id), // optional: an bestimmten User gebunden
+  stripeCouponId: text("stripe_coupon_id"),
+  stripePromotionCodeId: text("stripe_promotion_code_id"),
+  maxRedemptions: integer("max_redemptions").default(1),
+  timesRedeemed: integer("times_redeemed").default(0),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// News-Channel: Posts, die der Admin veröffentlicht. Werden 1x beim
+// Veröffentlichen als Push + Newsletter-Mail an alle Abonnenten verschickt.
+export const newsPosts = pgTable("news_posts", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  pushSentAt: timestamp("push_sent_at"),
+  emailSentAt: timestamp("email_sent_at"),
 });

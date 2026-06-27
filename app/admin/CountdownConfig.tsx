@@ -1,41 +1,49 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { saveCountdownSetting } from "./actions";
 
-const STORAGE_KEY = "bellator_countdown";
+type CountdownData = { enabled: boolean; targetDate: string; label: string };
 
-type CountdownData = {
-  enabled: boolean;
-  targetDate: string; // ISO string
-  label: string;
-};
-
-function getDefaults(): CountdownData {
-  return {
-    enabled: true,
-    targetDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16),
-    label: "Nächster Drop in",
-  };
-}
-
-export default function CountdownConfig() {
-  const [data, setData] = useState<CountdownData>(getDefaults());
+export default function CountdownConfig({ initial }: { initial: CountdownData }) {
+  const [data, setData] = useState<CountdownData>(initial);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState("");
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) setData(JSON.parse(stored));
-    } catch {}
-  }, []);
+  function broadcastPreview(next: CountdownData) {
+    // Live-Vorschau im selben Browser/Tab, ohne neu zu laden - die
+    // tatsächlich für ALLE Besucher gültige Speicherung passiert erst
+    // beim Klick auf "Speichern" (siehe save()).
+    window.dispatchEvent(new CustomEvent("bellator-countdown-preview", { detail: next }));
+  }
 
-  function save() {
+  function update(patch: Partial<CountdownData>) {
+    const next = { ...data, ...patch };
+    setData(next);
+    broadcastPreview(next);
+  }
+
+  async function save() {
+    setSaving(true);
+    setErr("");
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      // Broadcast zu anderen Tabs/Komponenten
-      window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY, newValue: JSON.stringify(data) }));
+      const fd = new FormData();
+      fd.append("enabled", String(data.enabled));
+      fd.append("targetDate", data.targetDate);
+      fd.append("label", data.label);
+      const res = await saveCountdownSetting(fd);
+      if (res?.error) {
+        setErr(res.error);
+        return;
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch {}
+    } catch (e) {
+      console.error("Countdown speichern fehlgeschlagen:", e);
+      setErr("Fehler. Bitte nochmal versuchen.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -48,7 +56,7 @@ export default function CountdownConfig() {
           </span>
           <button
             type="button"
-            onClick={() => setData(d => ({ ...d, enabled: !d.enabled }))}
+            onClick={() => update({ enabled: !data.enabled })}
             className={`relative w-10 h-5 border transition-all ${data.enabled ? "border-white bg-white" : "border-zinc-600 bg-zinc-900"}`}
           >
             <span className={`absolute top-0.5 w-4 h-4 transition-all ${data.enabled ? "right-0.5 bg-black" : "left-0.5 bg-white"}`} />
@@ -62,7 +70,7 @@ export default function CountdownConfig() {
           <input
             type="datetime-local"
             value={data.targetDate}
-            onChange={e => setData(d => ({ ...d, targetDate: e.target.value }))}
+            onChange={(e) => update({ targetDate: e.target.value })}
             className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white hover:border-zinc-500 focus:border-white outline-none transition"
           />
         </div>
@@ -71,25 +79,28 @@ export default function CountdownConfig() {
           <input
             type="text"
             value={data.label}
-            onChange={e => setData(d => ({ ...d, label: e.target.value }))}
+            onChange={(e) => update({ label: e.target.value })}
             placeholder="Nächster Drop in"
             className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white placeholder:text-zinc-600 hover:border-zinc-500 focus:border-white outline-none transition"
           />
         </div>
       </div>
 
+      {err && <p className="text-[10px] text-red-500 uppercase tracking-widest">{err}</p>}
+
       <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={save}
-          className="border border-zinc-500 px-4 py-2 text-[10px] uppercase tracking-widest font-bold hover:bg-white hover:text-black transition-all duration-200"
+          disabled={saving}
+          className="border border-zinc-500 px-4 py-2 text-[10px] uppercase tracking-widest font-bold hover:bg-white hover:text-black transition-all duration-200 disabled:opacity-50"
         >
-          Speichern
+          {saving ? "..." : "Speichern"}
         </button>
         {saved && <span className="text-[10px] text-green-500 uppercase tracking-widest">✓ Gespeichert</span>}
       </div>
       <p className="text-[9px] text-zinc-600">
-        Der Countdown wird auf der Shop-Hauptseite angezeigt wenn aktiviert. Einstellungen werden im Browser gespeichert.
+        Wird jetzt zentral gespeichert und gilt für ALLE Besucher (vorher nur lokal in deinem Browser).
       </p>
     </section>
   );

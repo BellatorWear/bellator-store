@@ -3,6 +3,7 @@ import { User, Settings, Trophy, ShoppingBag } from "lucide-react";
 import { getCurrentUser } from "@/app/actions";
 import { getCart } from "@/app/cart";
 import EngagementPopup from "./components/EngagementPopup";
+import RedeemCodeButton from "./components/RedeemCodeButton";
 
 export default async function ShopLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
@@ -11,7 +12,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
 
   return (
     <div className="min-h-screen flex flex-col font-mono"
-      style={{ backgroundImage: 'url("/background.png")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
+      style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
 
       {user && (
         <EngagementPopup
@@ -23,9 +24,15 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
       <div className="fixed inset-0 bg-black/50 z-0 pointer-events-none" />
 
       <header className="relative z-10 t-header border-b px-4 sm:px-6 py-4 flex justify-between items-center">
-        <Link href="/shop" className="text-xl sm:text-2xl font-black tracking-tighter italic t-text hover:opacity-70 transition">
-          BELLATOR.
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link href="/shop" className="text-xl sm:text-2xl font-black tracking-tighter italic t-text hover:opacity-70 transition">
+            BELLATOR.
+          </Link>
+          {/* Desktop: Rabattcode-Button oben links neben dem Logo (Mobile hat ihn unter dem Countdown) */}
+          <div className="hidden md:block">
+            <RedeemCodeButton />
+          </div>
+        </div>
         <nav className="flex gap-2 sm:gap-3 items-center">
           <Link href="/shop" className="hidden md:block text-xs uppercase tracking-widest t-muted hover:t-text transition px-2">Shop</Link>
           <Link href="/mehr" className="hidden md:block text-xs uppercase tracking-widest t-muted hover:t-text transition px-2">Mehr</Link>

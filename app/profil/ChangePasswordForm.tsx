@@ -1,7 +1,40 @@
 "use client";
 
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { handleAction } from "@/app/actions";
+
+function PasswordField({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        type={show ? "text" : "password"}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        required
+        className="w-full bg-black/80 border-b border-zinc-600 p-2 pr-9 focus:border-white outline-none transition text-center placeholder:text-zinc-600 text-white"
+      />
+      <button
+        type="button"
+        onClick={() => setShow((s) => !s)}
+        tabIndex={-1}
+        className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition"
+      >
+        {show ? <EyeOff size={16} /> : <Eye size={16} />}
+      </button>
+    </div>
+  );
+}
 
 export default function ChangePasswordForm() {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -26,50 +59,35 @@ export default function ChangePasswordForm() {
     }
 
     setLoading(true);
-    const fd = new FormData();
-    fd.append("actionType", "changePassword");
-    fd.append("currentPassword", currentPassword);
-    fd.append("newPassword", newPassword);
-    const res = await handleAction(fd);
-    setLoading(false);
+    try {
+      const fd = new FormData();
+      fd.append("actionType", "changePassword");
+      fd.append("currentPassword", currentPassword);
+      fd.append("newPassword", newPassword);
+      const res = await handleAction(fd);
 
-    if (res.error) {
-      setMsg({ text: res.error, type: "error" });
-      return;
+      if (res.error) {
+        setMsg({ text: res.error, type: "error" });
+        return;
+      }
+
+      setMsg({ text: "Passwort erfolgreich geändert.", type: "success" });
+      setCurrentPassword("");
+      setNewPassword("");
+      setNewPassword2("");
+    } catch (e) {
+      console.error("Passwort ändern fehlgeschlagen:", e);
+      setMsg({ text: "Fehler. Bitte nochmal versuchen.", type: "error" });
+    } finally {
+      setLoading(false);
     }
-
-    setMsg({ text: "Passwort erfolgreich geändert.", type: "success" });
-    setCurrentPassword("");
-    setNewPassword("");
-    setNewPassword2("");
   }
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <input
-        type="password"
-        value={currentPassword}
-        onChange={(e) => setCurrentPassword(e.target.value)}
-        placeholder="AKTUELLES PASSWORT"
-        required
-        className="w-full bg-black/80 border-b border-zinc-600 p-2 focus:border-white outline-none transition text-center placeholder:text-zinc-600 text-white"
-      />
-      <input
-        type="password"
-        value={newPassword}
-        onChange={(e) => setNewPassword(e.target.value)}
-        placeholder="NEUES PASSWORT"
-        required
-        className="w-full bg-black/80 border-b border-zinc-600 p-2 focus:border-white outline-none transition text-center placeholder:text-zinc-600 text-white"
-      />
-      <input
-        type="password"
-        value={newPassword2}
-        onChange={(e) => setNewPassword2(e.target.value)}
-        placeholder="NEUES PASSWORT BESTÄTIGEN"
-        required
-        className="w-full bg-black/80 border-b border-zinc-600 p-2 focus:border-white outline-none transition text-center placeholder:text-zinc-600 text-white"
-      />
+      <PasswordField value={currentPassword} onChange={setCurrentPassword} placeholder="AKTUELLES PASSWORT" />
+      <PasswordField value={newPassword} onChange={setNewPassword} placeholder="NEUES PASSWORT" />
+      <PasswordField value={newPassword2} onChange={setNewPassword2} placeholder="NEUES PASSWORT BESTÄTIGEN" />
 
       {msg && (
         <p

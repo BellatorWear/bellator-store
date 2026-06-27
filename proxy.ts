@@ -27,6 +27,15 @@ const PROTECTED_PREFIXES = ["/shop", "/admin"]; // Login ODER Gast erlaubt
 const LOGIN_ONLY_PREFIXES = ["/profil", "/einstellungen", "/belege"]; // NUR echter Login (kein Gast)
 
 export async function proxy(request: NextRequest) {
+  // Der Stripe-Webhook hat seinen eigenen Schutz (Signaturprüfung mit
+  // STRIPE_WEBHOOK_SECRET) und kommt von Stripes eigener Infrastruktur,
+  // nicht von normalen Besuchern - die IP-basierte Rate-Limitierung hier
+  // würde nur unnötig riskieren, legitime Bestell-Webhooks bei einem
+  // kurzzeitigen Redis-Ausfall mit 503 abzulehnen.
+  if (request.nextUrl.pathname === "/api/stripe-webhook") {
+    return NextResponse.next();
+  }
+
   // Extrahiere Client IP
   const ip =
     request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||

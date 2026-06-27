@@ -40,6 +40,11 @@ html, body {
   background-color: var(--bg);
   color: var(--text);
   transition: background-color 0.25s ease, color 0.25s ease;
+  /* Bellator nutzt durchgängig die Monospace/Typewriter-Optik des Headers -
+     vorher hatten Login/Registrieren/Access-Key/Verify-Seiten keine
+     font-mono Klasse gesetzt und liefen dadurch im Browser-Standardfont,
+     wodurch "BELLATOR." dort anders aussah als im Shop-Header. */
+  font-family: ui-monospace, "Courier New", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
 /* ===== SEMANTIC CLASSES - verwendet überall im Projekt ===== */
@@ -148,14 +153,17 @@ html, body {
 .t-meta    { font-weight: 500; }
 
 /* ===== BUTTON PRESS ANIMATION ===== */
-button, a[role="button"], .t-btn-primary, .t-btn-outline {
+/* Deckt auch <a>-Tags ab, die als Button gestylt sind (border-/btn-Klassen),
+   nicht nur <button> oder a[role="button"] - vorher hatten z.B. "Details
+   ansehen"-Links auf Mobile keine Press-Animation. */
+button, a[role="button"], a[class*="border"], a[class*="btn"], .t-btn-primary, .t-btn-outline {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
 }
-button:active, a[role="button"]:active {
+button:active, a[role="button"]:active, a[class*="border"]:active, a[class*="btn"]:active {
   transform: scale(0.96);
 }
 @media (prefers-reduced-motion: reduce) {
-  button:active, a[role="button"]:active { transform: none; }
+  button:active, a[role="button"]:active, a[class*="border"]:active, a[class*="btn"]:active { transform: none; }
 }
 
 /* ===== SKELETON LOADER (Shimmer) ===== */

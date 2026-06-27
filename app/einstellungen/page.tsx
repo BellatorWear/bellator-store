@@ -13,7 +13,7 @@ export default async function EinstellungenPage() {
 
   return (
     <main className="min-h-screen font-mono t-text"
-      style={{ backgroundImage: 'url("/background.png")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
+      style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
       <div className="fixed inset-0 bg-black/50 pointer-events-none z-0" />
       <header className="relative z-10 t-header border-b px-6 py-4 flex justify-between items-center">
         <a href="/shop" className="text-2xl font-black tracking-tighter italic t-text hover:opacity-70 transition">BELLATOR.</a>

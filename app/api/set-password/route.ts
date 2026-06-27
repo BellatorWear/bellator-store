@@ -78,6 +78,11 @@ export async function POST(req: NextRequest) {
       console.error("first_100 challenge award error:", e);
     }
   }
+  try {
+    await awardChallengeByType(session.userId, "complete_profile");
+  } catch (e) {
+    console.error("complete_profile challenge award error:", e);
+  }
 
   // Bestätigungs-Email senden
   try {

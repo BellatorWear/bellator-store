@@ -1,7 +1,8 @@
 "use server";
 import { db } from "@/db";
-import { cartItems, products, productVariants } from "@/db/schema";
+import { cartItems, products, productVariants, discountCodes } from "@/db/schema";
 import { eq, and, lt } from "drizzle-orm";
+import { cookies } from "next/headers";
 import { getCartOwnerKey, initCartCookie } from "./utils/cartOwner";
 import { getCurrentUser } from "./actions";
 import { isTrustedOrigin } from "./utils/origin";
@@ -110,11 +111,44 @@ export async function createCheckoutSession() {
   if (cart.length === 0) return { error: "Warenkorb ist leer." };
 
   const user = await getCurrentUser();
+  const ownerKey = await getCartOwnerKey();
 
   const { default: Stripe } = await import("stripe");
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
   const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+  // Eigener, vom Kunden eingelöster Rabattcode (siehe redeemDiscountCode)
+  // hat Vorrang vor dem automatischen Stammkunden-Rabatt - beide gleichzeitig
+  // anzuwenden würde sich nicht sauber abbilden lassen.
+  const cookieStore = await cookies();
+  const redeemedCode = cookieStore.get("bellator-discount-code")?.value;
+  let appliedDiscount: { coupon: string } | { promotion_code: string } | null = null;
+
+  if (redeemedCode) {
+    const found = await db.select().from(discountCodes).where(eq(discountCodes.code, redeemedCode));
+    const dc = found[0];
+    const stillValid =
+      dc &&
+      (dc.maxRedemptions === null || (dc.timesRedeemed ?? 0) < (dc.maxRedemptions ?? 1)) &&
+      (!dc.expiresAt || new Date(dc.expiresAt) > new Date());
+    if (stillValid && dc.stripePromotionCodeId) {
+      appliedDiscount = { promotion_code: dc.stripePromotionCodeId };
+    }
+  } else if (user?.discountPercent && user.discountPercent > 0) {
+    // Automatischer, computerberechneter Stammkunden-Rabatt - braucht
+    // keinen Code, wird live als einmaliger Coupon erzeugt.
+    try {
+      const coupon = await stripe.coupons.create({
+        percent_off: user.discountPercent,
+        duration: "once",
+        name: `Stammkunden-Rabatt ${user.discountPercent}%`,
+      });
+      appliedDiscount = { coupon: coupon.id };
+    } catch (e) {
+      console.error("Stammkunden-Rabatt Coupon Fehler:", e);
+    }
+  }
 
   try {
     const session = await stripe.checkout.sessions.create({
@@ -129,6 +163,7 @@ export async function createCheckoutSession() {
             // Bilder sind jetzt echte https-URLs (Vercel Blob), nicht mehr
             // Base64 - Stripe akzeptiert nur echte URLs, das geht jetzt.
             images: item.image ? [item.image] : undefined,
+            metadata: { productId: String(item.productId) },
           },
         },
       })),
@@ -149,6 +184,15 @@ export async function createCheckoutSession() {
         },
       ],
       customer_email: user?.email,
+      // Falls kein eigener Rabatt automatisch angewendet wird, darf der
+      // Kunde trotzdem direkt bei Stripe einen Promo-Code eingeben.
+      ...(appliedDiscount
+        ? { discounts: [appliedDiscount] }
+        : { allow_promotion_codes: true }),
+      metadata: {
+        ownerKey,
+        userId: user?.id ? String(user.id) : "",
+      },
       success_url: `${origin}/shop?checkout=success`,
       cancel_url: `${origin}/shop/warenkorb?checkout=cancelled`,
     });
@@ -158,4 +202,45 @@ export async function createCheckoutSession() {
     console.error("Stripe Checkout Fehler:", e);
     return { error: "Checkout konnte nicht erstellt werden." };
   }
+}
+
+/**
+ * Validiert einen vom Kunden eingegebenen Rabattcode gegen unsere eigene
+ * discount_codes Tabelle und merkt ihn sich (Cookie) für den nächsten
+ * Checkout. Die eigentliche, fälschungssichere Prüfung passiert nochmal
+ * direkt bei Stripe selbst (über promotion_code), hier geht es nur um die
+ * Vorschau/Bestätigung auf unserer Seite.
+ */
+export async function redeemDiscountCode(formData: FormData) {
+  if (!(await isTrustedOrigin())) return { error: "Anfrage abgelehnt." };
+  const code = ((formData.get("code") as string) ?? "").trim();
+  if (!code) return { error: "Bitte einen Code eingeben." };
+
+  const found = await db.select().from(discountCodes).where(eq(discountCodes.code, code));
+  if (found.length === 0) return { error: "Ungültiger Rabattcode." };
+  const dc = found[0];
+
+  if (dc.expiresAt && new Date(dc.expiresAt) < new Date()) {
+    return { error: "Dieser Code ist abgelaufen." };
+  }
+  if (dc.maxRedemptions !== null && (dc.timesRedeemed ?? 0) >= (dc.maxRedemptions ?? 1)) {
+    return { error: "Dieser Code wurde bereits vollständig eingelöst." };
+  }
+  if (dc.userId) {
+    const user = await getCurrentUser();
+    if (!user || user.id !== dc.userId) {
+      return { error: "Dieser Code ist einem anderen Account zugeordnet." };
+    }
+  }
+
+  const cookieStore = await cookies();
+  cookieStore.set("bellator-discount-code", code, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    path: "/",
+    maxAge: 60 * 60 * 24,
+  });
+
+  return { success: true, percentOff: dc.percentOff };
 }

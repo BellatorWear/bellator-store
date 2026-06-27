@@ -112,7 +112,7 @@ export default function LoginPage() {
       <main
         className="relative flex min-h-[100dvh] items-center justify-center p-4"
         style={{
-          backgroundImage: 'url("/background.png")',
+          backgroundImage: 'url("/background.webp")',
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundAttachment: "fixed",

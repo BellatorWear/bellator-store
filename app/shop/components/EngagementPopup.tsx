@@ -69,7 +69,7 @@ export default function EngagementPopup({
 
         <button onClick={dismiss}
           className="mt-6 w-full t-btn-outline py-3 font-black text-xs uppercase tracking-widest transition-all">
-          Nicht jetzt
+          Fertig
         </button>
       </div>
     </div>

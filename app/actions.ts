@@ -22,6 +22,7 @@ import { isTrustedOrigin } from "./utils/origin";
 import { Resend } from "resend";
 import { cookies } from "next/headers";
 import { checkLoginRateLimit, checkEmailRateLimit } from "./utils/ratelimit";
+import { createSingleUseStripeCode } from "./utils/stripeCodes";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import {
@@ -82,6 +83,7 @@ export async function getCurrentUser() {
     newsletterOptIn: user.newsletterOptIn ?? false,
     username: user.username ?? null,
     usernameChangedAt: user.usernameChangedAt ?? null,
+    mustSetPassword: user.mustSetPassword ?? false,
   };
 }
 
@@ -436,6 +438,9 @@ export async function handleAction(
     if (session.userId <= 100) {
       await awardChallengeByType(session.userId, "first_100");
     }
+    // "Profil vervollständigen" (Email bestätigt + Passwort gesetzt) - vorher
+    // hat das nie etwas getriggert, die Challenge war unerreichbar.
+    await awardChallengeByType(session.userId, "complete_profile");
 
     return { success: true };
   }
@@ -648,14 +653,17 @@ export async function handleAction(
     if (!session) return { error: "Nicht eingeloggt." };
 
     const enable = formData.get("enable") === "true";
+    const subscriptionRaw = formData.get("subscription") as string | null;
+
     await db
       .update(users)
-      .set({ pushEnabled: enable })
+      .set({
+        pushEnabled: enable,
+        pushSubscription: enable ? (subscriptionRaw ?? null) : null,
+      })
       .where(eq(users.id, session.userId));
 
     if (enable) {
-      // Placeholder: erfordert VAPID-Keys und Service Worker für echte
-      // Web-Push-Subscriptions. Hier wird nur der Wunsch des Users gespeichert.
       await awardChallengeByType(session.userId, "push");
     }
 
@@ -745,11 +753,24 @@ export async function handleAction(
     // Effekt je nach Prämien-Typ anwenden
     let code: string | null = null;
     if (reward.type === "discount") {
-      const newDiscount = Math.min((user.discountPercent ?? 0) + 5, 30);
-      await db
-        .update(users)
-        .set({ discountPercent: newDiscount })
-        .where(eq(users.id, session.userId));
+      const percent = reward.discountPercent ?? 5;
+      const result = await createSingleUseStripeCode({
+        percentOff: percent,
+        source: "reward_redemption",
+        userId: session.userId,
+        expiresInDays: 90,
+      });
+      if ("error" in result) {
+        // Punkte zurückerstatten, da die Prämie nicht ausgestellt werden konnte.
+        await db.update(users).set({ points: currentPoints }).where(eq(users.id, session.userId));
+        await db.insert(pointTransactions).values({
+          userId: session.userId,
+          points: reward.costPoints,
+          reason: `Rückerstattung: ${reward.title} (Fehler bei Code-Erstellung)`,
+        });
+        return { error: result.error };
+      }
+      code = result.code;
     } else if (reward.type === "physical") {
       code = "BLT-" + crypto.randomBytes(4).toString("hex").toUpperCase();
     }

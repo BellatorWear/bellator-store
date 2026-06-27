@@ -2,32 +2,33 @@
 import React, { useState, useEffect } from "react";
 import { handleAction } from "../actions";
 import { addToCart } from "../cart";
-
-const STORAGE_KEY = "bellator_countdown";
+import PriceDisplay from "./components/PriceDisplay";
+import RedeemCodeButton from "./components/RedeemCodeButton";
 
 type CountdownData = { enabled: boolean; targetDate: string; label: string };
 
-function Countdown() {
-  const [config, setConfig] = useState<CountdownData | null>(null);
+function Countdown({ initialConfig }: { initialConfig: CountdownData }) {
+  const [config, setConfig] = useState<CountdownData>(initialConfig);
   const [timeLeft, setTimeLeft] = useState({ d: 0, h: 0, m: 0, s: 0 });
 
+  // Erlaubt dem Admin-Panel (gleicher Tab/Browser), eine Live-Vorschau zu
+  // senden ohne neu laden zu müssen. Der eigentliche, für ALLE Besucher
+  // gültige Wert kommt aber als initialConfig vom Server (siteSettings),
+  // nicht mehr aus localStorage - daher zeigt ein komplett neuer Tab jetzt
+  // korrekt den vom Admin gespeicherten Wert statt immer wieder 14 Tage.
   useEffect(() => {
-    function loadConfig() {
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) setConfig(JSON.parse(stored));
-        else setConfig({ enabled: true, targetDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), label: "Nächster Drop in" });
-      } catch {}
+    function onPreview(e: Event) {
+      const detail = (e as CustomEvent<CountdownData>).detail;
+      if (detail) setConfig(detail);
     }
-    loadConfig();
-    window.addEventListener("storage", loadConfig);
-    return () => window.removeEventListener("storage", loadConfig);
+    window.addEventListener("bellator-countdown-preview", onPreview);
+    return () => window.removeEventListener("bellator-countdown-preview", onPreview);
   }, []);
 
   useEffect(() => {
     if (!config?.enabled) return;
     function calc() {
-      const diff = new Date(config!.targetDate).getTime() - Date.now();
+      const diff = new Date(config.targetDate).getTime() - Date.now();
       if (diff <= 0) { setTimeLeft({ d: 0, h: 0, m: 0, s: 0 }); return; }
       setTimeLeft({ d: Math.floor(diff / 86400000), h: Math.floor((diff % 86400000) / 3600000), m: Math.floor((diff % 3600000) / 60000), s: Math.floor((diff % 60000) / 1000) });
     }
@@ -57,13 +58,32 @@ function Countdown() {
           );
         })}
       </div>
+      {/* Mobile: Rabattcode-Button direkt unter dem Countdown (Desktop hat ihn im Header oben links) */}
+      <div className="md:hidden mt-4">
+        <RedeemCodeButton variant="block" />
+      </div>
     </div>
   );
 }
 
-export default function StaticProductCard() {
-  const [soldOut] = useState(false);
-  const stock = 10;
+type DbProduct = {
+  id: number;
+  priceCents: number;
+  compareAtPriceCents: number | null;
+  dropLabel: string | null;
+  dropLimit: number | null;
+  soldCount: number | null;
+} | null;
+
+export default function StaticProductCard({
+  countdown,
+  dbProduct,
+}: {
+  countdown: CountdownData;
+  dbProduct: DbProduct;
+}) {
+  const stock = dbProduct?.dropLimit != null ? Math.max(0, dbProduct.dropLimit - (dbProduct.soldCount ?? 0)) : 10;
+  const soldOut = dbProduct?.dropLimit != null && stock <= 0;
   const [showNewsletter, setShowNewsletter] = useState(false);
   const [email, setEmail] = useState("");
   const [newsletterMsg, setNewsletterMsg] = useState("");
@@ -74,35 +94,51 @@ export default function StaticProductCard() {
   async function subscribeNewsletter(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const fd = new FormData();
-    fd.append("actionType", "subscribeNewsletter");
-    fd.append("email", email);
-    const res = await handleAction(fd);
-    setLoading(false);
-    if (res.success) setNewsletterMsg("Du wirst beim nächsten Drop benachrichtigt!");
-    else setNewsletterMsg(res.error || "Fehler.");
+    try {
+      const fd = new FormData();
+      fd.append("actionType", "subscribeNewsletter");
+      fd.append("email", email);
+      const res = await handleAction(fd);
+      if (res.success) setNewsletterMsg("Du wirst beim nächsten Drop benachrichtigt!");
+      else setNewsletterMsg(res.error || "Fehler.");
+    } catch (e) {
+      console.error("Newsletter Anmeldung fehlgeschlagen:", e);
+      setNewsletterMsg("Fehler. Bitte nochmal versuchen.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleAddToCart() {
+    if (cartLoading) return;
     setCartLoading(true);
-    const fd = new FormData();
-    fd.append("productId", "1");
-    fd.append("quantity", "1");
-    const res = await addToCart(fd);
-    setCartLoading(false);
-    if (res.error) { setCartMsg(res.error); }
-    else { setCartMsg("✓ Zum Warenkorb hinzugefügt!"); setTimeout(() => setCartMsg(""), 3000); }
+    setCartMsg("");
+    try {
+      const fd = new FormData();
+      fd.append("productId", "1");
+      fd.append("quantity", "1");
+      const res = await addToCart(fd);
+      if (res.error) setCartMsg(res.error);
+      else { setCartMsg("✓ Zum Warenkorb hinzugefügt!"); setTimeout(() => setCartMsg(""), 3000); }
+    } catch (e) {
+      console.error("Add to cart fehlgeschlagen:", e);
+      setCartMsg("Fehler. Bitte nochmal versuchen.");
+    } finally {
+      setCartLoading(false);
+    }
   }
 
-  const product = { id: "basic-bellator-001", name: "Basic Bellator Shirt", tagline: "Bellators First Drop", price: "35.00 EUR" };
+  const product = { id: "basic-bellator-001", name: "Basic Bellator Shirt", tagline: "Bellators First Drop" };
+  const priceCents = dbProduct?.priceCents ?? 3500;
+  const compareAt = dbProduct?.compareAtPriceCents ?? null;
 
   return (
     <div className="flex flex-col items-center gap-5 w-full px-4 pt-2 pb-8">
-      <Countdown />
+      <Countdown initialConfig={countdown} />
 
       <div className="relative w-full max-w-[380px] t-card border-[3px] t-border p-5 sm:p-6" style={{ boxShadow: "8px 8px 0px 0px var(--shadow)" }}>
         <div className="flex justify-between items-center mb-3 text-[10px] uppercase tracking-widest">
-          <span className="border border-zinc-600 px-2 py-1 t-muted font-bold">Drop #1</span>
+          <span className="border border-zinc-600 px-2 py-1 t-muted font-bold">{dbProduct?.dropLabel ?? "Drop #1"}</span>
           {soldOut ? (
             <span className="border border-red-700 px-2 py-1 text-red-400 font-bold">Ausverkauft</span>
           ) : (
@@ -118,12 +154,14 @@ export default function StaticProductCard() {
         )}
 
         <div className="t-bg mb-4 overflow-hidden border t-border-s">
-          <img src="/blackshirt-mockup.png" alt={product.name} className="w-full h-auto block grayscale hover:grayscale-0 transition-all duration-300" />
+          <img src="/blackshirt-mockup.webp" alt={product.name} className="w-full h-auto block grayscale hover:grayscale-0 transition-all duration-300" />
         </div>
 
         <h3 className="text-[0.6rem] uppercase tracking-[0.4em] t-muted mb-1">{product.tagline}</h3>
         <h1 className="text-2xl sm:text-3xl font-black uppercase t-text mb-2 leading-tight">{product.name}</h1>
-        <p className="text-lg sm:text-xl font-black t-text mb-3 border-l-4 border-red-600 pl-3">{product.price}</p>
+        <div className="mb-3">
+          <PriceDisplay priceCents={priceCents} compareAtPriceCents={compareAt} />
+        </div>
 
         {cartMsg && <p className={`text-[10px] uppercase tracking-widest mb-2 ${cartMsg.startsWith("✓") ? "text-green-400" : "text-red-400"}`}>{cartMsg}</p>}
 
@@ -140,7 +178,7 @@ export default function StaticProductCard() {
             </a>
             <button onClick={handleAddToCart} disabled={cartLoading}
               className="w-full py-3 uppercase font-black tracking-[0.2em] border-[3px] border-zinc-600 t-muted hover:border-white hover:t-text transition-all duration-200 text-sm disabled:opacity-50">
-              {cartLoading ? "..." : "+ Warenkorb"}
+              {cartLoading ? "..." : "Zum Warenkorb hinzufügen"}
             </button>
           </div>
         )}
