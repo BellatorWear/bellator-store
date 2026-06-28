@@ -64,6 +64,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     success: true,
     email: user.email,
-    mustSetPassword: user.mustSetPassword ?? false,
+    mustSetPassword: user.mustSetPassword ?? true,
   });
 }

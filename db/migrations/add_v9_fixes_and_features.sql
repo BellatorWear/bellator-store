@@ -8,6 +8,25 @@
 -- exponieren/zu verändern.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS member_no SERIAL;
 
+-- --- BUGFIX: must_set_password / is_admin konnten NULL sein -----------
+-- In der echten DB hatten "must_set_password" und "is_admin" KEINE
+-- NOT NULL Constraint. Der App-Code hat überall "user.mustSetPassword ?? false"
+-- benutzt - bei einem NULL-Wert (statt explizit true/false) wurde das als
+-- "kein Passwort nötig" interpretiert. Ergebnis: User mit NULL in dieser
+-- Spalte wurden NIE zum Passwort-Setzen aufgefordert, obwohl sie noch gar
+-- keins hatten. SET NOT NULL würde fehlschlagen solange NULL-Zeilen
+-- existieren, deshalb zuerst auffüllen:
+-- Auffüllen: nur auf "true" setzen, wenn wirklich noch kein Passwort
+-- existiert - sonst würden bereits aktive User mit echtem Passwort (aber
+-- zufällig NULL in dieser Spalte) unnötig nochmal zum Setzen gezwungen.
+UPDATE users SET must_set_password = (password_hash IS NULL) WHERE must_set_password IS NULL;
+UPDATE users SET is_admin = false WHERE is_admin IS NULL;
+
+ALTER TABLE users ALTER COLUMN must_set_password SET DEFAULT true;
+ALTER TABLE users ALTER COLUMN must_set_password SET NOT NULL;
+ALTER TABLE users ALTER COLUMN is_admin SET DEFAULT false;
+ALTER TABLE users ALTER COLUMN is_admin SET NOT NULL;
+
 -- --- Rabatte an Produkten --------------------------------------------
 ALTER TABLE products ADD COLUMN IF NOT EXISTS compare_at_price_cents INTEGER;
 

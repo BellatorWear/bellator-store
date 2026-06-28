@@ -83,7 +83,10 @@ export async function getCurrentUser() {
     newsletterOptIn: user.newsletterOptIn ?? false,
     username: user.username ?? null,
     usernameChangedAt: user.usernameChangedAt ?? null,
-    mustSetPassword: user.mustSetPassword ?? false,
+    // Fail-safe: bei NULL (z.B. alte Zeilen ohne NOT NULL Constraint)
+    // lieber einmal zu viel zum Passwort-Setzen auffordern als einen
+    // Account ganz ohne Passwort durchrutschen zu lassen.
+    mustSetPassword: user.mustSetPassword ?? true,
   };
 }
 
@@ -266,7 +269,7 @@ export async function handleAction(
 
     return {
       success: true,
-      mustSetPassword: user.mustSetPassword ?? false,
+      mustSetPassword: user.mustSetPassword ?? true,
       email: user.email,
     };
   }
