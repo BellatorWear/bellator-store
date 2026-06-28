@@ -8,6 +8,7 @@ import ProductRow from "./ProductRow";
 import CountdownConfig from "./CountdownConfig";
 import ExclusiveCodeConfig from "./ExclusiveCodeConfig";
 import NewsChannel from "./NewsChannel";
+import UserSearch from "./UserSearch";
 import { getSetting, COUNTDOWN_KEY, COUNTDOWN_DEFAULT, EXCLUSIVE_CODE_KEY, EXCLUSIVE_CODE_DEFAULT } from "@/app/utils/settings";
 
 export default async function AdminPage() {
@@ -48,6 +49,9 @@ export default async function AdminPage() {
 
         {/* News-Channel */}
         <NewsChannel recentPosts={recentPosts} />
+
+        {/* User-Suche per (altem oder neuem) Username */}
+        <UserSearch />
 
         {/* Neues Produkt */}
         <NewProductForm />

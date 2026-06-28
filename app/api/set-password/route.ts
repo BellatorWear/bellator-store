@@ -51,6 +51,20 @@ export async function POST(req: NextRequest) {
 
   const { password } = await req.json();
 
+  // Auch hier: nur fürs allererste Setzen gedacht, kein Überschreiben ohne
+  // altes Passwort (gleiche Absicherung wie bei der Server Action).
+  const existingResult = await db
+    .select({ mustSetPassword: users.mustSetPassword, passwordHash: users.passwordHash })
+    .from(users)
+    .where(eq(users.id, session.userId));
+  const existing = existingResult[0];
+  if (existing && existing.passwordHash && existing.mustSetPassword === false) {
+    return NextResponse.json(
+      { error: "Passwort bereits gesetzt. Bitte über die Profileinstellungen ändern." },
+      { status: 400 },
+    );
+  }
+
   if (!password || typeof password !== "string")
     return NextResponse.json({ error: "Ungültige Eingabe." }, { status: 400 });
   if (password.length < 8)

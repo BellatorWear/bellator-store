@@ -1,7 +1,7 @@
 "use server";
 import { db } from "@/db";
-import { products, productVariants, discountCodes, newsPosts } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { products, productVariants, discountCodes, newsPosts, users, usernameHistory } from "@/db/schema";
+import { eq, ilike, desc } from "drizzle-orm";
 import { del } from "@vercel/blob";
 import { getCurrentUser } from "@/app/actions";
 import { sanitizeText, isSuspiciousInput } from "@/app/utils/inputSafety";
@@ -207,6 +207,68 @@ export async function deleteVariant(formData: FormData) {
   if (!id) return { error: "Ungültig." };
   await db.delete(productVariants).where(eq(productVariants.id, id));
   return { success: true };
+}
+
+// ===================================================================
+// Admin-Suche: User per aktuellem ODER früherem Benutzernamen finden
+// ===================================================================
+export async function searchUserByUsername(formData: FormData) {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
+
+  const raw = ((formData.get("username") as string) ?? "").trim();
+  if (!raw) return { error: "Bitte einen Benutzernamen eingeben." };
+  if (isSuspiciousInput(raw)) return { error: "Ungültige Eingabe." };
+
+  // Case-insensitive Treffer sowohl im aktuellen Namen als auch in der
+  // Historie (alte Namen) - "raw" oder "Raw" oder ein längst abgelegter
+  // alter Name finden alle denselben User.
+  const directMatch = await db
+    .select()
+    .from(users)
+    .where(ilike(users.username, raw));
+
+  let userId: number | null = directMatch[0]?.id ?? null;
+
+  if (!userId) {
+    const historyMatch = await db
+      .select()
+      .from(usernameHistory)
+      .where(ilike(usernameHistory.username, raw))
+      .orderBy(desc(usernameHistory.changedAt))
+      .limit(1);
+    userId = historyMatch[0]?.userId ?? null;
+  }
+
+  if (!userId) return { error: "Kein User mit diesem (auch früheren) Benutzernamen gefunden." };
+
+  const found = await db.select().from(users).where(eq(users.id, userId));
+  if (found.length === 0) return { error: "User nicht gefunden." };
+  const user = found[0];
+
+  const history = await db
+    .select()
+    .from(usernameHistory)
+    .where(eq(usernameHistory.userId, userId))
+    .orderBy(desc(usernameHistory.changedAt));
+
+  return {
+    success: true,
+    user: {
+      id: user.id,
+      memberNo: user.memberNo,
+      email: user.email,
+      username: user.username,
+      isAdmin: user.isAdmin,
+      points: user.points,
+      orderCount: user.orderCount,
+      discountPercent: user.discountPercent,
+      emailVerified: user.emailVerified,
+      createdAt: user.createdAt,
+      mustSetPassword: user.mustSetPassword,
+    },
+    history: history.map((h) => ({ username: h.username, changedAt: h.changedAt })),
+  };
 }
 
 // ===================================================================

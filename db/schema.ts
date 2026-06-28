@@ -161,6 +161,16 @@ export const productVariants = pgTable("product_variants", {
 
 // Warenkorb-Einträge. ownerKey ist entweder "user:<id>" (eingeloggt) oder
 // "guest:<uuid>" (Gast-Cookie) - so funktioniert der Warenkorb für beide.
+// Speichert JEDEN früheren Benutzernamen eines Users (nicht nur den
+// aktuellen) - damit Admins im Suchfeld auch nach alten Namen finden
+// können und nachvollziehbar bleibt, wer sich wann wie umbenannt hat.
+export const usernameHistory = pgTable("username_history", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  username: text("username").notNull(),
+  changedAt: timestamp("changed_at").defaultNow(),
+});
+
 export const cartItems = pgTable("cart_items", {
   id: serial("id").primaryKey(),
   ownerKey: text("owner_key").notNull(),

@@ -67,6 +67,21 @@ CREATE TABLE IF NOT EXISTS discount_codes (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- --- Username-Historie (für Admin-Suche nach alten Namen) -----------
+CREATE TABLE IF NOT EXISTS username_history (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  username TEXT NOT NULL,
+  changed_at TIMESTAMP DEFAULT NOW()
+);
+-- Aktuellen Username (falls vorhanden) einmalig als ersten Eintrag übernehmen,
+-- damit die Historie ab jetzt vollständig ist.
+INSERT INTO username_history (user_id, username, changed_at)
+SELECT id, username, COALESCE(username_changed_at, created_at)
+FROM users
+WHERE username IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM username_history WHERE username_history.user_id = users.id);
+
 -- --- News-Channel ------------------------------------------------------
 CREATE TABLE IF NOT EXISTS news_posts (
   id SERIAL PRIMARY KEY,

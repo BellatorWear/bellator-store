@@ -11,16 +11,22 @@ export default function SetUsernameModal({ onDone }: { onDone: () => void }) {
     e.preventDefault();
     setErr("");
     setLoading(true);
-    const fd = new FormData();
-    fd.append("actionType", "setUsername");
-    fd.append("username", username);
-    const res = await handleAction(fd);
-    setLoading(false);
-    if (res.error) {
-      setErr(typeof res.error === "string" ? res.error : "Fehler.");
-      return;
+    try {
+      const fd = new FormData();
+      fd.append("actionType", "setUsername");
+      fd.append("username", username);
+      const res = await handleAction(fd);
+      if (res.error) {
+        setErr(typeof res.error === "string" ? res.error : "Fehler.");
+        return;
+      }
+      onDone();
+    } catch (e) {
+      console.error("Username setzen fehlgeschlagen:", e);
+      setErr("Fehler. Bitte nochmal versuchen.");
+    } finally {
+      setLoading(false);
     }
-    onDone();
   }
 
   return (

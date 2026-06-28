@@ -14,6 +14,7 @@ import {
   rewards,
   userRewards,
   cartItems,
+  usernameHistory,
 } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { sanitizeText, isSuspiciousInput } from "./utils/inputSafety";
@@ -420,6 +421,20 @@ export async function handleAction(
       return {
         error: "Sitzung abgelaufen. Bitte erneut einloggen.",
       };
+    }
+
+    // Dieser Weg ist NUR für das allererste Setzen des Passworts gedacht.
+    // Vorher konnte man darüber jederzeit das Passwort überschreiben, ohne
+    // das alte zu kennen - das ist jetzt zu (für eine Änderung gibt es
+    // "changePassword" in den Profileinstellungen, das das aktuelle
+    // Passwort verlangt).
+    const existingResult = await db
+      .select({ mustSetPassword: users.mustSetPassword, passwordHash: users.passwordHash })
+      .from(users)
+      .where(eq(users.id, session.userId));
+    const existing = existingResult[0];
+    if (existing && existing.passwordHash && existing.mustSetPassword === false) {
+      return { error: "Passwort bereits gesetzt. Bitte über die Profileinstellungen ändern." };
     }
 
     const password = formData.get("password") as string;
@@ -838,6 +853,9 @@ export async function handleAction(
         .update(users)
         .set({ username, usernameChangedAt: new Date() })
         .where(eq(users.id, session.userId));
+      // Jede gesetzte/geänderte Variante landet in der Historie, damit
+      // Admins später auch nach alten Namen suchen können.
+      await db.insert(usernameHistory).values({ userId: session.userId, username });
     } catch {
       return { error: "Dieser Benutzername ist schon vergeben." };
     }

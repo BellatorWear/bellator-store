@@ -3,19 +3,18 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense } from "react";
-import { Eye, EyeOff } from "lucide-react";
-import SetUsernameModal from "../SetUsernameModal";
 
+// Nach erfolgreicher Verifizierung übernimmt ausschließlich der globale
+// ProfileSetupGuard (Root-Layout) das Passwort/Username-Setup - siehe
+// Kommentar in app/login/page.tsx für den Hintergrund (vorher hatte diese
+// Seite ihren EIGENEN Passwort/Username-Ablauf parallel zum globalen
+// Guard, was zu einer Endlosschleife führen konnte). window.location.href
+// statt router.push erzwingt einen frischen Server-Roundtrip.
 function VerifyContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [status, setStatus] = useState<"loading" | "success" | "error">(
-    "loading",
-  );
+  const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [msg, setMsg] = useState("");
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [showUsernameModal, setShowUsernameModal] = useState(false);
-  const [email, setEmail] = useState("");
 
   useEffect(() => {
     const token = searchParams.get("token");
@@ -29,61 +28,33 @@ function VerifyContent() {
       .then((r) => r.json())
       .then((data) => {
         if (data.success) {
-          setEmail(data.email);
           setStatus("success");
-          if (data.mustSetPassword === false) {
-            router.push("/shop");
-          } else {
-            setShowPasswordModal(true);
-          }
+          window.location.href = "/shop";
         } else {
           setStatus("error");
           setMsg(data.error || "Token ungültig oder abgelaufen.");
         }
       })
-      .catch(() => {
+      .catch((e) => {
+        console.error("Email-Verifizierung fehlgeschlagen:", e);
         setStatus("error");
         setMsg("Fehler bei der Verifizierung.");
       });
   }, [searchParams]);
 
-  if (showPasswordModal) {
-    return (
-      <PasswordModal
-        email={email}
-        onDone={() => {
-          setShowPasswordModal(false);
-          setShowUsernameModal(true);
-        }}
-      />
-    );
-  }
-
-  if (showUsernameModal) {
-    return <SetUsernameModal onDone={() => router.push("/shop")} />;
-  }
-
   return (
     <main className="flex min-h-[100dvh] items-center justify-center p-4 text-white">
       <div className="max-w-sm w-full border border-zinc-700 p-8 bg-black/60 backdrop-blur-md text-center">
-        <h1 className="text-3xl font-black uppercase tracking-tighter mb-6">
-          Bellator.
-        </h1>
+        <h1 className="text-3xl font-black uppercase tracking-tighter mb-6">Bellator.</h1>
         {status === "loading" && (
-          <p className="text-zinc-400 uppercase text-xs tracking-widest">
-            Verifiziere...
-          </p>
+          <p className="text-zinc-400 uppercase text-xs tracking-widest">Verifiziere...</p>
         )}
         {status === "success" && (
-          <p className="text-green-500 uppercase text-xs tracking-widest">
-            Email bestätigt!
-          </p>
+          <p className="text-green-500 uppercase text-xs tracking-widest">Email bestätigt! Wird weitergeleitet...</p>
         )}
         {status === "error" && (
           <>
-            <p className="text-red-500 uppercase text-xs tracking-widest mb-4">
-              {msg}
-            </p>
+            <p className="text-red-500 uppercase text-xs tracking-widest mb-4">{msg}</p>
             <button
               onClick={() => router.push("/")}
               className="text-[10px] text-zinc-500 uppercase tracking-widest hover:text-white transition"
@@ -92,105 +63,6 @@ function VerifyContent() {
             </button>
           </>
         )}
-      </div>
-    </main>
-  );
-}
-
-function PasswordModal({
-  email,
-  onDone,
-}: {
-  email: string;
-  onDone: () => void;
-}) {
-  const [pw, setPw] = useState("");
-  const [pw2, setPw2] = useState("");
-  const [err, setErr] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [showPw, setShowPw] = useState(false);
-  const [showPw2, setShowPw2] = useState(false);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setErr("");
-    if (pw.length < 8) {
-      setErr("Mindestens 8 Zeichen.");
-      return;
-    }
-    if (pw !== pw2) {
-      setErr("Passwörter stimmen nicht überein.");
-      return;
-    }
-
-    setLoading(true);
-    const res = await fetch("/api/set-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: pw }),
-    });
-    const data = await res.json();
-    setLoading(false);
-
-    if (data.error) {
-      setErr(data.error);
-      return;
-    }
-    onDone();
-  }
-
-  return (
-    <main className="flex min-h-[100dvh] items-center justify-center p-4 text-white">
-      <div className="w-full max-w-sm border border-zinc-600 bg-black p-8">
-        <h1 className="text-3xl font-black uppercase tracking-tighter mb-2">
-          Bellator.
-        </h1>
-        <h2 className="text-lg font-black uppercase tracking-tighter mb-2">
-          Passwort setzen
-        </h2>
-        <p className="text-xs text-zinc-500 uppercase tracking-widest mb-6">
-          Email bestätigt! Lege jetzt dein Passwort fest.
-        </p>
-        <form onSubmit={submit} className="space-y-4">
-          <div className="pw-wrap">
-            <input
-              type={showPw ? "text" : "password"}
-              value={pw}
-              onChange={(e) => setPw(e.target.value)}
-              placeholder="NEUES PASSWORT"
-              required
-              className="w-full bg-zinc-900 border-b border-zinc-600 p-2 focus:border-white outline-none transition text-center placeholder:text-zinc-600 text-white"
-            />
-            <button type="button" className="pw-eye" onClick={() => setShowPw((s) => !s)} tabIndex={-1}>
-              {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-          <div className="pw-wrap">
-            <input
-              type={showPw2 ? "text" : "password"}
-              value={pw2}
-              onChange={(e) => setPw2(e.target.value)}
-              placeholder="PASSWORT BESTÄTIGEN"
-              required
-              className="w-full bg-zinc-900 border-b border-zinc-600 p-2 focus:border-white outline-none transition text-center placeholder:text-zinc-600 text-white"
-            />
-            <button type="button" className="pw-eye" onClick={() => setShowPw2((s) => !s)} tabIndex={-1}>
-              {showPw2 ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-          {err && (
-            <p className="text-red-500 text-[10px] uppercase tracking-widest text-center">
-              {err}
-            </p>
-          )}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full border border-zinc-500 py-3 font-bold text-xs uppercase tracking-widest hover:bg-white hover:text-black transition-all disabled:opacity-50"
-          >
-            {loading ? "..." : "Passwort speichern & einloggen"}
-          </button>
-        </form>
       </div>
     </main>
   );
