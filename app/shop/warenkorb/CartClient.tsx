@@ -7,6 +7,7 @@ type CartItem = {
   id: number;
   name: string;
   variantLabel: string | null;
+  colorName: string | null;
   dropLabel: string | null;
   image: string | null;
   unitPriceCents: number;
@@ -40,10 +41,16 @@ export default function CartClient({ initialCart }: { initialCart: CartItem[] })
   async function checkout() {
     setLoading(true);
     setErr("");
-    const res = await createCheckoutSession();
-    setLoading(false);
-    if (res.error) { setErr(res.error); return; }
-    if (res.url) window.location.href = res.url;
+    try {
+      const res = await createCheckoutSession();
+      if (res.error) { setErr(res.error); return; }
+      if (res.url) window.location.href = res.url;
+    } catch (e) {
+      console.error("Checkout fehlgeschlagen:", e);
+      setErr("Fehler. Bitte nochmal versuchen.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -72,7 +79,7 @@ export default function CartClient({ initialCart }: { initialCart: CartItem[] })
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold uppercase tracking-widest t-text truncate">{item.name}</p>
-                    <p className="text-xs t-muted">{[item.variantLabel, item.dropLabel].filter(Boolean).join(" · ") || null}</p>
+                    <p className="text-xs t-muted">{[item.colorName, item.variantLabel, item.dropLabel].filter(Boolean).join(" · ") || null}</p>
                     <p className="text-xs t-muted mt-1">{(item.unitPriceCents / 100).toFixed(2)} €</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">

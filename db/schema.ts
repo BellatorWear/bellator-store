@@ -147,16 +147,34 @@ export const products = pgTable("products", {
   dropLimit: integer("drop_limit"), // null = unlimitiert
   soldCount: integer("sold_count").default(0),
   active: boolean("active").default(true),
+  // Pre-Release: vor dropDate nur für User mit Pre-Release-Zugang sichtbar.
+  // Sobald dropDate erreicht ist, automatisch für alle freigegeben - egal
+  // ob isPreRelease oder nicht. Ohne dropDate kein automatisches Verhalten.
+  isPreRelease: boolean("is_pre_release").default(false),
+  dropDate: timestamp("drop_date"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Varianten (z.B. Größe/Farbe) - optional pro Produkt
+// Varianten = Größen (z.B. "M", "L") - eigener Lagerbestand pro Größe.
 export const productVariants = pgTable("product_variants", {
   id: serial("id").primaryKey(),
   productId: integer("product_id").references(() => products.id),
-  label: text("label").notNull(), // z.B. "M / Schwarz"
+  label: text("label").notNull(), // z.B. "M"
   stock: integer("stock"), // null = unlimitiert
   priceCentsOverride: integer("price_cents_override"),
+});
+
+// Farben eines Produkts - jede Farbe hat einen Swatch (Hex-Wert für den
+// Farb-Button) sowie ein Vorder- und Rückseiten-Bild, die beim Auswählen
+// der Farbe angezeigt werden.
+export const productColors = pgTable("product_colors", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").notNull().references(() => products.id),
+  name: text("name").notNull(), // z.B. "Schwarz"
+  hexColor: text("hex_color").notNull(), // z.B. "#000000"
+  frontImage: text("front_image").notNull(),
+  backImage: text("back_image").notNull(),
+  sortOrder: integer("sort_order").default(0),
 });
 
 // Warenkorb-Einträge. ownerKey ist entweder "user:<id>" (eingeloggt) oder
@@ -176,8 +194,27 @@ export const cartItems = pgTable("cart_items", {
   ownerKey: text("owner_key").notNull(),
   productId: integer("product_id").references(() => products.id),
   variantId: integer("variant_id").references(() => productVariants.id),
+  colorId: integer("color_id").references(() => productColors.id),
   quantity: integer("quantity").default(1),
   addedAt: timestamp("added_at").defaultNow(),
+});
+
+// Pre-Release-Zugangscodes: schalten Produkte frei, die noch vor ihrem
+// dropDate stehen. maxUsesPerAccount begrenzt, wie oft EIN Account
+// denselben Code einlösen kann (Anzahl verschiedener Accounts ist nicht
+// begrenzt).
+export const preReleaseCodes = pgTable("pre_release_codes", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  maxUsesPerAccount: integer("max_uses_per_account").default(1),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const preReleaseRedemptions = pgTable("pre_release_redemptions", {
+  id: serial("id").primaryKey(),
+  codeId: integer("code_id").notNull().references(() => preReleaseCodes.id),
+  userId: integer("user_id").notNull().references(() => users.id),
+  redeemedAt: timestamp("redeemed_at").defaultNow(),
 });
 
 // Einzelne Key/Value Einstellungen, die der Admin im Panel ändert und die

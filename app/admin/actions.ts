@@ -1,8 +1,8 @@
 "use server";
 import { db } from "@/db";
-import { products, productVariants, discountCodes, newsPosts, users, usernameHistory } from "@/db/schema";
+import { products, productVariants, productColors, discountCodes, newsPosts, users, usernameHistory, preReleaseCodes, preReleaseRedemptions } from "@/db/schema";
 import { eq, ilike, desc } from "drizzle-orm";
-import { del } from "@vercel/blob";
+import { del, list } from "@vercel/blob";
 import { getCurrentUser } from "@/app/actions";
 import { sanitizeText, isSuspiciousInput } from "@/app/utils/inputSafety";
 import { isTrustedOrigin } from "@/app/utils/origin";
@@ -54,6 +54,12 @@ export async function createProduct(formData: FormData) {
   const compareAtPriceRaw = formData.get("compareAtPrice") as string;
   const dropLimitRaw = formData.get("dropLimit") as string;
   const dropLabelRaw = (formData.get("dropLabel") as string) ?? "";
+  const isPreRelease = formData.get("isPreRelease") === "true";
+  const dropDateRaw = (formData.get("dropDate") as string) ?? "";
+  const dropDate = dropDateRaw ? new Date(dropDateRaw) : null;
+  if (dropDateRaw && (!dropDate || isNaN(dropDate.getTime()))) {
+    return { error: "Ungültiges Drop-Datum." };
+  }
 
   if (isSuspiciousInput(nameRaw) || isSuspiciousInput(descriptionRaw)) {
     return { error: "Ungültige Eingabe." };
@@ -75,6 +81,40 @@ export async function createProduct(formData: FormData) {
     if (images.length < MAX_IMAGES_PER_PRODUCT) images.push(entry);
   }
 
+  // Größen kommen als wiederholte "sizes"-Felder (jeweils nur die Größen-
+  // Bezeichnung, z.B. "M") - werden nach dem Anlegen als product_variants
+  // mit dieser Bezeichnung als Label angelegt.
+  const sizes = formData
+    .getAll("sizes")
+    .filter((s): s is string => typeof s === "string" && s.trim() !== "")
+    .map((s) => sanitizeText(s, 20))
+    .filter(Boolean)
+    .slice(0, 12);
+
+  // Farben kommen als EIN JSON-Feld "colors" (Array von {name, hexColor,
+  // frontImage, backImage}) - das Formular sammelt sie clientseitig, bevor
+  // das Produkt überhaupt existiert (kein productId für eine eigene
+  // Server-Action pro Farbe möglich).
+  const colorsRaw = (formData.get("colors") as string) ?? "[]";
+  let parsedColors: { name: string; hexColor: string; frontImage: string; backImage: string }[] = [];
+  try {
+    const parsed = JSON.parse(colorsRaw);
+    if (Array.isArray(parsed)) parsedColors = parsed;
+  } catch {
+    return { error: "Ungültige Farb-Daten." };
+  }
+  for (const c of parsedColors) {
+    if (
+      isSuspiciousInput(c?.name ?? "") ||
+      typeof c?.hexColor !== "string" ||
+      !/^#[0-9a-fA-F]{6}$/.test(c.hexColor) ||
+      !isOwnBlobUrl(c?.frontImage ?? "") ||
+      !isOwnBlobUrl(c?.backImage ?? "")
+    ) {
+      return { error: "Ungültige Farb-Daten (Name, Farbwert oder Bilder fehlen/fehlerhaft)." };
+    }
+  }
+
   const baseSlug = slugify(name) || "produkt";
   let slug = baseSlug;
   let suffix = 1;
@@ -84,16 +124,37 @@ export async function createProduct(formData: FormData) {
 
   const dropLimit = dropLimitRaw && dropLimitRaw !== "" ? parseInt(dropLimitRaw, 10) : null;
 
-  await db.insert(products).values({
-    slug,
-    name,
-    description,
-    priceCents: Math.round(priceEuro * 100),
-    compareAtPriceCents: compareAtPriceEuro !== null ? Math.round(compareAtPriceEuro * 100) : null,
-    images,
-    dropLabel: isSuspiciousInput(dropLabelRaw) ? null : sanitizeText(dropLabelRaw, 40) || null,
-    dropLimit: dropLimit && dropLimit > 0 ? dropLimit : null,
-  });
+  const [created] = await db
+    .insert(products)
+    .values({
+      slug,
+      name,
+      description,
+      priceCents: Math.round(priceEuro * 100),
+      compareAtPriceCents: compareAtPriceEuro !== null ? Math.round(compareAtPriceEuro * 100) : null,
+      images,
+      dropLabel: isSuspiciousInput(dropLabelRaw) ? null : sanitizeText(dropLabelRaw, 40) || null,
+      dropLimit: dropLimit && dropLimit > 0 ? dropLimit : null,
+      isPreRelease,
+      dropDate,
+    })
+    .returning({ id: products.id });
+
+  if (sizes.length > 0) {
+    await db.insert(productVariants).values(sizes.map((label) => ({ productId: created.id, label, stock: null })));
+  }
+  if (parsedColors.length > 0) {
+    await db.insert(productColors).values(
+      parsedColors.map((c, i) => ({
+        productId: created.id,
+        name: sanitizeText(c.name, 30),
+        hexColor: c.hexColor,
+        frontImage: c.frontImage,
+        backImage: c.backImage,
+        sortOrder: i,
+      })),
+    );
+  }
 
   return { success: true };
 }
@@ -112,6 +173,12 @@ export async function updateProduct(formData: FormData) {
   const active = formData.get("active") === "true";
   const dropLabelRaw = (formData.get("dropLabel") as string) ?? "";
   const dropLimitRaw = formData.get("dropLimit") as string;
+  const isPreRelease = formData.get("isPreRelease") === "true";
+  const dropDateRaw = (formData.get("dropDate") as string) ?? "";
+  const dropDate = dropDateRaw ? new Date(dropDateRaw) : null;
+  if (dropDateRaw && (!dropDate || isNaN(dropDate.getTime()))) {
+    return { error: "Ungültiges Drop-Datum." };
+  }
 
   if (isSuspiciousInput(nameRaw) || isSuspiciousInput(descriptionRaw)) {
     return { error: "Ungültige Eingabe." };
@@ -143,6 +210,8 @@ export async function updateProduct(formData: FormData) {
       active,
       dropLabel: isSuspiciousInput(dropLabelRaw) ? null : sanitizeText(dropLabelRaw, 40) || null,
       dropLimit: dropLimit && dropLimit > 0 ? dropLimit : null,
+      isPreRelease,
+      dropDate,
       ...(images !== undefined ? { images } : {}),
     })
     .where(eq(products.id, id));
@@ -158,8 +227,10 @@ export async function deleteProduct(formData: FormData) {
   if (!id) return { error: "Ungültiges Produkt." };
 
   const existing = await db.select().from(products).where(eq(products.id, id));
+  const colors = await db.select().from(productColors).where(eq(productColors.productId, id));
 
   await db.delete(productVariants).where(eq(productVariants.productId, id));
+  await db.delete(productColors).where(eq(productColors.productId, id));
   await db.delete(products).where(eq(products.id, id));
 
   // Zugehörige Bilder im Blob-Store auch löschen, sonst sammeln sich dort
@@ -170,6 +241,69 @@ export async function deleteProduct(formData: FormData) {
       await del(url);
     } catch (e) {
       console.error("Konnte Blob nicht löschen:", url, e);
+    }
+  }
+  for (const c of colors) {
+    for (const url of [c.frontImage, c.backImage]) {
+      try {
+        await del(url);
+      } catch (e) {
+        console.error("Konnte Farb-Blob nicht löschen:", url, e);
+      }
+    }
+  }
+
+  return { success: true };
+}
+
+export async function addColor(formData: FormData) {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
+
+  const productId = Number(formData.get("productId"));
+  const nameRaw = (formData.get("name") as string) ?? "";
+  const hexColor = (formData.get("hexColor") as string) ?? "";
+  const frontImage = (formData.get("frontImage") as string) ?? "";
+  const backImage = (formData.get("backImage") as string) ?? "";
+
+  if (!productId || isSuspiciousInput(nameRaw)) return { error: "Ungültige Eingabe." };
+  const name = sanitizeText(nameRaw, 30);
+  if (!name) return { error: "Name erforderlich." };
+  if (!/^#[0-9a-fA-F]{6}$/.test(hexColor)) return { error: "Ungültiger Farbwert." };
+  if (!isOwnBlobUrl(frontImage) || !isOwnBlobUrl(backImage)) {
+    return { error: "Vorder- und Rückseiten-Bild sind erforderlich." };
+  }
+
+  const existingCount = await db.select().from(productColors).where(eq(productColors.productId, productId));
+
+  await db.insert(productColors).values({
+    productId,
+    name,
+    hexColor,
+    frontImage,
+    backImage,
+    sortOrder: existingCount.length,
+  });
+
+  return { success: true };
+}
+
+export async function deleteColor(formData: FormData) {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
+
+  const id = Number(formData.get("id"));
+  if (!id) return { error: "Ungültig." };
+
+  const existing = await db.select().from(productColors).where(eq(productColors.id, id));
+  await db.delete(productColors).where(eq(productColors.id, id));
+
+  for (const url of [existing[0]?.frontImage, existing[0]?.backImage]) {
+    if (!url) continue;
+    try {
+      await del(url);
+    } catch (e) {
+      console.error("Konnte Farb-Blob nicht löschen:", url, e);
     }
   }
 
@@ -210,6 +344,72 @@ export async function deleteVariant(formData: FormData) {
 }
 
 // ===================================================================
+// Diagnose: ist Vercel Blob (Bilder-Upload) wirklich verbunden?
+// ===================================================================
+// ===================================================================
+// Pre-Release-Zugangscodes
+// ===================================================================
+export async function createPreReleaseCode(formData: FormData) {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
+
+  const codeRaw = ((formData.get("code") as string) ?? "").trim().toUpperCase();
+  const maxUsesRaw = (formData.get("maxUsesPerAccount") as string) ?? "1";
+  const maxUsesPerAccount = parseInt(maxUsesRaw, 10);
+
+  if (!codeRaw || codeRaw.length < 3 || codeRaw.length > 30) {
+    return { error: "Bitte einen Code zwischen 3 und 30 Zeichen angeben." };
+  }
+  if (isSuspiciousInput(codeRaw)) return { error: "Ungültiger Code." };
+  if (!maxUsesPerAccount || maxUsesPerAccount <= 0) {
+    return { error: "Ungültige Anzahl (mindestens 1)." };
+  }
+
+  try {
+    await db.insert(preReleaseCodes).values({ code: codeRaw, maxUsesPerAccount });
+  } catch {
+    return { error: "Dieser Code existiert schon." };
+  }
+
+  return { success: true };
+}
+
+export async function deletePreReleaseCode(formData: FormData) {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
+
+  const id = Number(formData.get("id"));
+  if (!id) return { error: "Ungültig." };
+  await db.delete(preReleaseRedemptions).where(eq(preReleaseRedemptions.codeId, id));
+  await db.delete(preReleaseCodes).where(eq(preReleaseCodes.id, id));
+  return { success: true };
+}
+
+export async function checkBlobConnection() {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
+
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return {
+      success: false,
+      message: "BLOB_READ_WRITE_TOKEN ist nicht gesetzt. Im Vercel Dashboard unter Storage einen Blob-Store erstellen und mit diesem Projekt verbinden, dann neu deployen.",
+    };
+  }
+
+  try {
+    // Echter Verbindungstest statt nur die Existenz der Env-Variable zu
+    // prüfen - falls der Token falsch/abgelaufen ist, würde list() das
+    // genauso aufdecken.
+    await list({ limit: 1 });
+    return { success: true, message: "Verbindung zu Vercel Blob funktioniert." };
+  } catch (e) {
+    console.error("Blob-Verbindungstest fehlgeschlagen:", e);
+    const detail = e instanceof Error ? e.message : String(e);
+    return { success: false, message: `Verbindung fehlgeschlagen: ${detail}` };
+  }
+}
+
+// ===================================================================
 // Admin-Suche: User per aktuellem ODER früherem Benutzernamen finden
 // ===================================================================
 export async function searchUserByUsername(formData: FormData) {
@@ -217,18 +417,20 @@ export async function searchUserByUsername(formData: FormData) {
   if (!admin) return { error: "Keine Berechtigung." };
 
   const raw = ((formData.get("username") as string) ?? "").trim();
-  if (!raw) return { error: "Bitte einen Benutzernamen eingeben." };
+  if (!raw) return { error: "Bitte Email oder Benutzernamen eingeben." };
   if (isSuspiciousInput(raw)) return { error: "Ungültige Eingabe." };
 
-  // Case-insensitive Treffer sowohl im aktuellen Namen als auch in der
-  // Historie (alte Namen) - "raw" oder "Raw" oder ein längst abgelegter
-  // alter Name finden alle denselben User.
-  const directMatch = await db
-    .select()
-    .from(users)
-    .where(ilike(users.username, raw));
+  // Reihenfolge: 1) exakte/aktuelle Email  2) aktueller Username
+  // 3) früherer Username (Historie) - alle case-insensitive.
+  let userId: number | null = null;
 
-  let userId: number | null = directMatch[0]?.id ?? null;
+  const emailMatch = await db.select().from(users).where(ilike(users.email, raw));
+  userId = emailMatch[0]?.id ?? null;
+
+  if (!userId) {
+    const directMatch = await db.select().from(users).where(ilike(users.username, raw));
+    userId = directMatch[0]?.id ?? null;
+  }
 
   if (!userId) {
     const historyMatch = await db
@@ -240,7 +442,7 @@ export async function searchUserByUsername(formData: FormData) {
     userId = historyMatch[0]?.userId ?? null;
   }
 
-  if (!userId) return { error: "Kein User mit diesem (auch früheren) Benutzernamen gefunden." };
+  if (!userId) return { error: "Kein User mit dieser Email oder diesem (auch früheren) Benutzernamen gefunden." };
 
   const found = await db.select().from(users).where(eq(users.id, userId));
   if (found.length === 0) return { error: "User nicht gefunden." };

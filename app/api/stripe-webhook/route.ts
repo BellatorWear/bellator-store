@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { orders, orderItems, products, users, cartItems } from "@/db/schema";
+import { orders, orderItems, products, productVariants, users, cartItems } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { awardChallengeByType } from "@/app/actions";
 
@@ -8,7 +8,8 @@ import { awardChallengeByType } from "@/app/actions";
 // - legt die Bestellung + Positionen in der DB an (vorher passierte das NIE,
 //   weil es gar keinen Webhook gab - "orders"/"order_items" blieben leer)
 // - leert den Warenkorb des Käufers
-// - erhöht soldCount je Produkt (für Drop-Limits)
+// - erhöht soldCount je Produkt (für Drop-Limits) und reduziert den
+//   Lagerbestand der gekauften Größe (falls eine gewählt wurde)
 // - berechnet einen automatischen Stammkunden-Rabatt
 // - vergibt die Challenges "Erster Kauf" / "Treuer Kunde"
 //
@@ -83,10 +84,12 @@ export async function POST(req: NextRequest) {
       const price = li.amount_total ?? 0;
 
       let productId: number | null = null;
+      let variantId: number | null = null;
       const stripeProduct = li.price?.product;
       if (stripeProduct && typeof stripeProduct === "object" && "metadata" in stripeProduct) {
-        const idStr = (stripeProduct as { metadata?: Record<string, string> }).metadata?.productId;
-        if (idStr) productId = Number(idStr) || null;
+        const meta = (stripeProduct as { metadata?: Record<string, string> }).metadata;
+        if (meta?.productId) productId = Number(meta.productId) || null;
+        if (meta?.variantId) variantId = Number(meta.variantId) || null;
       }
 
       await db.insert(orderItems).values({
@@ -104,6 +107,18 @@ export async function POST(req: NextRequest) {
             .update(products)
             .set({ soldCount: (prod[0].soldCount ?? 0) + qty })
             .where(eq(products.id, productId));
+        }
+      }
+
+      if (variantId) {
+        const variantRows = await db.select().from(productVariants).where(eq(productVariants.id, variantId));
+        const variant = variantRows[0];
+        // null = unlimitiert, also nichts abzuziehen.
+        if (variant && variant.stock !== null) {
+          await db
+            .update(productVariants)
+            .set({ stock: Math.max(0, variant.stock - qty) })
+            .where(eq(productVariants.id, variantId));
         }
       }
     }

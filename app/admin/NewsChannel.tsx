@@ -39,8 +39,7 @@ export default function NewsChannel({ recentPosts }: { recentPosts: Post[] }) {
   }
 
   return (
-    <section className="border border-zinc-700 p-4 sm:p-6 space-y-4">
-      <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-500">News-Channel</h2>
+    <div className="space-y-4">
       <p className="text-[9px] text-zinc-600 leading-relaxed">
         Jeder Post geht sofort als Push-Benachrichtigung an alle User mit aktivierten Push-Benachrichtigungen
         UND als Newsletter-Mail an alle Newsletter-Abonnenten raus.
@@ -71,6 +70,6 @@ export default function NewsChannel({ recentPosts }: { recentPosts: Post[] }) {
           ))}
         </div>
       )}
-    </section>
+    </div>
   );
 }

@@ -10,6 +10,7 @@ import CustomValidationMessages from "./CustomValidationMessages";
 export const metadata: Metadata = {
   title: "Bellator Streetwear",
   description: "240g Heavy Cotton. Oversized Fit. Ohne Kompromisse.",
+  manifest: "/manifest.json",
   icons: {
     icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
   },

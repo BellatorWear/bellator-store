@@ -1,4 +1,6 @@
 "use client";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 export default function ConfirmDialog({
   open,
@@ -21,11 +23,17 @@ export default function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  if (!open) return null;
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  return (
+  if (!open || !mounted) return null;
+
+  // Per createPortal direkt in document.body - vermeidet, dass das Modal in
+  // einem verschachtelten Stacking-Context (z.B. innerhalb eines anderen
+  // positionierten Containers) hängen bleibt und verdeckt werden kann.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[140] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
       onClick={onCancel}
     >
       <div
@@ -55,6 +63,7 @@ export default function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

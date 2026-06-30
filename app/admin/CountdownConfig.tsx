@@ -47,9 +47,8 @@ export default function CountdownConfig({ initial }: { initial: CountdownData })
   }
 
   return (
-    <section className="border border-zinc-700 p-4 sm:p-6 space-y-4">
+    <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Countdown</h2>
         <label className="flex items-center gap-2 cursor-pointer">
           <span className="text-[10px] text-zinc-500 uppercase tracking-widest">
             {data.enabled ? "Aktiv" : "Deaktiviert"}
@@ -102,6 +101,6 @@ export default function CountdownConfig({ initial }: { initial: CountdownData })
       <p className="text-[9px] text-zinc-600">
         Wird jetzt zentral gespeichert und gilt für ALLE Besucher (vorher nur lokal in deinem Browser).
       </p>
-    </section>
+    </div>
   );
 }

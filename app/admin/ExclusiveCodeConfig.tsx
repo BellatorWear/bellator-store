@@ -30,9 +30,8 @@ export default function ExclusiveCodeConfig({ initial }: { initial: Setting }) {
   }
 
   return (
-    <section className="border border-zinc-700 p-4 sm:p-6 space-y-4">
+    <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Exklusive Erstbesteller-Codes</h2>
         <button type="button" onClick={() => setData((d) => ({ ...d, enabled: !d.enabled }))}
           className={`relative w-10 h-5 border transition-all ${data.enabled ? "border-white bg-white" : "border-zinc-600 bg-zinc-900"}`}>
           <span className={`absolute top-0.5 w-4 h-4 transition-all ${data.enabled ? "right-0.5 bg-black" : "left-0.5 bg-white"}`} />
@@ -71,6 +70,6 @@ export default function ExclusiveCodeConfig({ initial }: { initial: Setting }) {
         Hinweis: Sobald ein Code einmal bei Stripe angelegt ist, lässt sich sein Verwendungslimit dort
         nicht mehr ändern (Stripe-Einschränkung) - für ein neues Limit am besten einen neuen Code wählen.
       </p>
-    </section>
+    </div>
   );
 }

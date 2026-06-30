@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/db";
-import { cartItems, products, productVariants, discountCodes } from "@/db/schema";
+import { cartItems, products, productVariants, productColors, discountCodes, preReleaseCodes, preReleaseRedemptions } from "@/db/schema";
 import { eq, and, lt } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { getCartOwnerKey, initCartCookie } from "./utils/cartOwner";
@@ -23,10 +23,12 @@ export async function getCart() {
       item: cartItems,
       product: products,
       variant: productVariants,
+      color: productColors,
     })
     .from(cartItems)
     .innerJoin(products, eq(cartItems.productId, products.id))
     .leftJoin(productVariants, eq(cartItems.variantId, productVariants.id))
+    .leftJoin(productColors, eq(cartItems.colorId, productColors.id))
     .where(eq(cartItems.ownerKey, ownerKey));
 
   return rows.map((r) => {
@@ -35,10 +37,12 @@ export async function getCart() {
       id: r.item.id,
       productId: r.product.id,
       variantId: r.variant?.id ?? null,
+      colorId: r.color?.id ?? null,
       name: r.product.name,
       variantLabel: r.variant?.label ?? null,
+      colorName: r.color?.name ?? null,
       dropLabel: r.product.dropLabel ?? null,
-      image: r.product.images?.[0] ?? null,
+      image: r.color?.frontImage ?? r.product.images?.[0] ?? null,
       unitPriceCents: unitPrice,
       quantity: r.item.quantity ?? 1,
     };
@@ -49,8 +53,21 @@ export async function addToCart(formData: FormData) {
   if (!(await isTrustedOrigin())) return { error: "Anfrage abgelehnt." };
   const productId = Number(formData.get("productId"));
   const variantId = formData.get("variantId") ? Number(formData.get("variantId")) : null;
+  const colorId = formData.get("colorId") ? Number(formData.get("colorId")) : null;
   const quantity = Math.max(1, Math.min(10, Number(formData.get("quantity")) || 1));
   if (!productId) return { error: "Ungültiges Produkt." };
+
+  // Pre-Release-Schutz auch hier (nicht nur in der Anzeige) - sonst könnte
+  // man ein gesperrtes Produkt einfach direkt per productId in den
+  // Warenkorb legen, ohne es je gesehen zu haben.
+  const productRows = await db.select().from(products).where(eq(products.id, productId));
+  const product = productRows[0];
+  if (!product || !product.active) return { error: "Produkt nicht verfügbar." };
+  if (product.isPreRelease && product.dropDate && new Date(product.dropDate).getTime() > Date.now()) {
+    const user = await getCurrentUser();
+    const access = await hasPreReleaseAccess(user?.id);
+    if (!access) return { error: "Dieses Produkt ist noch nicht freigegeben." };
+  }
 
   const ownerKey = await initCartCookie();
 
@@ -59,14 +76,14 @@ export async function addToCart(formData: FormData) {
     .from(cartItems)
     .where(and(eq(cartItems.ownerKey, ownerKey), eq(cartItems.productId, productId)));
 
-  const match = existing.find((e) => e.variantId === variantId);
+  const match = existing.find((e) => e.variantId === variantId && e.colorId === colorId);
   if (match) {
     await db
       .update(cartItems)
       .set({ quantity: (match.quantity ?? 1) + quantity, addedAt: new Date() })
       .where(eq(cartItems.id, match.id));
   } else {
-    await db.insert(cartItems).values({ ownerKey, productId, variantId, quantity });
+    await db.insert(cartItems).values({ ownerKey, productId, variantId, colorId, quantity });
   }
 
   return { success: true };
@@ -90,6 +107,11 @@ export async function updateCartQuantity(formData: FormData) {
     .set({ quantity })
     .where(and(eq(cartItems.id, itemId), eq(cartItems.ownerKey, ownerKey)));
   return { success: true };
+}
+
+function lineItemName(item: { name: string; variantLabel: string | null; colorName: string | null }) {
+  const parts = [item.colorName, item.variantLabel].filter(Boolean);
+  return parts.length > 0 ? `${item.name} (${parts.join(", ")})` : item.name;
 }
 
 /**
@@ -118,8 +140,8 @@ export async function createCheckoutSession() {
 
   const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
-  // Eigener, vom Kunden eingelöster Rabattcode (siehe redeemDiscountCode)
-  // hat Vorrang vor dem automatischen Stammkunden-Rabatt - beide gleichzeitig
+  // Eigener, vom Kunden eingelöster Rabattcode (siehe redeemCode) hat
+  // Vorrang vor dem automatischen Stammkunden-Rabatt - beide gleichzeitig
   // anzuwenden würde sich nicht sauber abbilden lassen.
   const cookieStore = await cookies();
   const redeemedCode = cookieStore.get("bellator-discount-code")?.value;
@@ -159,11 +181,11 @@ export async function createCheckoutSession() {
           currency: "eur",
           unit_amount: item.unitPriceCents,
           product_data: {
-            name: item.variantLabel ? `${item.name} (${item.variantLabel})` : item.name,
+            name: lineItemName(item),
             // Bilder sind jetzt echte https-URLs (Vercel Blob), nicht mehr
             // Base64 - Stripe akzeptiert nur echte URLs, das geht jetzt.
             images: item.image ? [item.image] : undefined,
-            metadata: { productId: String(item.productId) },
+            metadata: { productId: String(item.productId), variantId: item.variantId ? String(item.variantId) : "" },
           },
         },
       })),
@@ -205,19 +227,37 @@ export async function createCheckoutSession() {
 }
 
 /**
- * Validiert einen vom Kunden eingegebenen Rabattcode gegen unsere eigene
- * discount_codes Tabelle und merkt ihn sich (Cookie) für den nächsten
- * Checkout. Die eigentliche, fälschungssichere Prüfung passiert nochmal
- * direkt bei Stripe selbst (über promotion_code), hier geht es nur um die
- * Vorschau/Bestätigung auf unserer Seite.
+ * Generischer "Code eingeben" - probiert zuerst einen Pre-Release-
+ * Zugangscode, dann einen Rabattcode. Pre-Release-Codes schalten sofort
+ * (serverseitig, dauerhaft) Zugang frei statt nur ein Cookie zu setzen.
  */
-export async function redeemDiscountCode(formData: FormData) {
+export async function redeemCode(formData: FormData) {
   if (!(await isTrustedOrigin())) return { error: "Anfrage abgelehnt." };
   const code = ((formData.get("code") as string) ?? "").trim();
   if (!code) return { error: "Bitte einen Code eingeben." };
 
+  const preReleaseMatch = await db.select().from(preReleaseCodes).where(eq(preReleaseCodes.code, code));
+  if (preReleaseMatch.length > 0) {
+    const user = await getCurrentUser();
+    if (!user) return { error: "Bitte zuerst einloggen, um einen Pre-Release-Code einzulösen." };
+
+    const prc = preReleaseMatch[0];
+    const ownUses = await db
+      .select()
+      .from(preReleaseRedemptions)
+      .where(and(eq(preReleaseRedemptions.codeId, prc.id), eq(preReleaseRedemptions.userId, user.id)));
+
+    if (prc.maxUsesPerAccount !== null && ownUses.length >= (prc.maxUsesPerAccount ?? 1)) {
+      return { error: "Dieser Code wurde mit diesem Account bereits maximal oft eingelöst." };
+    }
+
+    await db.insert(preReleaseRedemptions).values({ codeId: prc.id, userId: user.id });
+    return { success: true, type: "prerelease" as const };
+  }
+
+  // Kein Pre-Release-Code -> als Rabattcode versuchen.
   const found = await db.select().from(discountCodes).where(eq(discountCodes.code, code));
-  if (found.length === 0) return { error: "Ungültiger Rabattcode." };
+  if (found.length === 0) return { error: "Ungültiger Code." };
   const dc = found[0];
 
   if (dc.expiresAt && new Date(dc.expiresAt) < new Date()) {
@@ -242,5 +282,12 @@ export async function redeemDiscountCode(formData: FormData) {
     maxAge: 60 * 60 * 24,
   });
 
-  return { success: true, percentOff: dc.percentOff };
+  return { success: true, type: "discount" as const, percentOff: dc.percentOff };
+}
+
+/** Prüft, ob ein User schon irgendeinen Pre-Release-Code eingelöst hat. */
+export async function hasPreReleaseAccess(userId: number | null | undefined): Promise<boolean> {
+  if (!userId) return false;
+  const rows = await db.select().from(preReleaseRedemptions).where(eq(preReleaseRedemptions.userId, userId)).limit(1);
+  return rows.length > 0;
 }

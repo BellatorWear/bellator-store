@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import NotificationToggle from "@/app/einstellungen/NotificationToggle";
 import NewsletterToggle from "@/app/einstellungen/NewsletterToggle";
 
@@ -20,6 +21,9 @@ export default function EngagementPopup({
   initialPushEnabled: boolean;
 }) {
   const [show, setShow] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     // Beide schon aktiv? Dann gibt's nichts zu fragen.
@@ -36,10 +40,13 @@ export default function EngagementPopup({
     setShow(false);
   }
 
-  if (!show) return null;
+  if (!show || !mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+  // Per createPortal direkt in document.body - rendert sonst verschachtelt
+  // im Layout und könnte mit anderen fixed-Overlays (z.B. dem
+  // Rabattcode-Modal) in einen Stacking-Context-Konflikt geraten.
+  return createPortal(
+    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
       <div className="w-full max-w-sm t-card border p-6 sm:p-8">
         <h2 className="text-xl font-black uppercase tracking-tighter mb-2 t-text">Bleib auf dem Laufenden</h2>
         <p className="text-xs t-muted uppercase tracking-widest mb-6 leading-relaxed">
@@ -72,6 +79,7 @@ export default function EngagementPopup({
           Fertig
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

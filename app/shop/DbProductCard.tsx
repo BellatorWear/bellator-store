@@ -6,6 +6,7 @@ import { addToCart } from "@/app/cart";
 import PriceDisplay from "./components/PriceDisplay";
 
 type Variant = { id: number; label: string; stock: number | null };
+type Color = { id: number; name: string; hexColor: string; frontImage: string; backImage: string };
 type Product = {
   id: number;
   slug: string;
@@ -19,8 +20,9 @@ type Product = {
   soldCount: number | null;
 };
 
-export default function DbProductCard({ product, variants }: { product: Product; variants: Variant[] }) {
+export default function DbProductCard({ product, variants, colors = [], isPreRelease = false }: { product: Product; variants: Variant[]; colors?: Color[]; isPreRelease?: boolean }) {
   const [variantId, setVariantId] = useState<number | null>(variants[0]?.id ?? null);
+  const [colorId, setColorId] = useState<number | null>(colors[0]?.id ?? null);
   const [loading, setLoading] = useState(false);
   const [added, setAdded] = useState(false);
   const [err, setErr] = useState("");
@@ -28,6 +30,10 @@ export default function DbProductCard({ product, variants }: { product: Product;
 
   const remaining = product.dropLimit ? product.dropLimit - (product.soldCount ?? 0) : null;
   const soldOut = remaining !== null && remaining <= 0;
+  const selectedColor = colors.find((c) => c.id === colorId);
+  // Bevorzugt das Bild der ausgewählten Farbe, sonst Fallback auf das
+  // generische Bilder-Array (für Produkte ohne Farb-System).
+  const displayImage = selectedColor?.frontImage ?? (product.images && product.images[0]);
 
   async function handleAdd() {
     if (loading) return;
@@ -37,6 +43,7 @@ export default function DbProductCard({ product, variants }: { product: Product;
       const fd = new FormData();
       fd.append("productId", String(product.id));
       if (variantId) fd.append("variantId", String(variantId));
+      if (colorId) fd.append("colorId", String(colorId));
       fd.append("quantity", "1");
       const res = await addToCart(fd);
       if (res?.error) {
@@ -59,6 +66,9 @@ export default function DbProductCard({ product, variants }: { product: Product;
       style={{ boxShadow: "8px 8px 0px 0px var(--shadow)" }}>
       <div className="flex justify-between items-center mb-4 text-[10px] uppercase tracking-widest">
         <span className="border border-zinc-600 px-2 py-1 t-muted font-bold">{product.dropLabel || "Drop"}</span>
+        {isPreRelease && (
+          <span className="border border-purple-600 px-2 py-1 text-purple-400 font-bold">Pre-Release</span>
+        )}
         {soldOut ? (
           <span className="border border-red-700 px-2 py-1 text-red-400 font-bold">Ausverkauft</span>
         ) : remaining !== null ? (
@@ -66,10 +76,10 @@ export default function DbProductCard({ product, variants }: { product: Product;
         ) : null}
       </div>
 
-      {product.images && product.images[0] && (
+      {displayImage && (
         <Link href={`/shop/produkt/${product.slug}`} className="t-bg mb-5 overflow-hidden border t-border-s block">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={product.images[0]} alt={product.name}
+          <img src={displayImage} alt={product.name}
             className="w-full h-auto block grayscale hover:grayscale-0 transition-all duration-300" />
         </Link>
       )}
@@ -81,6 +91,21 @@ export default function DbProductCard({ product, variants }: { product: Product;
       <div className="mb-4">
         <PriceDisplay priceCents={product.priceCents} compareAtPriceCents={product.compareAtPriceCents} size="sm" />
       </div>
+
+      {colors.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {colors.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setColorId(c.id)}
+              title={c.name}
+              className={`w-7 h-7 border transition-all ${colorId === c.id ? "border-white scale-110" : "border-zinc-600"}`}
+              style={{ backgroundColor: c.hexColor }}
+            />
+          ))}
+        </div>
+      )}
 
       {variants.length > 0 && (
         <select value={variantId ?? ""} onChange={(e) => setVariantId(Number(e.target.value))}

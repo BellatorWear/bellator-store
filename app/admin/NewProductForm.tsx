@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { upload } from "@vercel/blob/client";
 import { createProduct } from "./actions";
 import PriceDisplay from "../shop/components/PriceDisplay";
+import SizeButtons, { type SizeItem } from "./SizeButtons";
+import ColorButtons, { type ColorItem } from "./ColorButtons";
 
 const MAX_IMAGES = 4;
 
@@ -11,6 +13,8 @@ type PendingImage = { url: string; uploading: boolean; error?: string };
 
 export default function NewProductForm() {
   const [images, setImages] = useState<PendingImage[]>([]);
+  const [sizes, setSizes] = useState<SizeItem[]>([]);
+  const [colors, setColors] = useState<ColorItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [success, setSuccess] = useState(false);
@@ -25,6 +29,7 @@ export default function NewProductForm() {
   const [previewPrice, setPreviewPrice] = useState("");
   const [previewCompareAt, setPreviewCompareAt] = useState("");
   const [previewDropLabel, setPreviewDropLabel] = useState("");
+  const [isPreRelease, setIsPreRelease] = useState(false);
 
   async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/"));
@@ -88,6 +93,8 @@ export default function NewProductForm() {
       const fd = new FormData(formRef.current!);
       fd.delete("images");
       images.filter((img) => img.url).forEach((img) => fd.append("images", img.url));
+      sizes.forEach((s) => fd.append("sizes", s.label));
+      fd.append("colors", JSON.stringify(colors));
       const res = await createProduct(fd);
       if (res.error) {
         setErr(res.error);
@@ -96,7 +103,10 @@ export default function NewProductForm() {
       setSuccess(true);
       formRef.current?.reset();
       setImages([]);
+      setSizes([]);
+      setColors([]);
       setPreviewName(""); setPreviewDescription(""); setPreviewPrice(""); setPreviewCompareAt(""); setPreviewDropLabel("");
+      setIsPreRelease(false);
       router.refresh();
       setTimeout(() => setSuccess(false), 3000);
     } catch (e) {
@@ -109,11 +119,11 @@ export default function NewProductForm() {
 
   const previewPriceCents = Math.round((parseFloat(previewPrice) || 0) * 100);
   const previewCompareAtCents = previewCompareAt ? Math.round((parseFloat(previewCompareAt) || 0) * 100) : null;
-  const firstImage = images.find((img) => img.url)?.url;
+  const firstColorImage = colors[0]?.frontImage;
+  const firstImage = firstColorImage || images.find((img) => img.url)?.url;
 
   return (
-    <div className="border border-zinc-700 p-4 sm:p-6 space-y-4">
-      <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Neues Produkt</h2>
+    <div className="space-y-4">
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <form ref={formRef} onSubmit={submit} className="space-y-3">
@@ -124,6 +134,19 @@ export default function NewProductForm() {
           <textarea name="description" placeholder="Beschreibung" required maxLength={1000} rows={3}
             value={previewDescription} onChange={(e) => setPreviewDescription(e.target.value)}
             className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white placeholder:text-zinc-600 hover:border-zinc-500 focus:border-white outline-none transition resize-none" />
+
+          <SizeButtons
+            sizes={sizes}
+            loading={loading}
+            onAdd={(label) => setSizes((prev) => [...prev, { label }])}
+            onRemove={(item) => setSizes((prev) => prev.filter((s) => s.label !== item.label))}
+          />
+          <ColorButtons
+            colors={colors}
+            loading={loading}
+            onAdd={(color) => setColors((prev) => [...prev, color])}
+            onRemove={(item) => setColors((prev) => prev.filter((c) => c.name !== item.name))}
+          />
 
           <div className="flex gap-3">
             <input name="price" type="number" step="0.01" min="0.01" placeholder="Preis (€)" required
@@ -141,6 +164,25 @@ export default function NewProductForm() {
               value={previewDropLabel} onChange={(e) => setPreviewDropLabel(e.target.value)}
               className="w-1/2 bg-zinc-900 border border-zinc-700 p-2 text-sm text-white placeholder:text-zinc-600 hover:border-zinc-500 focus:border-white outline-none transition" />
           </div>
+
+          <div className="flex gap-3 items-end">
+            <div className="w-1/2">
+              <label className="block text-[10px] text-zinc-500 uppercase tracking-widest mb-1">
+                Drop-Datum (optional)
+              </label>
+              <input name="dropDate" type="datetime-local"
+                className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white hover:border-zinc-500 focus:border-white outline-none transition" />
+            </div>
+            <label className="w-1/2 flex items-center gap-2 text-xs text-zinc-400 pb-2 cursor-pointer">
+              <input type="checkbox" checked={isPreRelease} onChange={(e) => setIsPreRelease(e.target.checked)} />
+              Pre-Release (vor Drop-Datum nur mit Zugangscode sichtbar)
+            </label>
+          </div>
+          <input type="hidden" name="isPreRelease" value={String(isPreRelease)} />
+          <p className="text-[9px] text-zinc-600 -mt-1">
+            Ohne Haken wird das Produkt zum Drop-Datum automatisch für alle freigegeben (falls gesetzt) -
+            mit Haken ist es vorher nur für User mit gültigem Pre-Release-Code sichtbar.
+          </p>
 
           {/* Bilder Upload - geht direkt zu Vercel Blob, nicht über den Server */}
           <div>
@@ -231,6 +273,20 @@ export default function NewProductForm() {
               {previewName || "Produktname"}
             </h1>
             <PriceDisplay priceCents={previewPriceCents || 0} compareAtPriceCents={previewCompareAtCents} />
+            {colors.length > 0 && (
+              <div className="flex gap-1.5">
+                {colors.map((c) => (
+                  <span key={c.name} className="w-6 h-6 border border-zinc-700" style={{ backgroundColor: c.hexColor }} title={c.name} />
+                ))}
+              </div>
+            )}
+            {sizes.length > 0 && (
+              <div className="flex gap-1.5">
+                {sizes.map((s) => (
+                  <span key={s.label} className="w-7 h-7 border border-zinc-700 flex items-center justify-center text-[9px] text-zinc-400">{s.label}</span>
+                ))}
+              </div>
+            )}
             <p className="text-xs text-zinc-400 leading-relaxed">
               {previewDescription || "Beschreibung erscheint hier..."}
             </p>

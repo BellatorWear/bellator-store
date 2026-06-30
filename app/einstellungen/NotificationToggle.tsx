@@ -23,13 +23,18 @@ export default function NotificationToggle({ initialEnabled }: { initialEnabled:
 
     try {
       if (!enabled) {
-        if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
-          setMsg("Dein Browser unterstützt keine Push-Benachrichtigungen.");
+        if (!window.isSecureContext) {
+          setMsg("Push braucht eine sichere Verbindung (HTTPS).");
           return;
         }
+        if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+          setMsg("Dein Browser/Gerät unterstützt keine Push-Benachrichtigungen (z.B. iPhone: nur als zum Homescreen hinzugefügte App).");
+          return;
+        }
+
         const permission = await Notification.requestPermission();
         if (permission !== "granted") {
-          setMsg("Berechtigung verweigert.");
+          setMsg(permission === "denied" ? "Berechtigung blockiert - in den Browser-Einstellungen für diese Seite erlauben." : "Berechtigung nicht erteilt.");
           return;
         }
 
@@ -41,6 +46,15 @@ export default function NotificationToggle({ initialEnabled }: { initialEnabled:
 
         const registration = await navigator.serviceWorker.register("/sw.js");
         await navigator.serviceWorker.ready;
+
+        // Falls schon eine Subscription existiert (z.B. von einem früheren
+        // Test mit einem ANDEREN VAPID-Key) - die blockiert sonst eine neue
+        // Subscription mit "InvalidStateError", weil der Browser nur einen
+        // Key pro Registrierung gleichzeitig zulässt. Erst aufräumen, dann
+        // frisch abonnieren.
+        const existingSub = await registration.pushManager.getSubscription();
+        if (existingSub) await existingSub.unsubscribe();
+
         const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
@@ -58,7 +72,6 @@ export default function NotificationToggle({ initialEnabled }: { initialEnabled:
         setEnabled(true);
         setMsg("Push-Benachrichtigungen aktiviert!");
       } else {
-        // Subscription auch lokal beenden, nicht nur serverseitig löschen.
         if ("serviceWorker" in navigator) {
           const registration = await navigator.serviceWorker.getRegistration("/sw.js");
           const sub = await registration?.pushManager.getSubscription();
@@ -72,8 +85,12 @@ export default function NotificationToggle({ initialEnabled }: { initialEnabled:
         setMsg("Push-Benachrichtigungen deaktiviert.");
       }
     } catch (e) {
+      // Den ECHTEN Fehler zeigen statt eines generischen Texts - "Fehler.
+      // Bitte nochmal versuchen." ohne Kontext lässt sich nicht debuggen.
+      const name = e instanceof Error ? e.name : "Fehler";
+      const detail = e instanceof Error ? e.message : String(e);
       console.error("Push Toggle fehlgeschlagen:", e);
-      setMsg("Fehler. Bitte nochmal versuchen.");
+      setMsg(`${name}: ${detail}`);
     } finally {
       setLoading(false);
     }
@@ -85,7 +102,7 @@ export default function NotificationToggle({ initialEnabled }: { initialEnabled:
         className={`relative w-14 h-7 border transition-all disabled:opacity-50 ${enabled ? "border-white bg-white" : "t-border t-card"}`}>
         <span className={`absolute top-1 w-5 h-5 transition-all ${enabled ? "right-1 bg-black" : "left-1 bg-white"}`} />
       </button>
-      {msg && <p className="text-[9px] t-muted max-w-[140px] text-right">{msg}</p>}
+      {msg && <p className="text-[9px] t-muted max-w-[200px] text-right break-words">{msg}</p>}
     </div>
   );
 }

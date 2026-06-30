@@ -52,16 +52,15 @@ export default function UserSearch() {
   }
 
   return (
-    <section className="border border-zinc-700 p-4 sm:p-6 space-y-4">
-      <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-500">User-Suche (Username)</h2>
+    <div className="space-y-4">
       <p className="text-[9px] text-zinc-600 leading-relaxed">
-        Findet einen User über seinen aktuellen ODER einen früheren Benutzernamen.
+        Findet einen User über seine Email, seinen aktuellen ODER einen früheren Benutzernamen.
       </p>
       <form onSubmit={submit} className="flex gap-2">
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Benutzername (aktuell oder alt)"
+          placeholder="Email oder Benutzername (aktuell/alt)"
           className="flex-1 bg-zinc-900 border border-zinc-700 p-2 text-sm text-white placeholder:text-zinc-600"
         />
         <button type="submit" disabled={loading}
@@ -115,6 +114,6 @@ export default function UserSearch() {
           </div>
         </div>
       )}
-    </section>
+    </div>
   );
 }

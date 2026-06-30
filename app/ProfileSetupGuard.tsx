@@ -32,7 +32,7 @@ export default function ProfileSetupGuard({
   if (step === "done") return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 font-mono">
+    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 font-mono">
       {step === "password" && (
         <PasswordSetupModal email={email} onDone={() => setStep("username")} />
       )}

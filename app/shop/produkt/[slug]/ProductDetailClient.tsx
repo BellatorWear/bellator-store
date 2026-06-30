@@ -7,6 +7,7 @@ import { updateProduct } from "@/app/admin/actions";
 import PriceDisplay from "@/app/shop/components/PriceDisplay";
 
 type Variant = { id: number; label: string; stock: number | null };
+type Color = { id: number; name: string; hexColor: string; frontImage: string; backImage: string };
 type Product = {
   id: number;
   name: string;
@@ -20,9 +21,21 @@ type Product = {
   active?: boolean | null;
 };
 
-export default function ProductDetailClient({ product, variants, isAdmin }: { product: Product; variants: Variant[]; isAdmin: boolean }) {
+export default function ProductDetailClient({
+  product,
+  variants,
+  colors,
+  isAdmin,
+}: {
+  product: Product;
+  variants: Variant[];
+  colors: Color[];
+  isAdmin: boolean;
+}) {
   const images = product.images && product.images.length > 0 ? product.images : [];
   const [activeImage, setActiveImage] = useState(0);
+  const [colorId, setColorId] = useState<number | null>(colors[0]?.id ?? null);
+  const [showBack, setShowBack] = useState(false);
   const [variantId, setVariantId] = useState<number | null>(variants[0]?.id ?? null);
   const [loading, setLoading] = useState(false);
   const [added, setAdded] = useState(false);
@@ -44,6 +57,13 @@ export default function ProductDetailClient({ product, variants, isAdmin }: { pr
   const soldOut = remaining !== null && remaining <= 0;
   const selectedVariant = variants.find((v) => v.id === variantId);
   const variantSoldOut = selectedVariant ? selectedVariant.stock !== null && selectedVariant.stock <= 0 : false;
+  const selectedColor = colors.find((c) => c.id === colorId);
+
+  // Wenn Farben existieren, bestimmen sie das Bild (Vorder-/Rückseite je
+  // nach Auswahl) - sonst fällt man auf das generische Bilder-Array zurück.
+  const mainImage = selectedColor
+    ? (showBack ? selectedColor.backImage : selectedColor.frontImage)
+    : images[activeImage];
 
   async function handleAdd() {
     if (loading) return;
@@ -53,6 +73,7 @@ export default function ProductDetailClient({ product, variants, isAdmin }: { pr
       const fd = new FormData();
       fd.append("productId", String(product.id));
       if (variantId) fd.append("variantId", String(variantId));
+      if (colorId) fd.append("colorId", String(colorId));
       fd.append("quantity", "1");
       const res = await addToCart(fd);
       if (res?.error) {
@@ -124,23 +145,31 @@ export default function ProductDetailClient({ product, variants, isAdmin }: { pr
           {/* Bilder */}
           <div className="flex flex-col">
             <div className="t-card border aspect-square flex items-center justify-center mb-4 overflow-hidden">
-              {images.length > 0 ? (
+              {mainImage ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={images[activeImage]} alt={product.name} className="max-h-full w-full object-contain p-4" />
+                <img src={mainImage} alt={product.name} className="max-h-full w-full object-contain p-4" />
               ) : (
                 <span className="text-xs t-faint uppercase tracking-widest">Kein Bild</span>
               )}
             </div>
-            {images.length > 1 && (
-              <div className="flex gap-2 flex-wrap">
-                {images.map((img, i) => (
-                  <button key={i} onClick={() => setActiveImage(i)}
-                    className={`w-16 h-16 border overflow-hidden ${i === activeImage ? "border-white" : "t-border-s opacity-60"}`}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img} alt="" className="w-full h-full object-cover" />
-                  </button>
-                ))}
-              </div>
+
+            {selectedColor ? (
+              <button onClick={() => setShowBack(!showBack)}
+                className="w-full py-2.5 t-btn-outline font-black uppercase tracking-widest transition text-xs mb-3">
+                {showBack ? "Vorderseite zeigen" : "Rückseite zeigen"}
+              </button>
+            ) : (
+              images.length > 1 && (
+                <div className="flex gap-2 flex-wrap">
+                  {images.map((img, i) => (
+                    <button key={i} onClick={() => setActiveImage(i)}
+                      className={`w-16 h-16 border overflow-hidden ${i === activeImage ? "border-white" : "t-border-s opacity-60"}`}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={img} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )
             )}
           </div>
 
@@ -164,6 +193,7 @@ export default function ProductDetailClient({ product, variants, isAdmin }: { pr
                   <input value={dropLimit} onChange={(e) => setDropLimit(e.target.value)} type="number" placeholder="Drop-Limit"
                     className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white" />
                 </div>
+                <p className="text-[9px] text-zinc-500">Größen & Farben lassen sich im Admin-Panel verwalten.</p>
                 {saveErr && <p className="text-[10px] text-red-500 uppercase tracking-widest">{saveErr}</p>}
                 <div className="flex gap-2">
                   <button onClick={saveEdit} disabled={saving}
@@ -189,18 +219,34 @@ export default function ProductDetailClient({ product, variants, isAdmin }: { pr
                   </span>
                 )}
 
+                {colors.length > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest t-muted mb-2">
+                      Farbe{selectedColor ? `: ${selectedColor.name}` : ""}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {colors.map((c) => (
+                        <button key={c.id} onClick={() => { setColorId(c.id); setShowBack(false); }}
+                          title={c.name}
+                          className={`w-10 h-10 border-2 transition-all ${colorId === c.id ? "border-white scale-110" : "border-zinc-600"}`}
+                          style={{ backgroundColor: c.hexColor }} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {variants.length > 0 && (
                   <div>
-                    <p className="text-[10px] uppercase tracking-widest t-muted mb-2">Variante</p>
+                    <p className="text-[10px] uppercase tracking-widest t-muted mb-2">Größe</p>
                     <div className="flex flex-wrap gap-2">
                       {variants.map((v) => {
                         const vSoldOut = v.stock !== null && v.stock <= 0;
                         return (
                           <button key={v.id} onClick={() => setVariantId(v.id)} disabled={vSoldOut}
-                            className={`px-4 py-2 text-xs sm:text-sm font-bold uppercase transition disabled:opacity-40 ${
+                            className={`w-12 h-12 text-xs font-bold uppercase transition disabled:opacity-40 flex items-center justify-center ${
                               variantId === v.id ? "t-btn-primary" : "t-btn-outline"
                             }`}>
-                            {v.label} {vSoldOut ? "(aus)" : ""}
+                            {v.label}
                           </button>
                         );
                       })}

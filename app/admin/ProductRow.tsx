@@ -1,9 +1,11 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { updateProduct, deleteProduct, addVariant, deleteVariant } from "./actions";
+import { updateProduct, deleteProduct, addVariant, deleteVariant, addColor, deleteColor } from "./actions";
 import ConfirmDialog from "./ConfirmDialog";
 import PriceDisplay from "../shop/components/PriceDisplay";
+import SizeButtons, { type SizeItem } from "./SizeButtons";
+import ColorButtons, { type ColorItem } from "./ColorButtons";
 
 type Product = {
   id: number;
@@ -16,10 +18,13 @@ type Product = {
   dropLimit: number | null;
   soldCount: number | null;
   slug: string;
+  isPreRelease: boolean | null;
+  dropDate: Date | string | null;
 };
 type Variant = { id: number; label: string; stock: number | null };
+type Color = { id: number; name: string; hexColor: string; frontImage: string; backImage: string };
 
-export default function ProductRow({ product, variants }: { product: Product; variants: Variant[] }) {
+export default function ProductRow({ product, variants, colors }: { product: Product; variants: Variant[]; colors: Color[] }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(product.name);
   const [description, setDescription] = useState(product.description);
@@ -27,10 +32,13 @@ export default function ProductRow({ product, variants }: { product: Product; va
   const [compareAtPrice, setCompareAtPrice] = useState(product.compareAtPriceCents ? (product.compareAtPriceCents / 100).toString() : "");
   const [dropLabel, setDropLabel] = useState(product.dropLabel ?? "");
   const [dropLimit, setDropLimit] = useState(product.dropLimit ? String(product.dropLimit) : "");
+  const [isPreRelease, setIsPreRelease] = useState(product.isPreRelease ?? false);
+  const [dropDate, setDropDate] = useState(
+    product.dropDate ? new Date(product.dropDate).toISOString().slice(0, 16) : "",
+  );
   const [active, setActive] = useState(product.active ?? true);
-  const [variantLabel, setVariantLabel] = useState("");
-  const [variantStock, setVariantStock] = useState("");
   const [loading, setLoading] = useState(false);
+  const [variantBusy, setVariantBusy] = useState(false);
   const [err, setErr] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -49,6 +57,8 @@ export default function ProductRow({ product, variants }: { product: Product; va
       fd.append("compareAtPrice", compareAtPrice);
       fd.append("dropLabel", dropLabel);
       fd.append("dropLimit", dropLimit);
+      fd.append("isPreRelease", String(isPreRelease));
+      fd.append("dropDate", dropDate);
       fd.append("active", String(active));
       const res = await updateProduct(fd);
       if (res?.error) {
@@ -80,33 +90,67 @@ export default function ProductRow({ product, variants }: { product: Product; va
     }
   }
 
-  async function addVariantSubmit() {
-    if (!variantLabel.trim() || loading) return;
-    setLoading(true);
+  async function handleAddSize(label: string) {
+    setVariantBusy(true);
     try {
       const fd = new FormData();
       fd.append("productId", String(product.id));
-      fd.append("label", variantLabel);
-      fd.append("stock", variantStock);
+      fd.append("label", label);
       await addVariant(fd);
-      setVariantLabel("");
-      setVariantStock("");
       router.refresh();
     } catch (e) {
-      console.error("Variante hinzufügen fehlgeschlagen:", e);
+      console.error("Größe hinzufügen fehlgeschlagen:", e);
     } finally {
-      setLoading(false);
+      setVariantBusy(false);
     }
   }
 
-  async function removeVariant(id: number) {
+  async function handleRemoveSize(item: SizeItem) {
+    if (!item.id) return;
+    setVariantBusy(true);
     try {
       const fd = new FormData();
-      fd.append("id", String(id));
+      fd.append("id", String(item.id));
       await deleteVariant(fd);
       router.refresh();
     } catch (e) {
-      console.error("Variante löschen fehlgeschlagen:", e);
+      console.error("Größe löschen fehlgeschlagen:", e);
+    } finally {
+      setVariantBusy(false);
+    }
+  }
+
+  async function handleAddColor(color: ColorItem) {
+    setVariantBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("productId", String(product.id));
+      fd.append("name", color.name);
+      fd.append("hexColor", color.hexColor);
+      fd.append("frontImage", color.frontImage);
+      fd.append("backImage", color.backImage);
+      const res = await addColor(fd);
+      if (res?.error) setErr(res.error);
+      router.refresh();
+    } catch (e) {
+      console.error("Farbe hinzufügen fehlgeschlagen:", e);
+    } finally {
+      setVariantBusy(false);
+    }
+  }
+
+  async function handleRemoveColor(item: ColorItem) {
+    if (!item.id) return;
+    setVariantBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("id", String(item.id));
+      await deleteColor(fd);
+      router.refresh();
+    } catch (e) {
+      console.error("Farbe löschen fehlgeschlagen:", e);
+    } finally {
+      setVariantBusy(false);
     }
   }
 
@@ -141,6 +185,17 @@ export default function ProductRow({ product, variants }: { product: Product; va
               <input value={dropLimit} onChange={(e) => setDropLimit(e.target.value)} type="number"
                 className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm" />
             </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 items-end">
+            <div>
+              <label className="block text-[9px] text-zinc-500 uppercase tracking-widest mb-1">Drop-Datum (optional)</label>
+              <input value={dropDate} onChange={(e) => setDropDate(e.target.value)} type="datetime-local"
+                className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm" />
+            </div>
+            <label className="flex items-center gap-2 text-xs text-zinc-400 pb-2 cursor-pointer">
+              <input type="checkbox" checked={isPreRelease} onChange={(e) => setIsPreRelease(e.target.checked)} />
+              Pre-Release
+            </label>
           </div>
           {compareAtPrice && (
             <div className="pt-1">
@@ -199,32 +254,25 @@ export default function ProductRow({ product, variants }: { product: Product; va
         </div>
       )}
 
-      <div className="border-t border-zinc-800 pt-3">
-        <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2">Varianten</p>
-        <div className="space-y-1 mb-2">
-          {variants.map((v) => (
-            <div key={v.id} className="flex justify-between text-xs text-zinc-400">
-              <span>{v.label} {v.stock !== null ? `(${v.stock} auf Lager)` : "(unlimitiert)"}</span>
-              <button onClick={() => removeVariant(v.id)} className="text-red-500 hover:text-red-400">✕</button>
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-2">
-          <input value={variantLabel} onChange={(e) => setVariantLabel(e.target.value)} placeholder="z.B. M / Schwarz"
-            className="flex-1 bg-zinc-900 border border-zinc-700 p-1.5 text-xs" />
-          <input value={variantStock} onChange={(e) => setVariantStock(e.target.value)} placeholder="Lager" type="number"
-            className="w-20 bg-zinc-900 border border-zinc-700 p-1.5 text-xs" />
-          <button onClick={addVariantSubmit} disabled={loading}
-            className="border border-zinc-700 px-2 text-[10px] uppercase tracking-widest hover:bg-white hover:text-black transition disabled:opacity-50">
-            +
-          </button>
-        </div>
+      <div className="border-t border-zinc-800 pt-3 space-y-4">
+        <SizeButtons
+          sizes={variants}
+          loading={variantBusy}
+          onAdd={handleAddSize}
+          onRemove={handleRemoveSize}
+        />
+        <ColorButtons
+          colors={colors}
+          loading={variantBusy}
+          onAdd={handleAddColor}
+          onRemove={handleRemoveColor}
+        />
       </div>
 
       <ConfirmDialog
         open={confirmDelete}
         title="Produkt löschen?"
-        message={`"${product.name}" wird unwiderruflich gelöscht, inkl. aller Varianten und Bilder.`}
+        message={`"${product.name}" wird unwiderruflich gelöscht, inkl. aller Größen, Farben und Bilder.`}
         loading={deleting}
         onConfirm={remove}
         onCancel={() => setConfirmDelete(false)}
