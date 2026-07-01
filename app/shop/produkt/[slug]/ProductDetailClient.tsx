@@ -124,7 +124,7 @@ export default function ProductDetailClient({
     <main className="t-text font-mono">
       <div className="max-w-[1000px] mx-auto py-8 px-4 md:py-16">
         <div className="flex justify-between items-center mb-8">
-          <Link href="/shop" className="text-[10px] t-muted uppercase tracking-widest hover:t-text transition inline-block">
+          <Link href="/shop" className="text-xs font-bold uppercase tracking-widest text-white bg-black/70 border border-zinc-500 px-3 py-1.5 hover:bg-white hover:text-black transition-all inline-block">
             ← Zurück zum Shop
           </Link>
           {isAdmin && !editing && (
@@ -155,7 +155,7 @@ export default function ProductDetailClient({
 
             {selectedColor ? (
               <button onClick={() => setShowBack(!showBack)}
-                className="w-full py-2.5 t-btn-outline font-black uppercase tracking-widest transition text-xs mb-3">
+                className="w-full py-2.5 bg-white text-black border-[3px] border-white font-black uppercase tracking-widest text-xs mb-3 hover:bg-black hover:text-white hover:border-white transition-all">
                 {showBack ? "Vorderseite zeigen" : "Rückseite zeigen"}
               </button>
             ) : (

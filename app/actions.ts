@@ -15,6 +15,8 @@ import {
   userRewards,
   cartItems,
   usernameHistory,
+  preReleaseCodes,
+  preReleaseRedemptions,
 } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { sanitizeText, isSuspiciousInput } from "./utils/inputSafety";
@@ -40,6 +42,8 @@ type ActionResponse = {
   mustSetPassword?: boolean;
   email?: string;
   guestName?: string;
+  code?: string | null;
+  message?: string;
 };
 
 // Liest die aktuell eingeloggte, verifizierte Session aus dem Cookie.
@@ -779,7 +783,6 @@ export async function handleAction(
         expiresInDays: 90,
       });
       if ("error" in result) {
-        // Punkte zurückerstatten, da die Prämie nicht ausgestellt werden konnte.
         await db.update(users).set({ points: currentPoints }).where(eq(users.id, session.userId));
         await db.insert(pointTransactions).values({
           userId: session.userId,
@@ -789,6 +792,27 @@ export async function handleAction(
         return { error: result.error };
       }
       code = result.code;
+    } else if (reward.type === "prerelease_access") {
+      // Früher Zugang: einen neuen Pre-Release-Code speziell für diesen
+      // User erstellen (max 1 Einlösung), sodass er Pre-Release-Produkte
+      // sehen kann ohne einen öffentlichen Code zu kennen.
+      const userCode = "VIP-" + crypto.randomBytes(5).toString("hex").toUpperCase();
+      await db.insert(preReleaseCodes).values({
+        code: userCode,
+        maxUsesPerAccount: 1,
+      });
+      // Sofort für diesen User einlösen
+      const newPrc = await db
+        .select()
+        .from(preReleaseCodes)
+        .where(eq(preReleaseCodes.code, userCode));
+      if (newPrc.length > 0) {
+        await db.insert(preReleaseRedemptions).values({
+          codeId: newPrc[0].id,
+          userId: session.userId,
+        });
+      }
+      code = userCode;
     } else if (reward.type === "physical") {
       code = "BLT-" + crypto.randomBytes(4).toString("hex").toUpperCase();
     }
@@ -799,7 +823,29 @@ export async function handleAction(
       code,
     });
 
-    return { success: code ? `Eingelöst! Dein Code: ${code}` : "Eingelöst!" };
+    // Code per Email schicken, damit der User ihn auch später noch hat.
+    if (code) {
+      try {
+        const { Resend } = await import("resend");
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        await resend.emails.send({
+          from: "Bellator <noreply@mz-dev.de>",
+          to: user.email,
+          subject: `Dein Bellator Code: ${reward.title}`,
+          html: `<!DOCTYPE html><html><body style="font-family:'Courier New',monospace;background:#000;color:#e0e0e0;margin:0;padding:40px 20px;"><h1 style="color:white;font-size:24px;font-weight:900;text-transform:uppercase;letter-spacing:0.1em;border-bottom:2px solid white;padding-bottom:16px;">BELLATOR.</h1><p style="margin-top:24px;">Du hast <strong>${reward.title}</strong> eingelöst.</p><div style="background:#111;border:2px solid white;padding:24px;margin:24px 0;text-align:center;"><p style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.2em;margin:0 0 12px;">Dein Code</p><p style="font-size:22px;font-weight:900;letter-spacing:0.15em;color:white;margin:0;">${code}</p></div><p style="color:#888;font-size:11px;">Gib diesen Code beim Checkout ein um deinen Rabatt zu erhalten.</p></body></html>`,
+        });
+      } catch (e) {
+        // Email-Fehler darf die Einlösung nicht rückgängig machen -
+        // der Code wird im UI trotzdem angezeigt.
+        console.error("Reward-Email fehlgeschlagen:", e);
+      }
+    }
+
+    return {
+      success: true,
+      code: code ?? null,
+      message: reward.title,
+    };
   }
 
   // --- BENUTZERNAME SETZEN/ÄNDERN ---

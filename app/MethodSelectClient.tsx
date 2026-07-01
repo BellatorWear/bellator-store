@@ -1,12 +1,10 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { handleAction } from "./actions";
 
 export default function MethodSelectClient() {
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
   async function handleGuest() {
     setLoading(true);
@@ -14,7 +12,7 @@ export default function MethodSelectClient() {
       const fd = new FormData();
       fd.append("actionType", "guestLogin");
       const res = await handleAction(fd);
-      if (res?.success) router.push("/shop");
+      if (res?.success) window.location.href = "/shop";
     } catch (e) {
       console.error("Gast-Login fehlgeschlagen:", e);
     } finally {
@@ -24,7 +22,7 @@ export default function MethodSelectClient() {
 
   return (
     <main
-      className="relative flex min-h-[100dvh] items-center justify-center p-4 text-white font-mono"
+      className="relative flex min-h-[100dvh] flex-col items-center justify-center p-4 text-white font-mono"
       style={{
         backgroundImage: 'url("/background.webp")',
         backgroundSize: "cover",
@@ -57,8 +55,13 @@ export default function MethodSelectClient() {
             {loading ? "..." : "Als Gast fortfahren"}
           </button>
         </div>
+      </div>
 
-        <Link href="/impressum" className="fixed bottom-4 right-4 text-[10px] text-white/40 uppercase tracking-widest hover:text-white transition z-20">
+      {/* Impressum UNTER dem Kasten als normaler, statischer Element –
+          nicht mehr als fixed-positioned, das auf Mobile in die Buttons
+          ragte, wenn das Menü zentriert war und wenig Platz nach unten war. */}
+      <div className="relative z-10 mt-6">
+        <Link href="/impressum" className="text-[10px] text-white/40 uppercase tracking-widest hover:text-white transition">
           Impressum
         </Link>
       </div>

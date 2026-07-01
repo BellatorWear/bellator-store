@@ -7,8 +7,6 @@ import PriceDisplay from "../shop/components/PriceDisplay";
 import SizeButtons, { type SizeItem } from "./SizeButtons";
 import ColorButtons, { type ColorItem } from "./ColorButtons";
 
-const MAX_IMAGES = 4;
-
 type PendingImage = { url: string; uploading: boolean; error?: string };
 
 export default function NewProductForm() {
@@ -19,11 +17,9 @@ export default function NewProductForm() {
   const [err, setErr] = useState("");
   const [success, setSuccess] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mainImageInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
-  // Live-Vorschau-Felder, gespiegelt vom Formular, damit man direkt sieht
-  // wie es später auf der "Details ansehen"-Seite aussehen wird.
   const [previewName, setPreviewName] = useState("");
   const [previewDescription, setPreviewDescription] = useState("");
   const [previewPrice, setPreviewPrice] = useState("");
@@ -31,46 +27,38 @@ export default function NewProductForm() {
   const [previewDropLabel, setPreviewDropLabel] = useState("");
   const [isPreRelease, setIsPreRelease] = useState(false);
 
-  async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/"));
-    const room = MAX_IMAGES - images.length;
-    const toUpload = files.slice(0, Math.max(0, room));
-
-    // Sofort Platzhalter anzeigen, damit man sieht dass der Upload läuft -
-    // die Datei geht direkt vom Browser zu Vercel Blob, NICHT über unseren
-    // Server (sonst würde Vercels 4,5-MB-Limit pro Function greifen).
-    const placeholders = toUpload.map(() => ({ url: "", uploading: true }) as PendingImage);
-    setImages((prev) => [...prev, ...placeholders]);
-
-    for (let i = 0; i < toUpload.length; i++) {
-      const file = toUpload[i];
-      const indexInState = images.length + i;
-      try {
-        const blob = await upload(file.name, file, {
-          access: "public",
-          handleUploadUrl: "/api/admin/upload",
-        });
-        setImages((prev) =>
-          prev.map((img, idx) => (idx === indexInState ? { url: blob.url, uploading: false } : img)),
-        );
-      } catch (uploadErr) {
-        // Den ECHTEN Fehlergrund anzeigen statt nur "Fehler" - meistens
-        // bedeutet das: in Vercel ist noch kein Blob-Store mit dem Projekt
-        // verbunden (Dashboard -> Storage -> Create Database -> Blob), wodurch
-        // BLOB_READ_WRITE_TOKEN fehlt.
-        const message = uploadErr instanceof Error ? uploadErr.message : "Unbekannter Fehler";
-        setImages((prev) =>
-          prev.map((img, idx) =>
-            idx === indexInState
-              ? { url: "", uploading: false, error: message }
-              : img,
-          ),
-        );
-        console.error("Bild-Upload fehlgeschlagen:", uploadErr);
-      }
+  async function uploadFile(file: File): Promise<PendingImage> {
+    try {
+      const blob = await upload(file.name, file, {
+        access: "public",
+        handleUploadUrl: "/api/admin/upload",
+      });
+      return { url: blob.url, uploading: false };
+    } catch (uploadErr) {
+      const raw = uploadErr instanceof Error ? uploadErr.message : "Unbekannter Fehler";
+      // "NetworkError when attempting to fetch resource" tritt auf, wenn
+      // BLOB_READ_WRITE_TOKEN nicht gesetzt ist oder der Vercel Blob Store
+      // nicht mit dem Projekt verbunden ist (Dashboard → Storage → Blob).
+      const friendly = raw.includes("NetworkError")
+        ? "Verbindungsfehler. Bitte prüfe: Vercel Dashboard → Storage → Blob-Store mit Projekt verbinden → Neu deployen."
+        : raw;
+      console.error("Bild-Upload fehlgeschlagen:", raw);
+      return { url: "", uploading: false, error: friendly };
     }
+  }
 
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  async function handleMainImageClick() {
+    mainImageInputRef.current?.click();
+  }
+
+  async function handleMainImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Platzhalter sofort zeigen
+    setImages([{ url: "", uploading: true }]);
+    const result = await uploadFile(file);
+    setImages([result]);
+    if (mainImageInputRef.current) mainImageInputRef.current.value = "";
   }
 
   function removeImage(i: number) {
@@ -96,10 +84,7 @@ export default function NewProductForm() {
       sizes.forEach((s) => fd.append("sizes", s.label));
       fd.append("colors", JSON.stringify(colors));
       const res = await createProduct(fd);
-      if (res.error) {
-        setErr(res.error);
-        return;
-      }
+      if (res.error) { setErr(res.error); return; }
       setSuccess(true);
       formRef.current?.reset();
       setImages([]);
@@ -121,10 +106,10 @@ export default function NewProductForm() {
   const previewCompareAtCents = previewCompareAt ? Math.round((parseFloat(previewCompareAt) || 0) * 100) : null;
   const firstColorImage = colors[0]?.frontImage;
   const firstImage = firstColorImage || images.find((img) => img.url)?.url;
+  const mainImg = images[0];
 
   return (
     <div className="space-y-4">
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <form ref={formRef} onSubmit={submit} className="space-y-3">
           <input name="name" placeholder="Name" required maxLength={80}
@@ -167,132 +152,70 @@ export default function NewProductForm() {
 
           <div className="flex gap-3 items-end">
             <div className="w-1/2">
-              <label className="block text-[10px] text-zinc-500 uppercase tracking-widest mb-1">
-                Drop-Datum (optional)
-              </label>
+              <label className="block text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Drop-Datum (optional)</label>
               <input name="dropDate" type="datetime-local"
                 className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white hover:border-zinc-500 focus:border-white outline-none transition" />
             </div>
             <label className="w-1/2 flex items-center gap-2 text-xs text-zinc-400 pb-2 cursor-pointer">
               <input type="checkbox" checked={isPreRelease} onChange={(e) => setIsPreRelease(e.target.checked)} />
-              Pre-Release (vor Drop-Datum nur mit Zugangscode sichtbar)
+              Pre-Release
             </label>
           </div>
           <input type="hidden" name="isPreRelease" value={String(isPreRelease)} />
-          <p className="text-[9px] text-zinc-600 -mt-1">
-            Ohne Haken wird das Produkt zum Drop-Datum automatisch für alle freigegeben (falls gesetzt) -
-            mit Haken ist es vorher nur für User mit gültigem Pre-Release-Code sichtbar.
-          </p>
 
-          {/* Bilder Upload - geht direkt zu Vercel Blob, nicht über den Server */}
+          {/* Hauptbild — großes, klickbares Feld */}
           <div>
-            <label className="block text-[10px] text-zinc-500 uppercase tracking-widest mb-2">
-              Bilder (max. {MAX_IMAGES}, hochauflösend möglich)
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <span className="border border-zinc-600 px-3 py-2 text-[10px] uppercase tracking-widest text-zinc-400 hover:border-white hover:text-white transition font-bold">
-                Bilder auswählen
-              </span>
-              <span className="text-[10px] text-zinc-600">
-                {images.length === 0 ? "Keine Dateien ausgewählt" : `${images.length} Bild${images.length > 1 ? "er" : ""} ausgewählt`}
-              </span>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleFiles}
-                className="hidden"
-              />
-            </label>
-
-            {images.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-3">
-                {images.map((img, i) => (
-                  <div key={i} className="relative w-16 h-16 border border-zinc-700 flex items-center justify-center bg-zinc-900">
-                    {img.uploading ? (
-                      <span className="text-[8px] text-zinc-500 uppercase tracking-widest text-center px-1">Lädt...</span>
-                    ) : img.error ? (
-                      <span className="text-[7px] text-red-500 uppercase tracking-widest text-center px-1 leading-tight" title={img.error}>
-                        {img.error.length > 40 ? img.error.slice(0, 40) + "…" : img.error}
-                      </span>
-                    ) : (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={img.url} alt="" className="w-full h-full object-cover" />
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => removeImage(i)}
-                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 text-white text-[10px] font-black flex items-center justify-center hover:bg-red-500 transition"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            {images.some((img) => img.error) && (
-              <p className="text-[9px] text-zinc-500 mt-2 leading-relaxed">
-                Upload-Fehler? Meistens fehlt der Vercel-Blob-Store: im Vercel Dashboard unter „Storage" einen
-                Blob-Store anlegen und mit diesem Projekt verbinden (fügt BLOB_READ_WRITE_TOKEN automatisch hinzu),
-                dann neu deployen.
-              </p>
-            )}
+            <label className="block text-[10px] text-zinc-500 uppercase tracking-widest mb-2">Hauptbild</label>
+            <button
+              type="button"
+              onClick={handleMainImageClick}
+              className="w-full aspect-video border-2 border-dashed border-zinc-600 bg-zinc-900 flex flex-col items-center justify-center hover:border-white transition-all cursor-pointer overflow-hidden relative"
+            >
+              {mainImg?.uploading ? (
+                <p className="text-xs text-zinc-400 uppercase tracking-widest">Lädt hoch...</p>
+              ) : mainImg?.error ? (
+                <p className="text-[9px] text-red-400 px-4 text-center leading-relaxed">{mainImg.error}</p>
+              ) : mainImg?.url ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={mainImg.url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                  <span className="absolute bottom-2 right-2 bg-black/80 text-white text-[9px] uppercase tracking-widest px-2 py-1">Klicken zum Ändern</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-8 h-8 text-zinc-600 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" /></svg>
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Klicken zum Hochladen</span>
+                </>
+              )}
+            </button>
+            <input ref={mainImageInputRef} type="file" accept="image/*" onChange={handleMainImageChange} className="hidden" />
           </div>
 
           {err && <p className="text-[10px] text-red-500 uppercase tracking-widest">{err}</p>}
           {success && <p className="text-[10px] text-green-500 uppercase tracking-widest">✓ Produkt angelegt!</p>}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="border border-zinc-500 px-6 py-2.5 text-[10px] uppercase tracking-widest font-bold text-white hover:bg-white hover:text-black transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          <button type="submit" disabled={loading}
+            className="border border-zinc-500 px-6 py-2.5 text-[10px] uppercase tracking-widest font-bold text-white hover:bg-white hover:text-black transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
             {loading ? "Wird angelegt..." : "Produkt anlegen"}
           </button>
         </form>
 
-        {/* Live-Vorschau: so wird es ungefähr auf der "Details ansehen"-Seite aussehen */}
+        {/* Live-Vorschau */}
         <div>
           <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2">Live-Vorschau</p>
           <div className="border-[3px] border-zinc-700 bg-black p-5 space-y-3">
             <div className="bg-zinc-900 border border-zinc-800 aspect-square flex items-center justify-center overflow-hidden">
-              {firstImage ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={firstImage} alt="" className="max-h-full object-contain" />
-              ) : (
-                <span className="text-[10px] text-zinc-600 uppercase tracking-widest">Kein Bild</span>
-              )}
+              {firstImage
+                ? <img src={firstImage} alt="" className="max-h-full object-contain" />
+                : <span className="text-[10px] text-zinc-600 uppercase tracking-widest">Kein Bild</span>}
             </div>
-            {previewDropLabel && (
-              <span className="inline-block text-[10px] uppercase tracking-widest font-bold border border-zinc-600 text-zinc-400 px-2 py-1">
-                {previewDropLabel}
-              </span>
-            )}
-            <h1 className="text-2xl font-black uppercase text-white leading-tight">
-              {previewName || "Produktname"}
-            </h1>
+            {previewDropLabel && <span className="inline-block text-[10px] uppercase tracking-widest font-bold border border-zinc-600 text-zinc-400 px-2 py-1">{previewDropLabel}</span>}
+            <h1 className="text-2xl font-black uppercase text-white leading-tight">{previewName || "Produktname"}</h1>
             <PriceDisplay priceCents={previewPriceCents || 0} compareAtPriceCents={previewCompareAtCents} />
-            {colors.length > 0 && (
-              <div className="flex gap-1.5">
-                {colors.map((c) => (
-                  <span key={c.name} className="w-6 h-6 border border-zinc-700" style={{ backgroundColor: c.hexColor }} title={c.name} />
-                ))}
-              </div>
-            )}
-            {sizes.length > 0 && (
-              <div className="flex gap-1.5">
-                {sizes.map((s) => (
-                  <span key={s.label} className="w-7 h-7 border border-zinc-700 flex items-center justify-center text-[9px] text-zinc-400">{s.label}</span>
-                ))}
-              </div>
-            )}
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              {previewDescription || "Beschreibung erscheint hier..."}
-            </p>
-            <div className="w-full py-3 text-center uppercase font-black tracking-[0.2em] border-[3px] border-zinc-700 text-white text-xs">
-              Zum Warenkorb hinzufügen
-            </div>
+            {colors.length > 0 && <div className="flex gap-1.5">{colors.map((c) => <span key={c.name} className="w-6 h-6 border border-zinc-700" style={{ backgroundColor: c.hexColor }} title={c.name} />)}</div>}
+            {sizes.length > 0 && <div className="flex gap-1.5">{sizes.map((s) => <span key={s.label} className="w-7 h-7 border border-zinc-700 flex items-center justify-center text-[9px] text-zinc-400">{s.label}</span>)}</div>}
+            <p className="text-xs text-zinc-400 leading-relaxed">{previewDescription || "Beschreibung erscheint hier..."}</p>
+            <div className="w-full py-3 text-center uppercase font-black tracking-[0.2em] border-[3px] border-zinc-700 text-white text-xs">Zum Warenkorb hinzufügen</div>
           </div>
         </div>
       </div>

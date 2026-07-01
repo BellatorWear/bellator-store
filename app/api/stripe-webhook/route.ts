@@ -150,6 +150,12 @@ export async function POST(req: NextRequest) {
         if (newOrderCount === 3) {
           await awardChallengeByType(userIdMeta, "repeat_customer");
         }
+        if (newOrderCount === 5) {
+          await awardChallengeByType(userIdMeta, "order_5");
+        }
+        if (newOrderCount === 10) {
+          await awardChallengeByType(userIdMeta, "order_10");
+        }
       }
     }
 

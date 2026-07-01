@@ -17,7 +17,7 @@ export default async function EinstellungenPage() {
       <div className="fixed inset-0 bg-black/50 pointer-events-none z-0" />
       <header className="relative z-10 t-header border-b px-6 py-4 flex justify-between items-center">
         <a href="/shop" className="text-2xl font-black tracking-tighter italic t-text hover:opacity-70 transition">BELLATOR.</a>
-        <a href="/shop" className="text-[10px] t-muted uppercase tracking-widest hover:t-text transition">← Zurück zum Shop</a>
+        <a href="/shop" className="text-xs font-bold uppercase tracking-widest text-white bg-black/70 border border-zinc-500 px-3 py-1.5 hover:bg-white hover:text-black transition-all">← Zurück zum Shop</a>
       </header>
 
       <div className="relative z-10 flex justify-center p-4 sm:p-6 md:p-16">

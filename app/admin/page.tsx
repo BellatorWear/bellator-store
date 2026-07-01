@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/app/actions";
 import { db } from "@/db";
-import { products, productVariants, productColors, users, newsPosts, preReleaseCodes, preReleaseRedemptions } from "@/db/schema";
+import { products, productVariants, productColors, users, newsPosts, preReleaseCodes, preReleaseRedemptions, pageViews } from "@/db/schema";
 import { desc } from "drizzle-orm";
 import NewProductForm from "./NewProductForm";
 import ProductRow from "./ProductRow";
@@ -19,7 +19,7 @@ export default async function AdminPage() {
   if (!user) redirect("/login");
   if (!user.isAdmin) redirect("/shop");
 
-  const [allProducts, allVariants, allColors, userCountResult, countdown, exclusiveCode, recentPosts, allPreReleaseCodes, allPreReleaseRedemptions] = await Promise.all([
+  const [allProducts, allVariants, allColors, userCountResult, countdown, exclusiveCode, recentPosts, allPreReleaseCodes, allPreReleaseRedemptions, viewCountResult] = await Promise.all([
     db.select().from(products),
     db.select().from(productVariants),
     db.select().from(productColors),
@@ -29,8 +29,10 @@ export default async function AdminPage() {
     db.select().from(newsPosts).orderBy(desc(newsPosts.createdAt)).limit(5),
     db.select().from(preReleaseCodes),
     db.select().from(preReleaseRedemptions),
+    db.select().from(pageViews),
   ]);
   const userCount = userCountResult.length;
+  const viewCount = viewCountResult.length;
   const preReleaseCodesWithCounts = allPreReleaseCodes.map((c) => ({
     ...c,
     redemptionCount: allPreReleaseRedemptions.filter((r) => r.codeId === c.id).length,
@@ -136,7 +138,10 @@ export default async function AdminPage() {
           <h1 className="text-2xl font-black uppercase tracking-tighter">Admin Panel</h1>
           <div className="flex items-center gap-3">
             <span className="text-[10px] uppercase tracking-widest border border-zinc-700 px-3 py-1.5 text-zinc-300">
-              <span className="text-yellow-400 font-bold">{userCount}</span> registrierte User
+              <span className="text-yellow-400 font-bold">{userCount}</span> User
+            </span>
+            <span className="text-[10px] uppercase tracking-widest border border-zinc-700 px-3 py-1.5 text-zinc-300">
+              <span className="text-blue-400 font-bold">{viewCount}</span> Aufrufe
             </span>
             <a href="/shop" className="text-[10px] text-zinc-500 uppercase tracking-widest hover:text-white transition">
               ← Zurück zum Shop

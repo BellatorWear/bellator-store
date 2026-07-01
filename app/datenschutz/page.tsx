@@ -5,7 +5,7 @@ export default function DatenschutzPage() {
     <main className="min-h-screen text-[#e0e0e0] font-mono" style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
       <header className="bg-black border-b border-[#333] px-6 py-4 flex justify-between items-center">
         <a href="/shop" className="text-2xl font-bold tracking-tighter italic hover:opacity-80 transition">BELLATOR.</a>
-        <a href="/shop" className="text-[10px] text-zinc-500 uppercase tracking-widest hover:text-white transition">← Zurück zum Shop</a>
+        <a href="/shop" className="text-xs font-bold uppercase tracking-widest text-white bg-black/70 border border-zinc-500 px-3 py-1.5 hover:bg-white hover:text-black transition-all inline-block">← Zurück zum Shop</a>
       </header>
       <div className="flex justify-center p-4 sm:p-6 md:p-16">
         <div className="w-full max-w-2xl space-y-6">

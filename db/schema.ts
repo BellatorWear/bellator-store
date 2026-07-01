@@ -217,6 +217,14 @@ export const preReleaseRedemptions = pgTable("pre_release_redemptions", {
   redeemedAt: timestamp("redeemed_at").defaultNow(),
 });
 
+// Zählt Sitzungsöffnungen (Page Views) — wird clientseitig beim ersten
+// Laden des Shops gepingt, einmal pro Session. Kein DSGVO-relevantes
+// Tracking (keine Cookies, keine personenbezogenen Daten, nur ein Zähler).
+export const pageViews = pgTable("page_views", {
+  id: serial("id").primaryKey(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Einzelne Key/Value Einstellungen, die der Admin im Panel ändert und die
 // für ALLE Besucher gelten sollen (z.B. Countdown). Vorher lag sowas in
 // localStorage im Browser des Admins - das sah dann für jeden Besucher

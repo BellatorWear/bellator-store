@@ -101,7 +101,7 @@ export default function CartClient({ initialCart }: { initialCart: CartItem[] })
               <span className="text-xs t-muted uppercase tracking-widest">Gesamt (zzgl. Versand)</span>
               <span className="text-xl font-black t-text">{(total / 100).toFixed(2)} €</span>
             </div>
-            <p className="text-[10px] t-faint uppercase tracking-widest -mt-2">
+            <p className="text-[10px] uppercase tracking-widest -mt-2 bg-black/80 border border-zinc-800 px-3 py-2 t-faint">
               Versandkosten werden im nächsten Schritt bei Stripe berechnet.
             </p>
 

@@ -1,0 +1,16 @@
+{
+  "name": "Bellator Streetwear",
+  "short_name": "Bellator",
+  "description": "240g Heavy Cotton. Oversized Fit. Ohne Kompromisse.",
+  "start_url": "/shop",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
