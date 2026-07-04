@@ -21,7 +21,7 @@ export default function LoginPage() {
     try {
       const res = await handleAction(formData);
       if (res?.error) { setMsg({ text: res.error, type: "error" }); return; }
-      if (res?.success === true) window.location.href = "/shop";
+      if (res?.success === true) window.location.href = "/";
     } catch (e) {
       console.error("Login fehlgeschlagen:", e);
       setMsg({ text: "Fehler. Bitte nochmal versuchen.", type: "error" });
@@ -35,7 +35,7 @@ export default function LoginPage() {
       const fd = new FormData();
       fd.append("actionType", "guestLogin");
       const res = await handleAction(fd);
-      if (res?.success) window.location.href = "/shop";
+      if (res?.success) window.location.href = "/";
     } catch (e) {
       console.error("Gast-Login fehlgeschlagen:", e);
     }

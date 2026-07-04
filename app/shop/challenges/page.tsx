@@ -1,4 +1,6 @@
 import { getCurrentUser } from "@/app/actions";
+import GlobalHeader from "@/app/components/GlobalHeader";
+import GlobalFooter from "@/app/components/GlobalFooter";
 import { db } from "@/db";
 import { challenges, userChallenges, rewards, userRewards } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -30,7 +32,11 @@ export default async function ChallengesPage() {
   const pending = allChallenges.filter(c => !completedIds.has(c.id));
 
   return (
-    <main className="flex justify-center p-6 md:p-16">
+    <div className="min-h-screen flex flex-col bg-black text-white font-mono" style={{backgroundImage:'url("/background.webp")',backgroundSize:"cover",backgroundPosition:"center",backgroundAttachment:"fixed"}}>
+      <div className="fixed inset-0 bg-black/70 z-0 pointer-events-none" />
+      <div className="relative z-10 flex flex-col min-h-screen">
+      <GlobalHeader />
+      <main className="flex-1 flex justify-center px-4 sm:px-8 py-8">
       <div className="w-full max-w-xl space-y-8">
         <div className="t-card border p-4">
           <h1 className="text-3xl font-black uppercase tracking-tighter mb-1 t-text">Challenges & Punkte</h1>
@@ -45,7 +51,7 @@ export default async function ChallengesPage() {
         {/* Offene Challenges */}
         {pending.length > 0 && (
           <section className="space-y-3">
-            <h2 className="text-xs font-bold uppercase tracking-widest t-muted">Offen</h2>
+            <h2 className="text-xs font-bold uppercase tracking-widest t-text bg-black/80 border border-zinc-800 px-4 py-2 inline-block">Offen</h2>
             {pending.map(challenge => (
               <div key={challenge.id} className="border t-border t-card p-4">
                 <div className="flex justify-between items-start gap-4">
@@ -64,7 +70,7 @@ export default async function ChallengesPage() {
         {/* Erledigte Challenges */}
         {done.length > 0 && (
           <section className="space-y-3">
-            <h2 className="text-xs font-bold uppercase tracking-widest t-muted">Erledigt</h2>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-yellow-400 bg-black/80 border border-yellow-900 px-4 py-2 inline-block">Erledigt</h2>
             {done.map(challenge => (
               <div key={challenge.id} className="border border-yellow-800 bg-yellow-900/10 p-4">
                 <div className="flex justify-between items-start gap-4">
@@ -113,5 +119,8 @@ export default async function ChallengesPage() {
         </section>
       </div>
     </main>
+      <GlobalFooter />
+      </div>
+    </div>
   );
 }

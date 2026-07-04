@@ -1,15 +1,12 @@
+import InfoPageLayout from "@/app/components/InfoPageLayout";
+
 export const metadata = { title: "Datenschutzerklärung — Bellator Streetwear" };
 
-export default function DatenschutzPage() {
+export default function Page() {
   return (
-    <main className="min-h-screen text-[#e0e0e0] font-mono" style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
-      <header className="bg-black border-b border-[#333] px-6 py-4 flex justify-between items-center">
-        <a href="/shop" className="text-2xl font-bold tracking-tighter italic hover:opacity-80 transition">BELLATOR.</a>
-        <a href="/shop" className="text-xs font-bold uppercase tracking-widest text-white bg-black/70 border border-zinc-500 px-3 py-1.5 hover:bg-white hover:text-black transition-all inline-block">← Zurück zum Shop</a>
-      </header>
-      <div className="flex justify-center p-4 sm:p-6 md:p-16">
-        <div className="w-full max-w-2xl space-y-6">
-          <div className="bg-black/90 p-4">
+    <InfoPageLayout title="Datenschutzerklärung">
+      <div className="space-y-6 text-sm text-zinc-300 leading-relaxed">
+        <div className="bg-black/90 p-4">
             <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter mb-1">Datenschutzerklärung</h1>
             <p className="text-xs text-zinc-500 uppercase tracking-widest">Gemäß Art. 13, 14 DSGVO</p>
           </div>
@@ -58,8 +55,7 @@ export default function DatenschutzPage() {
           <div className="bg-black/90 p-4 text-[10px] text-zinc-500 uppercase tracking-widest leading-relaxed">
             Hinweis: Dies ist eine Vorlage und ersetzt keine Rechtsberatung. Bitte alle Platzhalter ausfüllen, die Liste der Dienstleister an euren tatsächlichen Stand anpassen (z.B. sobald Google Analytics/Cloudflare aktiv ist) und vor Live-Gang von einer:m Anwält:in prüfen lassen.
           </div>
-        </div>
       </div>
-    </main>
+    </InfoPageLayout>
   );
 }

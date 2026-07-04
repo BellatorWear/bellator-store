@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { orders, orderItems, products, productVariants, users, cartItems } from "@/db/schema";
+import { orders, orderItems, products, productVariants, users, cartItems, pointTransactions } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { awardChallengeByType } from "@/app/actions";
 
@@ -138,11 +138,23 @@ export async function POST(req: NextRequest) {
         // Computerberechneter Treuerabatt: +5% je Bestellung nach der ersten,
         // gedeckelt bei 25%, damit es nicht unkontrolliert wächst.
         const newDiscount = Math.min(5 * Math.max(0, newOrderCount - 1), 25);
+        // Punkte: 10 Punkte pro Euro (total, NICHT rabattierter Betrag).
+        // total ist in Cent, also: Punkte = total / 10
+        const pointsEarned = Math.floor(total / 10);
+        const newPoints = (user.points ?? 0) + pointsEarned;
 
         await db
           .update(users)
-          .set({ orderCount: newOrderCount, discountPercent: newDiscount })
+          .set({ orderCount: newOrderCount, discountPercent: newDiscount, points: newPoints })
           .where(eq(users.id, userIdMeta));
+
+        if (pointsEarned > 0) {
+          await db.insert(pointTransactions).values({
+            userId: userIdMeta,
+            points: pointsEarned,
+            reason: `Bestellung #${order.id} — ${(total / 100).toFixed(2)}€`,
+          });
+        }
 
         if (newOrderCount === 1) {
           await awardChallengeByType(userIdMeta, "first_order");

@@ -29,7 +29,7 @@ function VerifyContent() {
       .then((data) => {
         if (data.success) {
           setStatus("success");
-          window.location.href = "/shop";
+          window.location.href = "/";
         } else {
           setStatus("error");
           setMsg(data.error || "Token ungültig oder abgelaufen.");

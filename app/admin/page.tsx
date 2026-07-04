@@ -1,8 +1,11 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/app/actions";
 import { db } from "@/db";
-import { products, productVariants, productColors, users, newsPosts, preReleaseCodes, preReleaseRedemptions, pageViews } from "@/db/schema";
+import { products, productVariants, productColors, users, newsPosts, preReleaseCodes, preReleaseRedemptions, pageViews, emailLog, homePosts } from "@/db/schema";
 import { desc } from "drizzle-orm";
+import Link from "next/link";
+import GlobalHeader from "@/app/components/GlobalHeader";
+import GlobalFooter from "@/app/components/GlobalFooter";
 import NewProductForm from "./NewProductForm";
 import ProductRow from "./ProductRow";
 import CountdownConfig from "./CountdownConfig";
@@ -11,6 +14,8 @@ import NewsChannel from "./NewsChannel";
 import UserSearch from "./UserSearch";
 import BlobStatus from "./BlobStatus";
 import PreReleaseCodeManager from "./PreReleaseCodeManager";
+import EmailLogViewer from "./EmailLogViewer";
+import HomePostManager from "./HomePostManager";
 import AdminDashboard, { type AdminFunctionGroup } from "./AdminDashboard";
 import { getSetting, COUNTDOWN_KEY, COUNTDOWN_DEFAULT, EXCLUSIVE_CODE_KEY, EXCLUSIVE_CODE_DEFAULT } from "@/app/utils/settings";
 
@@ -19,7 +24,7 @@ export default async function AdminPage() {
   if (!user) redirect("/login");
   if (!user.isAdmin) redirect("/shop");
 
-  const [allProducts, allVariants, allColors, userCountResult, countdown, exclusiveCode, recentPosts, allPreReleaseCodes, allPreReleaseRedemptions, viewCountResult] = await Promise.all([
+  const [allProducts, allVariants, allColors, userCountResult, countdown, exclusiveCode, recentPosts, allPreReleaseCodes, allPreReleaseRedemptions, viewCountResult, emailEntries, homePostList] = await Promise.all([
     db.select().from(products),
     db.select().from(productVariants),
     db.select().from(productColors),
@@ -30,7 +35,11 @@ export default async function AdminPage() {
     db.select().from(preReleaseCodes),
     db.select().from(preReleaseRedemptions),
     db.select().from(pageViews),
+    db.select({ id: emailLog.id, to: emailLog.to, subject: emailLog.subject, source: emailLog.source, sentAt: emailLog.sentAt })
+      .from(emailLog).orderBy(desc(emailLog.sentAt)).limit(200),
+    db.select().from(homePosts).orderBy(desc(homePosts.createdAt)),
   ]);
+
   const userCount = userCountResult.length;
   const viewCount = viewCountResult.length;
   const preReleaseCodesWithCounts = allPreReleaseCodes.map((c) => ({
@@ -40,12 +49,32 @@ export default async function AdminPage() {
 
   const groups: AdminFunctionGroup[] = [
     {
+      title: "Inhalte",
+      items: [
+        {
+          id: "home-posts",
+          title: "Startseiten-Posts",
+          description: "Artikel, Videos, Leaks und Making-Ofs für die Startseite",
+          keywords: ["startseite", "blog", "post", "artikel", "video", "leak", "makingof"],
+          content: <HomePostManager posts={homePostList} />,
+          defaultOpen: true,
+        },
+        {
+          id: "news-channel",
+          title: "News-Channel",
+          description: "Post veröffentlichen — geht an Push + Newsletter raus",
+          keywords: ["news", "push", "newsletter", "mail", "ankündigung", "post"],
+          content: <NewsChannel recentPosts={recentPosts} />,
+        },
+      ],
+    },
+    {
       title: "Produkte",
       items: [
         {
           id: "new-product",
           title: "Neues Produkt anlegen",
-          description: "Name, Preis, Rabatt, Bilder, Drop-Limit",
+          description: "Name, Preis, Rabatt, Größen, Farben, Drop-Limit",
           keywords: ["produkt", "anlegen", "neu", "rabatt", "bild", "upload", "drop"],
           content: <NewProductForm />,
         },
@@ -59,12 +88,12 @@ export default async function AdminPage() {
         {
           id: "existing-products",
           title: "Bestehende Produkte verwalten",
-          description: `${allProducts.length} Produkt${allProducts.length === 1 ? "" : "e"} - bearbeiten, löschen, Varianten`,
-          keywords: ["produkt", "bearbeiten", "löschen", "variante", "lager", "verwalten"],
+          description: `${allProducts.length} Produkt${allProducts.length === 1 ? "" : "e"}`,
+          keywords: ["produkt", "bearbeiten", "löschen", "variante", "lager"],
           content: (
             <div className="space-y-4">
               {allProducts.length === 0 && (
-                <p className="text-xs text-zinc-600 uppercase tracking-widest border border-zinc-800 p-4">Noch keine Produkte angelegt.</p>
+                <p className="text-xs text-zinc-600 uppercase tracking-widest border border-zinc-800 p-4">Noch keine Produkte.</p>
               )}
               {allProducts.map((p) => (
                 <ProductRow
@@ -80,45 +109,45 @@ export default async function AdminPage() {
       ],
     },
     {
-      title: "User-Verwaltung",
+      title: "User & Kommunikation",
       items: [
         {
           id: "user-search",
           title: "User-Suche",
-          description: "Per Email oder Benutzername (auch alte Namen) finden",
-          keywords: ["user", "suche", "email", "username", "benutzername", "profil", "historie"],
+          description: "Per Email oder Benutzername (auch alte Namen)",
+          keywords: ["user", "suche", "email", "username", "profil"],
           content: <UserSearch />,
+        },
+        {
+          id: "email-log",
+          title: "Email-Log",
+          description: `${emailEntries.length} versendete Emails — automatische und manuelle`,
+          keywords: ["email", "log", "newsletter", "versandt", "mail"],
+          content: <EmailLogViewer emails={emailEntries} />,
         },
       ],
     },
     {
-      title: "Marketing & Engagement",
+      title: "Marketing",
       items: [
         {
-          id: "news-channel",
-          title: "News-Channel",
-          description: "Post veröffentlichen - geht an Push + Newsletter raus",
-          keywords: ["news", "push", "newsletter", "mail", "ankündigung", "post"],
-          content: <NewsChannel recentPosts={recentPosts} />,
-        },
-        {
           id: "exclusive-codes",
-          title: "Exklusive Erstbesteller-Rabattcodes",
-          description: "Code für die ersten N Bestellungen konfigurieren",
-          keywords: ["rabatt", "code", "exklusiv", "discount", "gutschein", "stripe"],
+          title: "Erstbesteller-Rabattcodes",
+          description: "Code für die ersten N Bestellungen",
+          keywords: ["rabatt", "code", "exklusiv", "discount"],
           content: <ExclusiveCodeConfig initial={exclusiveCode} />,
         },
         {
           id: "prerelease-codes",
           title: "Pre-Release-Zugangscodes",
           description: "Schaltet Pre-Release-Produkte vor dem Drop-Datum frei",
-          keywords: ["pre-release", "prerelease", "zugang", "code", "vip", "early access", "drop"],
+          keywords: ["pre-release", "zugang", "code", "vip", "drop"],
           content: <PreReleaseCodeManager codes={preReleaseCodesWithCounts} />,
         },
       ],
     },
     {
-      title: "Shop-Einstellungen",
+      title: "Einstellungen",
       items: [
         {
           id: "countdown",
@@ -132,25 +161,30 @@ export default async function AdminPage() {
   ];
 
   return (
-    <main className="min-h-screen font-mono bg-black text-white p-4 sm:p-8">
-      <div className="max-w-3xl mx-auto space-y-8">
-        <div className="flex justify-between items-center flex-wrap gap-2">
-          <h1 className="text-2xl font-black uppercase tracking-tighter">Admin Panel</h1>
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] uppercase tracking-widest border border-zinc-700 px-3 py-1.5 text-zinc-300">
+    <div className="min-h-screen flex flex-col bg-black text-white font-mono">
+      <GlobalHeader />
+      <main className="flex-1 w-full max-w-[1200px] mx-auto px-4 sm:px-8 py-8 space-y-8">
+        <div className="flex justify-between items-center flex-wrap gap-3">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter">Admin Panel</h1>
+            <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Bellator Streetwear</p>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-[10px] uppercase tracking-widest border border-zinc-700 px-3 py-1.5">
               <span className="text-yellow-400 font-bold">{userCount}</span> User
             </span>
-            <span className="text-[10px] uppercase tracking-widest border border-zinc-700 px-3 py-1.5 text-zinc-300">
+            <span className="text-[10px] uppercase tracking-widest border border-zinc-700 px-3 py-1.5">
               <span className="text-blue-400 font-bold">{viewCount}</span> Aufrufe
             </span>
-            <a href="/shop" className="text-[10px] text-zinc-500 uppercase tracking-widest hover:text-white transition">
+            <Link href="/shop"
+              className="text-xs font-bold uppercase tracking-widest text-white bg-black/70 border border-zinc-500 px-3 py-1.5 hover:bg-white hover:text-black transition-all">
               ← Zurück zum Shop
-            </a>
+            </Link>
           </div>
         </div>
-
         <AdminDashboard groups={groups} />
-      </div>
-    </main>
+      </main>
+      <GlobalFooter />
+    </div>
   );
 }

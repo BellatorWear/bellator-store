@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import GlobalHeader from "@/app/components/GlobalHeader";
+import GlobalFooter from "@/app/components/GlobalFooter";
 import { getCurrentUser } from "@/app/actions";
 import { db } from "@/db";
 import { orders, userChallenges, challenges, userRewards, rewards } from "@/db/schema";
@@ -7,7 +9,7 @@ import LogoutButton from "./LogoutButton";
 import ChangePasswordForm from "./ChangePasswordForm";
 import DeleteAccountButton from "./DeleteAccountButton";
 
-export default async function ProfilPage() {
+export default async function Page() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
@@ -52,16 +54,12 @@ export default async function ProfilPage() {
   } catch {}
 
   return (
-    <main className="min-h-screen t-text font-mono"
+    <div className="min-h-screen flex flex-col font-mono t-text"
       style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
       <div className="fixed inset-0 bg-black/50 pointer-events-none z-0" />
-
-      <header className="relative z-10 t-header border-b px-4 sm:px-6 py-4 flex justify-between items-center">
-        <a href="/shop" className="text-xl sm:text-2xl font-black tracking-tighter italic t-text hover:opacity-70 transition">BELLATOR.</a>
-        <a href="/shop" className="text-xs font-bold uppercase tracking-widest text-white bg-black/70 border border-zinc-500 px-3 py-1.5 hover:bg-white hover:text-black transition-all">← Zurück zum Shop</a>
-      </header>
-
-      <div className="relative z-10 flex justify-center p-4 sm:p-6 md:p-16">
+      <div className="relative z-10 flex flex-col min-h-screen">
+        <GlobalHeader />
+        <main className="flex-1 w-full max-w-[1400px] mx-auto px-4 sm:px-8 md:px-16 py-8">
         <div className="w-full max-w-xl space-y-6">
 
           <div className="t-card border p-4">
@@ -196,7 +194,9 @@ export default async function ProfilPage() {
           </section>
 
         </div>
+        </main>
+        <GlobalFooter />
       </div>
-    </main>
+    </div>
   );
 }

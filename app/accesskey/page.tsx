@@ -16,7 +16,7 @@ export default function AccessKeyPage() {
       formData.append("actionType", "loginWithKey");
       const res = await handleAction(formData);
       if (res?.error) { setMsg({ text: res.error, type: "error" }); return; }
-      if (res?.success === true) window.location.href = "/shop";
+      if (res?.success === true) window.location.href = "/";
     } catch (e) {
       console.error("Login mit Access Key fehlgeschlagen:", e);
       setMsg({ text: "Fehler. Bitte nochmal versuchen.", type: "error" });

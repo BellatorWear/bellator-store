@@ -163,6 +163,34 @@ export default function NewProductForm() {
           </div>
           <input type="hidden" name="isPreRelease" value={String(isPreRelease)} />
 
+          {/* Kategorisierung für Shop-Filter */}
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="block text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Kategorie</label>
+              <select name="category" className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white hover:border-zinc-500 focus:border-white outline-none transition">
+                <option value="">Keine</option>
+                <option value="shirt">Shirt</option>
+                <option value="hoodie">Hoodie</option>
+                <option value="ziphoodie">Zip-Hoodie</option>
+                <option value="pants">Hose</option>
+                <option value="set">Set</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Geschlecht</label>
+              <select name="gender" className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white hover:border-zinc-500 focus:border-white outline-none transition">
+                <option value="unisex">Unisex</option>
+                <option value="male">Männlich</option>
+                <option value="female">Weiblich</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Collection</label>
+              <input name="collection" placeholder="z.B. Summer 2025" maxLength={40}
+                className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white placeholder:text-zinc-600 hover:border-zinc-500 focus:border-white outline-none transition" />
+            </div>
+          </div>
+
           {/* Hauptbild — großes, klickbares Feld */}
           <div>
             <label className="block text-[10px] text-zinc-500 uppercase tracking-widest mb-2">Hauptbild</label>

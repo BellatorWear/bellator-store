@@ -12,7 +12,7 @@ export default function MethodSelectClient() {
       const fd = new FormData();
       fd.append("actionType", "guestLogin");
       const res = await handleAction(fd);
-      if (res?.success) window.location.href = "/shop";
+      if (res?.success) window.location.href = "/";
     } catch (e) {
       console.error("Gast-Login fehlgeschlagen:", e);
     } finally {

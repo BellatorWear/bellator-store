@@ -147,9 +147,11 @@ export const products = pgTable("products", {
   dropLimit: integer("drop_limit"), // null = unlimitiert
   soldCount: integer("sold_count").default(0),
   active: boolean("active").default(true),
+  // Kategorisierung für Shop-Filter
+  category: text("category"), // "shirt"|"hoodie"|"ziphoodie"|"pants"|"set"
+  gender: text("gender"),     // "male"|"female"|"unisex"
+  collection: text("collection"), // frei wählbarer Name, z.B. "Summer 2025"
   // Pre-Release: vor dropDate nur für User mit Pre-Release-Zugang sichtbar.
-  // Sobald dropDate erreicht ist, automatisch für alle freigegeben - egal
-  // ob isPreRelease oder nicht. Ohne dropDate kein automatisches Verhalten.
   isPreRelease: boolean("is_pre_release").default(false),
   dropDate: timestamp("drop_date"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -263,3 +265,34 @@ export const newsPosts = pgTable("news_posts", {
   pushSentAt: timestamp("push_sent_at"),
   emailSentAt: timestamp("email_sent_at"),
 });
+
+// ===================================================================
+// Neue Tabellen (v13)
+// ===================================================================
+
+// Startseiten-Posts (Blog-artig) - Admin kann Artikel, Bilder,
+// Videos und Leaks posten. category = "article"|"video"|"leak"|"makingof"
+export const homePosts = pgTable("home_posts", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  body: text("body"),
+  imageUrl: text("image_url"),
+  videoUrl: text("video_url"),
+  category: text("category").notNull().default("article"),
+  published: boolean("published").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Email-Log: Jede versendete Mail landet hier (automatische und manuelle).
+export const emailLog = pgTable("email_log", {
+  id: serial("id").primaryKey(),
+  to: text("to").notNull(),
+  subject: text("subject").notNull(),
+  bodyHtml: text("body_html").notNull(),
+  source: text("source").notNull(), // "newsletter"|"reward"|"verification"|"news"|"reminder"
+  sentAt: timestamp("sent_at").defaultNow(),
+});
+
+// Produkt-Erweiterungen: Kategorie, Geschlecht, Collection
+// (werden als ALTER TABLE in der Migration ergänzt, weil die Tabelle schon existiert)

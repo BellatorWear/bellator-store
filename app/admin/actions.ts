@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/db";
-import { products, productVariants, productColors, discountCodes, newsPosts, users, usernameHistory, preReleaseCodes, preReleaseRedemptions } from "@/db/schema";
+import { products, productVariants, productColors, discountCodes, newsPosts, users, usernameHistory, preReleaseCodes, preReleaseRedemptions, homePosts } from "@/db/schema";
 import { eq, ilike, desc } from "drizzle-orm";
 import { del, list } from "@vercel/blob";
 import { getCurrentUser } from "@/app/actions";
@@ -60,6 +60,12 @@ export async function createProduct(formData: FormData) {
   if (dropDateRaw && (!dropDate || isNaN(dropDate.getTime()))) {
     return { error: "Ungültiges Drop-Datum." };
   }
+  const categoryRaw = (formData.get("category") as string) ?? "";
+  const genderRaw = (formData.get("gender") as string) ?? "unisex";
+  const collectionRaw = (formData.get("collection") as string) ?? "";
+  const category = ["shirt","hoodie","ziphoodie","pants","set"].includes(categoryRaw) ? categoryRaw : null;
+  const gender = ["male","female","unisex"].includes(genderRaw) ? genderRaw : "unisex";
+  const collection = isSuspiciousInput(collectionRaw) ? null : sanitizeText(collectionRaw, 40) || null;
 
   if (isSuspiciousInput(nameRaw) || isSuspiciousInput(descriptionRaw)) {
     return { error: "Ungültige Eingabe." };
@@ -137,6 +143,9 @@ export async function createProduct(formData: FormData) {
       dropLimit: dropLimit && dropLimit > 0 ? dropLimit : null,
       isPreRelease,
       dropDate,
+      category,
+      gender,
+      collection,
     })
     .returning({ id: products.id });
 
@@ -179,6 +188,12 @@ export async function updateProduct(formData: FormData) {
   if (dropDateRaw && (!dropDate || isNaN(dropDate.getTime()))) {
     return { error: "Ungültiges Drop-Datum." };
   }
+  const categoryRaw = (formData.get("category") as string) ?? "";
+  const genderRaw = (formData.get("gender") as string) ?? "unisex";
+  const collectionRaw = (formData.get("collection") as string) ?? "";
+  const category = ["shirt","hoodie","ziphoodie","pants","set"].includes(categoryRaw) ? categoryRaw : null;
+  const gender = ["male","female","unisex"].includes(genderRaw) ? genderRaw : "unisex";
+  const collection = isSuspiciousInput(collectionRaw) ? null : sanitizeText(collectionRaw, 40) || null;
 
   if (isSuspiciousInput(nameRaw) || isSuspiciousInput(descriptionRaw)) {
     return { error: "Ungültige Eingabe." };
@@ -192,9 +207,6 @@ export async function updateProduct(formData: FormData) {
 
   const dropLimit = dropLimitRaw && dropLimitRaw !== "" ? parseInt(dropLimitRaw, 10) : null;
 
-  // Bilder sind optional bearbeitbar - wird das Feld gar nicht mitgeschickt,
-  // bleiben die bestehenden Bilder unverändert (z.B. wenn nur der Preis
-  // geändert wird, ohne die Bilder-Sektion zu berühren).
   const imageEntries = formData.getAll("images");
   const images = imageEntries.length > 0
     ? imageEntries.filter((e): e is string => typeof e === "string" && isOwnBlobUrl(e)).slice(0, MAX_IMAGES_PER_PRODUCT)
@@ -212,6 +224,9 @@ export async function updateProduct(formData: FormData) {
       dropLimit: dropLimit && dropLimit > 0 ? dropLimit : null,
       isPreRelease,
       dropDate,
+      category,
+      gender,
+      collection,
       ...(images !== undefined ? { images } : {}),
     })
     .where(eq(products.id, id));
@@ -595,4 +610,57 @@ export async function createNewsPost(formData: FormData) {
     emailSent: emailResult.sent,
     emailError: emailResult.error,
   };
+}
+
+// ===================================================================
+// Startseiten-Blog-Posts
+// ===================================================================
+export async function createHomePost(formData: FormData) {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
+
+  const titleRaw = (formData.get("title") as string) ?? "";
+  const bodyRaw = (formData.get("body") as string) ?? "";
+  const imageUrl = (formData.get("imageUrl") as string) ?? "";
+  const videoUrl = (formData.get("videoUrl") as string) ?? "";
+  const categoryRaw = (formData.get("category") as string) ?? "article";
+
+  if (isSuspiciousInput(titleRaw) || isSuspiciousInput(bodyRaw)) return { error: "Ungültige Eingabe." };
+  const title = sanitizeText(titleRaw, 120);
+  if (!title) return { error: "Titel erforderlich." };
+
+  await db.insert(homePosts).values({
+    title,
+    body: sanitizeText(bodyRaw, 5000) || null,
+    imageUrl: imageUrl || null,
+    videoUrl: videoUrl || null,
+    category: ["article", "video", "leak", "makingof"].includes(categoryRaw) ? categoryRaw : "article",
+    published: false,
+  });
+
+  return { success: true };
+}
+
+export async function toggleHomePostPublished(formData: FormData) {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
+
+  const id = Number(formData.get("id"));
+  if (!id) return { error: "Ungültig." };
+
+  const existing = await db.select().from(homePosts).where(eq(homePosts.id, id));
+  if (existing.length === 0) return { error: "Post nicht gefunden." };
+
+  await db.update(homePosts).set({ published: !existing[0].published }).where(eq(homePosts.id, id));
+  return { success: true };
+}
+
+export async function deleteHomePost(formData: FormData) {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
+
+  const id = Number(formData.get("id"));
+  if (!id) return { error: "Ungültig." };
+  await db.delete(homePosts).where(eq(homePosts.id, id));
+  return { success: true };
 }

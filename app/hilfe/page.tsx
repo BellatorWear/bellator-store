@@ -1,39 +1,31 @@
+import InfoPageLayout from "@/app/components/InfoPageLayout";
+
 export default function HilfePage() {
   const faqs = [
     { q: "Wie bekomme ich Zugang zum Shop?", a: "Klicke auf 'Registrieren', gib deine Email ein und bestätige den Link in der Email." },
-    { q: "Was ist ein Access Key?", a: "Der Access Key ist eine alternative Einlogmethode, die wir dir per Email schicken. Er ist 7 Tage gültig und kann nur einmal verwendet werden." },
-    { q: "Wie kann ich bezahlen?", a: "Wir akzeptieren PayPal, Klarna und Visa." },
+    { q: "Was ist ein Access Key?", a: "Der Access Key ist eine alternative Einlogmethode. Er ist 7 Tage gültig und kann nur einmal verwendet werden." },
+    { q: "Wie kann ich bezahlen?", a: "Wir akzeptieren alle gängigen Kreditkarten, PayPal und weitere Methoden über Stripe." },
     { q: "Wie lange dauert die Lieferung?", a: "Die Lieferzeit beträgt in der Regel 3–7 Werktage innerhalb Deutschlands." },
     { q: "Kann ich meine Bestellung zurückgeben?", a: "Ja, du hast 14 Tage Widerrufsrecht ab Erhalt der Ware." },
-    { q: "Was sind Bellator-Punkte?", a: "Für jede Bestellung und bestimmte Aktionen sammelst du Punkte, die du für zukünftige Bestellungen einlösen kannst." },
+    { q: "Was sind Bellator-Punkte?", a: "Für jede Bestellung sammelst du Punkte (10 Punkte pro Euro), die du gegen Rabatte und exklusive Vorteile einlösen kannst." },
+    { q: "Was ist ein Pre-Release-Code?", a: "Mit einem Pre-Release-Code bekommst du frühzeitig Zugriff auf neue Drops, bevor sie offiziell verfügbar sind." },
+    { q: "Wie löse ich einen Code ein?", a: "Klicke auf 'Code eingeben' im Menü (oben rechts, drei Striche) und gib deinen Code ein. Er gilt entweder als Rabatt beim Checkout oder als Pre-Release-Zugang." },
   ];
 
   return (
-    <main className="min-h-screen text-[#e0e0e0] font-mono" style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
-      <header className="bg-black border-b border-[#333] px-6 py-4 flex justify-between items-center">
-        <a href="/shop" className="text-2xl font-bold tracking-tighter italic hover:opacity-80 transition">BELLATOR.</a>
-        <a href="/shop" className="text-xs font-bold uppercase tracking-widest text-white bg-black/70 border border-zinc-500 px-3 py-1.5 hover:bg-white hover:text-black transition-all inline-block">← Zurück zum Shop</a>
-      </header>
-      <div className="flex justify-center p-4 sm:p-6 md:p-16">
-        <div className="w-full max-w-xl space-y-8">
-          <div className="bg-black/80 p-4">
-            <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter mb-1">Hilfe & FAQ</h1>
-            <p className="text-xs text-zinc-500 uppercase tracking-widest">Häufig gestellte Fragen</p>
-          </div>
-          <div className="space-y-4">
-            {faqs.map((faq, i) => (
-              <section key={i} className="border border-zinc-700 bg-black/80 p-6">
-                <h2 className="text-sm font-bold uppercase tracking-widest text-white mb-2">{faq.q}</h2>
-                <p className="text-xs text-zinc-400 leading-relaxed">{faq.a}</p>
-              </section>
-            ))}
-          </div>
-          <div className="border border-zinc-700 bg-black/80 p-6">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400 mb-2">Noch Fragen?</h2>
-            <p className="text-xs text-zinc-500">Schreib uns an: <span className="text-white">kontakt@mz-dev.de</span></p>
-          </div>
+    <InfoPageLayout title="Hilfe & FAQ" subtitle="Häufig gestellte Fragen">
+      <div className="space-y-4">
+        {faqs.map((faq, i) => (
+          <section key={i} className="border border-zinc-700 bg-black/80 p-5 sm:p-6">
+            <h2 className="text-sm font-bold uppercase tracking-widest text-white mb-2">{faq.q}</h2>
+            <p className="text-sm text-zinc-400 leading-relaxed">{faq.a}</p>
+          </section>
+        ))}
+        <div className="border border-zinc-700 bg-black/80 p-5 sm:p-6">
+          <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400 mb-2">Noch Fragen?</h2>
+          <p className="text-sm text-zinc-500">Schreib uns auf <a href="https://discord.gg/T4RwVJRyRp" className="text-white hover:text-[#5865F2] transition">Discord</a> oder per Mail an <span className="text-white">kontakt@mz-dev.de</span></p>
         </div>
       </div>
-    </main>
+    </InfoPageLayout>
   );
 }
