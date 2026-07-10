@@ -1,6 +1,4 @@
 import { getCurrentUser } from "@/app/actions";
-import GlobalHeader from "@/app/components/GlobalHeader";
-import GlobalFooter from "@/app/components/GlobalFooter";
 import { db } from "@/db";
 import { challenges, userChallenges, rewards, userRewards } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -32,12 +30,8 @@ export default async function ChallengesPage() {
   const pending = allChallenges.filter(c => !completedIds.has(c.id));
 
   return (
-    <div className="min-h-screen flex flex-col bg-black text-white font-mono" style={{backgroundImage:'url("/background.webp")',backgroundSize:"cover",backgroundPosition:"center",backgroundAttachment:"fixed"}}>
-      <div className="fixed inset-0 bg-black/70 z-0 pointer-events-none" />
-      <div className="relative z-10 flex flex-col min-h-screen">
-      <GlobalHeader />
-      <main className="flex-1 flex justify-center px-4 sm:px-8 py-8">
-      <div className="w-full max-w-xl space-y-8">
+      <div className="flex-1 flex justify-center px-4 sm:px-8 py-8">
+      <div className="w-full max-w-xl lg:max-w-5xl xl:max-w-6xl space-y-8">
         <div className="t-card border p-4">
           <h1 className="text-3xl font-black uppercase tracking-tighter mb-1 t-text">Challenges & Punkte</h1>
           <p className="text-xs t-muted uppercase tracking-widest">Sammle Punkte durch Aktionen und löse sie für Prämien ein</p>
@@ -48,6 +42,8 @@ export default async function ChallengesPage() {
           <span className="text-yellow-400 font-bold text-xl">{user.points} Pkt.</span>
         </div>
 
+        <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-8 items-start">
+        <div className="space-y-8">
         {/* Offene Challenges */}
         {pending.length > 0 && (
           <section className="space-y-3">
@@ -66,7 +62,9 @@ export default async function ChallengesPage() {
             ))}
           </section>
         )}
+        </div>
 
+        <div className="space-y-8">
         {/* Erledigte Challenges */}
         {done.length > 0 && (
           <section className="space-y-3">
@@ -117,10 +115,9 @@ export default async function ChallengesPage() {
             );
           })}
         </section>
+        </div>
+        </div>
       </div>
-    </main>
-      <GlobalFooter />
       </div>
-    </div>
   );
 }

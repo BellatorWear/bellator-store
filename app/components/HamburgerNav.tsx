@@ -1,8 +1,8 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import RedeemCodeButton from "@/app/shop/components/RedeemCodeButton";
+import RedeemCodeButton, { type RedeemCodeButtonHandle } from "@/app/shop/components/RedeemCodeButton";
 
 type NavProps = {
   cartCount?: number;
@@ -23,6 +23,7 @@ const LINKS = [
 export default function HamburgerNav({ cartCount = 0, isAdmin, username }: NavProps) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const redeemRef = useRef<RedeemCodeButtonHandle | null>(null);
   useEffect(() => setMounted(true), []);
 
   // Scroll sperren wenn Menü offen
@@ -109,7 +110,16 @@ export default function HamburgerNav({ cartCount = 0, isAdmin, username }: NavPr
         </nav>
 
         <div className="border-t border-zinc-800 p-4">
-          <RedeemCodeButton variant="block" />
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              redeemRef.current?.open();
+            }}
+            className="w-full border t-border py-2.5 text-[10px] sm:text-xs uppercase tracking-widest font-bold t-text hover:bg-white hover:text-black transition-all"
+          >
+            Code eingeben
+          </button>
         </div>
       </div>
     </>,
@@ -128,6 +138,7 @@ export default function HamburgerNav({ cartCount = 0, isAdmin, username }: NavPr
         <span className="w-4 h-[2px] bg-current" />
       </button>
       {menu}
+      <RedeemCodeButton ref={redeemRef} variant="hidden" />
     </>
   );
 }

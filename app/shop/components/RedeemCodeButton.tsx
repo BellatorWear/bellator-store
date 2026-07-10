@@ -1,10 +1,14 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useImperativeHandle, forwardRef } from "react";
 import { createPortal } from "react-dom";
 import { redeemCode } from "@/app/cart";
 
-export default function RedeemCodeButton({ variant = "inline" }: { variant?: "inline" | "block" }) {
+export type RedeemCodeButtonHandle = { open: () => void };
+
+const RedeemCodeButton = forwardRef<RedeemCodeButtonHandle, { variant?: "inline" | "block" | "hidden" }>(
+  function RedeemCodeButton({ variant = "inline" }, ref) {
   const [open, setOpen] = useState(false);
+  useImperativeHandle(ref, () => ({ open: () => setOpen(true) }), []);
   const [mounted, setMounted] = useState(false);
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -45,7 +49,7 @@ export default function RedeemCodeButton({ variant = "inline" }: { variant?: "in
   // Overlays auf Root-Ebene (z.B. dem Newsletter/Push-Popup) komplett
   // verdeckt werden, auch mit höherem z-index. Per Portal umgeht man das.
   const modal = open && mounted ? createPortal(
-    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setOpen(false)}>
+    <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setOpen(false)}>
       <div className="w-full max-w-sm t-card border p-6 sm:p-8" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-black uppercase tracking-tighter mb-2 t-text">Code eingeben</h2>
         <p className="text-xs t-muted uppercase tracking-widest mb-6">Rabattcode oder Pre-Release-Zugangscode.</p>
@@ -78,18 +82,22 @@ export default function RedeemCodeButton({ variant = "inline" }: { variant?: "in
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={
-          variant === "block"
-            ? "w-full border t-border py-2.5 text-[10px] sm:text-xs uppercase tracking-widest font-bold t-text hover:bg-white hover:text-black transition-all"
-            : "text-[11px] uppercase tracking-widest font-bold t-text border t-border px-3 py-1.5 hover:bg-white hover:text-black transition-all"
-        }
-      >
-        Code eingeben
-      </button>
+      {variant !== "hidden" && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className={
+            variant === "block"
+              ? "w-full border t-border py-2.5 text-[10px] sm:text-xs uppercase tracking-widest font-bold t-text hover:bg-white hover:text-black transition-all"
+              : "text-[11px] uppercase tracking-widest font-bold t-text border t-border px-3 py-1.5 hover:bg-white hover:text-black transition-all"
+          }
+        >
+          Code eingeben
+        </button>
+      )}
       {modal}
     </>
   );
-}
+});
+
+export default RedeemCodeButton;
