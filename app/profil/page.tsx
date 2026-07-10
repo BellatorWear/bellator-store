@@ -57,12 +57,12 @@ export default async function Page() {
     <div className="min-h-screen flex flex-col font-mono t-text"
       style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
       <div className="fixed inset-0 bg-black/50 pointer-events-none z-0" />
-      <div className="relative z-10 flex flex-col min-h-screen">
+      <div className="relative z-10 flex flex-col min-h-screen t-invert">
         <GlobalHeader />
-        <main className="flex-1 w-full max-w-[1400px] mx-auto px-4 sm:px-8 md:px-16 py-8">
-        <div className="w-full max-w-xl space-y-6">
+        <main className="flex-1 w-full max-w-[1400px] mx-auto px-4 sm:px-8 py-8">
+        <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
-          <div className="t-card border p-4">
+          <div className="t-card border p-4 lg:col-span-2">
             <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter mb-1">Mein Profil</h1>
             <p className="text-xs t-muted uppercase tracking-widest">Account verwalten</p>
           </div>
@@ -187,7 +187,7 @@ export default async function Page() {
           </section>
 
           {/* Account löschen */}
-          <section className="border border-red-900 bg-black/80 p-5 sm:p-6">
+          <section className="border border-red-900 bg-black/80 p-5 sm:p-6 lg:col-span-2">
             <h2 className="text-xs font-bold uppercase tracking-widest text-red-700 mb-4">Gefahrenzone</h2>
             <p className="text-xs t-muted mb-4">Das Löschen deines Accounts ist unwiderruflich. Alle Daten werden permanent entfernt.</p>
             <DeleteAccountButton />

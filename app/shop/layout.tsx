@@ -19,7 +19,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
         />
       )}
       <div className="fixed inset-0 bg-black/50 z-0 pointer-events-none" />
-      <div className="relative z-10 flex flex-col min-h-screen">
+      <div className="relative z-10 flex flex-col min-h-screen t-invert">
         <GlobalHeader />
         <main className="flex-grow">{children}</main>
         <GlobalFooter />

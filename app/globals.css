@@ -17,21 +17,10 @@
   --shadow: rgba(255,255,255,0.15);
 }
 
-[data-theme="light"] {
-  --bg: #f2efe9;
-  --bg-card: rgba(255,255,255,0.92);
-  --bg-input: rgba(255,255,255,0.95);
-  --bg-header: #1c1c1c;
-  --bg-footer: #1c1c1c;
-  --text: #111111;
-  --text-muted: #555555;
-  --text-faint: #999999;
-  --border: #cccccc;
-  --border-subtle: #e5e5e5;
-  --accent: #111111;
-  --accent-inv: #ffffff;
-  --shadow: rgba(0,0,0,0.15);
-}
+/* Light Mode wird NICHT mehr über eigene Variablenwerte umgesetzt (das
+   hellte vorher nur einzelne Boxen auf, siehe .t-invert weiter unten für
+   die neue Lösung). Die Variablen bleiben daher immer bei ihren
+   Dunkel-Werten - die eigentliche Farbumkehr passiert per CSS-Filter. */
 
 /* ===== BASE ===== */
 * { box-sizing: border-box; }
@@ -45,6 +34,40 @@ html, body {
      font-mono Klasse gesetzt und liefen dadurch im Browser-Standardfont,
      wodurch "BELLATOR." dort anders aussah als im Shop-Header. */
   font-family: ui-monospace, "Courier New", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+/* ===== LIGHT MODE: GANZE SEITE INVERTIEREN =====
+   Statt nur .t-card-Boxen über Variablen aufzuhellen, wird der komplette
+   sichtbare Seiteninhalt (Hintergrund, Text, Rahmen - nur Schwarz/Weiß/
+   Grau) per Filter invertiert. hue-rotate(180deg) gleicht dabei den
+   Farbstich aus, den invert() bei gesättigten Akzentfarben (Gelb, Lila,
+   Rot, Grün) erzeugen würde, sodass diese ungefähr ihre Originalfarbe
+   behalten.
+   WICHTIG: Der Filter wird NICHT auf <html>/<body> gesetzt. filter
+   erzeugt laut Spec einen neuen containing block für position:fixed/
+   absolute Nachfahren (wie transform) - auf <body> würde das jedes per
+   createPortal(..., document.body) gerenderte Overlay (Menü, Modals) vom
+   echten Viewport lösen und beim Scrollen kaputt positionieren. Der
+   Filter sitzt deshalb gezielt auf dem sichtbaren Seiteninhalt-Wrapper
+   jeder Seite (.t-invert), der diese Portal-Overlays NICHT enthält. */
+[data-theme="light"] .t-invert {
+  filter: invert(1) hue-rotate(180deg);
+  transition: filter 0.25s ease;
+}
+/* Header/Footer bleiben bewusst in beiden Themes dunkel (Branding) -
+   zweite Filteranwendung hebt die Invertierung des Wrappers exakt wieder
+   auf. .t-no-invert kann für jedes Element genutzt werden, das absichtlich
+   nicht mit der Seite mitinvertieren soll. */
+[data-theme="light"] .t-invert .t-no-invert {
+  filter: invert(1) hue-rotate(180deg);
+}
+/* Echte Fotos (Produktbilder, Hintergrundbild) sollen nicht mitinvertiert
+   werden - auch hier hebt die zweite Filteranwendung die erste exakt
+   wieder auf. */
+[data-theme="light"] .t-invert img,
+[data-theme="light"] .t-invert video,
+[data-theme="light"] .t-invert [style*="background-image"] {
+  filter: invert(1) hue-rotate(180deg);
 }
 
 /* ===== SEMANTIC CLASSES - verwendet überall im Projekt ===== */
@@ -180,9 +203,6 @@ button:active, a[role="button"]:active, a[class*="border"]:active, a[class*="btn
   transform: translateX(-100%);
   background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
   animation: shimmer 1.4s infinite;
-}
-[data-theme="light"] .skeleton::after {
-  background: linear-gradient(90deg, transparent, rgba(0,0,0,0.08), transparent);
 }
 @keyframes shimmer {
   100% { transform: translateX(100%); }

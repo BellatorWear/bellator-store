@@ -161,9 +161,9 @@ export default async function AdminPage() {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-black text-white font-mono">
+    <div className="min-h-screen flex flex-col bg-black text-white font-mono t-invert">
       <GlobalHeader />
-      <main className="flex-1 w-full max-w-[1200px] mx-auto px-4 sm:px-8 py-8 space-y-8">
+      <main className="flex-1 w-full max-w-[1400px] mx-auto px-3 sm:px-6 py-8 space-y-8">
         <div className="flex justify-between items-center flex-wrap gap-3">
           <div>
             <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter">Admin Panel</h1>

@@ -46,7 +46,7 @@ export default function EngagementPopup({
   // im Layout und könnte mit anderen fixed-Overlays (z.B. dem
   // Rabattcode-Modal) in einen Stacking-Context-Konflikt geraten.
   return createPortal(
-    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 t-invert">
       <div className="w-full max-w-sm t-card border p-6 sm:p-8">
         <h2 className="text-xl font-black uppercase tracking-tighter mb-2 t-text">Bleib auf dem Laufenden</h2>
         <p className="text-xs t-muted uppercase tracking-widest mb-6 leading-relaxed">

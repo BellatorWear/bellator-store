@@ -49,7 +49,7 @@ const RedeemCodeButton = forwardRef<RedeemCodeButtonHandle, { variant?: "inline"
   // Overlays auf Root-Ebene (z.B. dem Newsletter/Push-Popup) komplett
   // verdeckt werden, auch mit höherem z-index. Per Portal umgeht man das.
   const modal = open && mounted ? createPortal(
-    <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setOpen(false)}>
+    <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 t-invert" onClick={() => setOpen(false)}>
       <div className="w-full max-w-sm t-card border p-6 sm:p-8" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-black uppercase tracking-tighter mb-2 t-text">Code eingeben</h2>
         <p className="text-xs t-muted uppercase tracking-widest mb-6">Rabattcode oder Pre-Release-Zugangscode.</p>

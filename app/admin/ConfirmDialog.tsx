@@ -33,7 +33,7 @@ export default function ConfirmDialog({
   // positionierten Containers) hängen bleibt und verdeckt werden kann.
   return createPortal(
     <div
-      className="fixed inset-0 z-[140] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[140] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 t-invert"
       onClick={onCancel}
     >
       <div
