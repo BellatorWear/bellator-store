@@ -32,7 +32,7 @@ export default function PriceDisplay({ priceCents, compareAtPriceCents, size = "
         <span className="pointer-events-none absolute left-[-4%] top-1/2 h-[2px] w-[108%] bg-red-600 -translate-y-1/2 rotate-[14deg]" />
         <span className="pointer-events-none absolute left-[-4%] top-1/2 h-[2px] w-[108%] bg-red-600 -translate-y-1/2 -rotate-[14deg]" />
       </span>
-      <span className={`${big} font-black text-red-500 inline-block -rotate-2`}>
+      <span className={`${big} font-black text-green-500 inline-block -rotate-2`}>
         {(priceCents / 100).toFixed(2)} €
       </span>
     </div>
