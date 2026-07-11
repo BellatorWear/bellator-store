@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
 import CookieBanner from "./shop/components/CookieBanner";
+import GlobalSoundEffects from "./components/GlobalSoundEffects";
 import ThemeScript from "./ThemeScript";
 import { getCurrentUser } from "./actions";
 import ProfileSetupGuard from "./ProfileSetupGuard";
@@ -26,6 +27,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <CustomValidationMessages />
         <Providers>{children}</Providers>
         <CookieBanner />
+        <GlobalSoundEffects />
         {user && (
           <ProfileSetupGuard
             mustSetPassword={user.mustSetPassword}

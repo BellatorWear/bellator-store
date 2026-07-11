@@ -176,17 +176,22 @@ html, body {
 .t-meta    { font-weight: 500; }
 
 /* ===== BUTTON PRESS ANIMATION ===== */
-/* Deckt auch <a>-Tags ab, die als Button gestylt sind (border-/btn-Klassen),
-   nicht nur <button> oder a[role="button"] - vorher hatten z.B. "Details
-   ansehen"-Links auf Mobile keine Press-Animation. */
-button, a[role="button"], a[class*="border"], a[class*="btn"], .t-btn-primary, .t-btn-outline {
-  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
+/* Deckt jetzt wirklich ALLE <button>, <a> und [role="button"] ab statt nur
+   welche mit "border"/"btn" in der Klasse - vorher hatten z.B. reine
+   Text-Links auf Mobile gar keine Press-Rückmeldung, was sich "unbedacht"
+   angefühlt hat, weil nichts auf den Tap reagierte. */
+button, a, [role="button"], input[type="submit"], input[type="button"] {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.1s ease, opacity 0.1s ease;
 }
-button:active, a[role="button"]:active, a[class*="border"]:active, a[class*="btn"]:active {
+button:active, a:active, [role="button"]:active, input[type="submit"]:active, input[type="button"]:active {
   transform: scale(0.96);
+  opacity: 0.85;
 }
 @media (prefers-reduced-motion: reduce) {
-  button:active, a[role="button"]:active, a[class*="border"]:active, a[class*="btn"]:active { transform: none; }
+  button:active, a:active, [role="button"]:active, input[type="submit"]:active, input[type="button"]:active {
+    transform: none;
+    opacity: 1;
+  }
 }
 
 /* ===== SKELETON LOADER (Shimmer) ===== */

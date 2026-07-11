@@ -27,37 +27,53 @@ function playStartupSound(ctx: AudioContext) {
   osc.stop(ctx.currentTime + 0.8);
 }
 
-// Hover-Sound: kurzer, leiser Tick
+// Hover-Sound: weicher, kurzer Tick (gefiltert statt roher Rechteckwelle,
+// klingt dadurch runder statt scharf/blechern)
 export function playHoverSound() {
   const ctx = createAudioContext();
   if (!ctx) return;
   const osc = ctx.createOscillator();
+  const filter = ctx.createBiquadFilter();
   const gain = ctx.createGain();
-  osc.connect(gain);
+  osc.connect(filter);
+  filter.connect(gain);
   gain.connect(ctx.destination);
-  osc.type = "square";
-  osc.frequency.setValueAtTime(800, ctx.currentTime);
-  gain.gain.setValueAtTime(0.04, ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
+  osc.type = "sine";
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(2200, ctx.currentTime);
+  osc.frequency.setValueAtTime(1100, ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(1500, ctx.currentTime + 0.04);
+  gain.gain.setValueAtTime(0.05, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.07);
   osc.start(ctx.currentTime);
-  osc.stop(ctx.currentTime + 0.06);
+  osc.stop(ctx.currentTime + 0.07);
 }
 
-// Click-Sound: satterer Klick
+// Click-Sound: satter, weicher "Pop" statt scharfer Sägezahnwelle -
+// zwei leicht versetzte Oszillatoren für mehr Körper, gefiltert für einen
+// runden statt blechernen Klang (angelehnt an dezente Browser-UI-Sounds).
 export function playClickSound() {
   const ctx = createAudioContext();
   if (!ctx) return;
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-  osc.type = "sawtooth";
-  osc.frequency.setValueAtTime(200, ctx.currentTime);
-  osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.12);
-  gain.gain.setValueAtTime(0.12, ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
-  osc.start(ctx.currentTime);
-  osc.stop(ctx.currentTime + 0.12);
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(1800, ctx.currentTime);
+  filter.connect(ctx.destination);
+
+  [{ freq: 320, delay: 0, gain: 0.11 }, { freq: 480, delay: 0.005, gain: 0.05 }].forEach(({ freq, delay, gain: g }) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(filter);
+    osc.type = "triangle";
+    const t = ctx.currentTime + delay;
+    osc.frequency.setValueAtTime(freq, t);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.4, t + 0.1);
+    gain.gain.setValueAtTime(g, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    osc.start(t);
+    osc.stop(t + 0.1);
+  });
 }
 
 // Success-Sound: kurzer aufsteigender Ton
