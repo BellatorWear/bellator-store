@@ -25,7 +25,7 @@ const CATEGORIES = [
   { value: "makingof", label: "Making Of" },
 ];
 
-export default function HomePostManager({ posts }: { posts: Post[] }) {
+export default function HomePostManager({ posts, canEdit = true }: { posts: Post[]; canEdit?: boolean }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [bodyHtml, setBodyHtml] = useState("");
@@ -135,14 +135,18 @@ export default function HomePostManager({ posts }: { posts: Post[] }) {
                   }`}>
                   {post.published ? "Veröffentlicht" : "Entwurf"}
                 </button>
-                <button onClick={() => setEditingId(editingId === post.id ? null : post.id)}
-                  className="text-[10px] border border-zinc-700 px-2 py-1 uppercase tracking-widest hover:bg-white hover:text-black transition">
-                  {editingId === post.id ? "Zuklappen" : "Bearbeiten"}
-                </button>
-                <button onClick={() => setDeleteId(post.id)}
-                  className="text-[10px] border border-red-800 text-red-500 px-2 py-1 hover:bg-red-900/30 transition">
-                  Löschen
-                </button>
+                {canEdit && (
+                  <>
+                    <button onClick={() => setEditingId(editingId === post.id ? null : post.id)}
+                      className="text-[10px] border border-zinc-700 px-2 py-1 uppercase tracking-widest hover:bg-white hover:text-black transition">
+                      {editingId === post.id ? "Zuklappen" : "Bearbeiten"}
+                    </button>
+                    <button onClick={() => setDeleteId(post.id)}
+                      className="text-[10px] border border-red-800 text-red-500 px-2 py-1 hover:bg-red-900/30 transition">
+                      Löschen
+                    </button>
+                  </>
+                )}
               </div>
             </div>
             {editingId === post.id && (

@@ -82,6 +82,7 @@ export async function getCurrentUser() {
     points: user.points ?? 0,
     theme: user.theme ?? "dark",
     isAdmin: user.isAdmin ?? false,
+    role: user.role ?? null,
     discountPercent: user.discountPercent ?? 0,
     orderCount: user.orderCount ?? 0,
     pushEnabled: user.pushEnabled ?? false,

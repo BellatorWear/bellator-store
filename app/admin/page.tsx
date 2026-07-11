@@ -17,12 +17,16 @@ import PreReleaseCodeManager from "./PreReleaseCodeManager";
 import EmailLogViewer from "./EmailLogViewer";
 import HomePostManager from "./HomePostManager";
 import AdminDashboard, { type AdminFunctionGroup } from "./AdminDashboard";
+import RoleManager from "./RoleManager";
+import { hasSection, canEditPosts, isValidRole, type Role } from "./permissions";
 import { getSetting, COUNTDOWN_KEY, COUNTDOWN_DEFAULT, EXCLUSIVE_CODE_KEY, EXCLUSIVE_CODE_DEFAULT } from "@/app/utils/settings";
 
 export default async function AdminPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (!user.isAdmin) redirect("/shop");
+  if (!user.role && !user.isAdmin) redirect("/shop");
+  const role: Role | null = isValidRole(user.role) ? user.role : (user.isAdmin ? "admin" : null);
+  if (!role) redirect("/shop");
 
   const [allProducts, allVariants, allColors, userCountResult, countdown, exclusiveCode, recentPosts, allPreReleaseCodes, allPreReleaseRedemptions, viewCountResult, emailEntries, homePostList] = await Promise.all([
     db.select().from(products),
@@ -56,7 +60,7 @@ export default async function AdminPage() {
           title: "Startseiten-Posts",
           description: "Artikel, Videos, Leaks und Making-Ofs für die Startseite",
           keywords: ["startseite", "blog", "post", "artikel", "video", "leak", "makingof"],
-          content: <HomePostManager posts={homePostList} />,
+          content: <HomePostManager posts={homePostList} canEdit={canEditPosts(role)} />,
           defaultOpen: true,
         },
         {
@@ -158,7 +162,24 @@ export default async function AdminPage() {
         },
       ],
     },
+    {
+      title: "Team & Rollen",
+      items: [
+        {
+          id: "roles",
+          title: "Rollen vergeben",
+          description: "Bellator Team-Mitgliedern Admin/Developer/Marketing-Zugriff geben",
+          keywords: ["rolle", "team", "berechtigung", "rechte", "marketing", "developer"],
+          content: <RoleManager />,
+        },
+      ],
+    },
   ];
+
+  // Nur die Abschnitte zeigen, die die Rolle des eingeloggten Users freigibt.
+  const visibleGroups = groups
+    .map((g) => ({ ...g, items: g.items.filter((item) => hasSection(role, item.id as any)) }))
+    .filter((g) => g.items.length > 0);
 
   return (
     <div className="min-h-screen flex flex-col bg-black text-white font-mono"
@@ -185,7 +206,7 @@ export default async function AdminPage() {
             </Link>
           </div>
         </div>
-        <AdminDashboard groups={groups} />
+        <AdminDashboard groups={visibleGroups} />
       </main>
       <GlobalFooter />
       </div>

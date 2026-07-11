@@ -17,6 +17,7 @@ export const users = pgTable("users", {
   isGuest: boolean("is_guest").default(false),
   theme: text("theme").default("dark"),
   isAdmin: boolean("is_admin").default(false),
+  role: text("role"), // null = normaler User, sonst 'admin' | 'developer' | 'marketing'
   orderCount: integer("order_count").default(0),
   discountPercent: integer("discount_percent").default(0), // Rabatt in % (berechnet)
   pushSubscription: text("push_subscription"), // JSON Web Push subscription
