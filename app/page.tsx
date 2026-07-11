@@ -5,6 +5,7 @@ import Link from "next/link";
 import GlobalHeader from "./components/GlobalHeader";
 import GlobalFooter from "./components/GlobalFooter";
 import LandingSound from "./components/LandingSound";
+import PageViewTracker from "./PageViewTracker";
 
 export const metadata = { title: "Bellator Streetwear — Home" };
 
@@ -25,10 +26,11 @@ export default async function HomePage() {
   return (
     <div className="min-h-screen flex flex-col bg-black text-white font-mono"
       style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
-      <div className="fixed inset-0 bg-black/70 z-0 pointer-events-none" />
       <div className="relative z-10 flex flex-col min-h-screen t-invert">
+      <div className="absolute inset-0 bg-black/70 z-0 pointer-events-none" />
         <GlobalHeader />
         <LandingSound />
+        <PageViewTracker />
 
         {/* Hero */}
         <section className="w-full max-w-[1400px] mx-auto px-4 sm:px-8 md:px-16 py-16 md:py-24">

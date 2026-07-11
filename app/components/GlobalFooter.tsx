@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function GlobalFooter() {
   return (
-    <footer className="bg-black border-t border-zinc-800 font-mono mt-auto t-no-invert">
+    <footer className="bg-black border-t border-zinc-800 font-mono mt-auto">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-8 py-10 grid grid-cols-1 sm:grid-cols-3 gap-8 text-[11px] uppercase tracking-widest">
         <div>
           <p className="font-black text-white mb-4 text-base italic">BELLATOR.</p>

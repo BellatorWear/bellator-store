@@ -6,7 +6,6 @@ import ThemeScript from "./ThemeScript";
 import { getCurrentUser } from "./actions";
 import ProfileSetupGuard from "./ProfileSetupGuard";
 import CustomValidationMessages from "./CustomValidationMessages";
-import PageViewTracker from "./PageViewTracker";
 
 export const metadata: Metadata = {
   title: "Bellator Streetwear",
@@ -25,7 +24,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         <ThemeScript />
         <CustomValidationMessages />
-        <PageViewTracker />
         <Providers>{children}</Providers>
         <CookieBanner />
         {user && (

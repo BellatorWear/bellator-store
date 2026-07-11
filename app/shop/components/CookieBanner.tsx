@@ -35,7 +35,7 @@ export default function CookieBanner() {
   if (!isVisible) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-sm z-[9999] t-card border p-5 sm:p-6"
+    <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-sm z-[9999] t-card border p-5 sm:p-6 t-invert"
       style={{ boxShadow: "10px 10px 0px 0px var(--shadow)" }}>
       <p className="text-xs t-text leading-relaxed mb-4">
         Wir verwenden technisch notwendige Cookies (Login, Warenkorb, Theme).
