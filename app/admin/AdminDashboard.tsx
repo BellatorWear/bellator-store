@@ -54,7 +54,7 @@ export default function AdminDashboard({ groups }: { groups: AdminFunctionGroup[
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Funktion suchen... (z.B. 'User', 'Produkt', 'News')"
-          className="w-full bg-zinc-900 border border-zinc-700 p-3 pl-10 text-sm text-white placeholder:text-zinc-600 focus:border-white outline-none transition"
+          className="w-full bg-black/90 border border-zinc-700 p-3 pl-10 text-sm text-white placeholder:text-zinc-600 focus:border-white outline-none transition"
         />
       </div>
 
@@ -73,10 +73,10 @@ export default function AdminDashboard({ groups }: { groups: AdminFunctionGroup[
             {group.items.map((item) => {
               const isOpen = openIds.has(item.id);
               return (
-                <div key={item.id} className="border border-zinc-700">
+                <div key={item.id} className="border border-zinc-700 bg-black/90">
                   <button
                     onClick={() => toggle(item.id)}
-                    className="w-full flex items-center justify-between gap-3 p-3.5 text-left hover:bg-zinc-900/60 transition-colors"
+                    className="w-full flex items-center justify-between gap-3 p-3.5 text-left hover:bg-zinc-900 transition-colors"
                   >
                     <div>
                       <p className="text-sm font-bold uppercase tracking-wide text-white">{item.title}</p>
@@ -88,7 +88,7 @@ export default function AdminDashboard({ groups }: { groups: AdminFunctionGroup[
                     />
                   </button>
                   {isOpen && (
-                    <div className="border-t border-zinc-800 p-4 sm:p-5">
+                    <div className="border-t border-zinc-800 bg-black/95 p-4 sm:p-5">
                       {item.content}
                     </div>
                   )}

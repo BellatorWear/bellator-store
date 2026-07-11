@@ -61,19 +61,19 @@ export default async function HomePage() {
             <p className="text-sm text-zinc-400 leading-relaxed mb-8 max-w-md">
               Streetwear ohne Kompromisse. Jedes Piece ist streng limitiert — wenn es weg ist, ist es weg.
             </p>
-            <div className="flex items-center gap-3 mb-8">
+            <div className="mb-8">
               <Link href="/shop"
                 className="inline-block border-[3px] border-white px-8 py-4 text-sm font-black uppercase tracking-widest text-white hover:bg-white hover:text-black transition-all duration-200">
                 Zum Shop →
               </Link>
-              <span className="text-[10px] uppercase tracking-widest text-zinc-500">
-                <span className="text-white font-bold">{userCount}</span> Aktive User
-              </span>
             </div>
           </div>
           {countdown.enabled && (
             <div className="mt-4">
-              <CountdownBanner initialConfig={countdown} />
+              <p className="text-center text-[10px] uppercase tracking-widest text-zinc-500 mb-3">
+                <span className="text-white font-bold">{userCount}</span> Aktive User
+              </p>
+              <CountdownBanner initialConfig={countdown} variant="stacked" />
             </div>
           )}
         </section>

@@ -4,7 +4,7 @@ import RedeemCodeButton from "./RedeemCodeButton";
 
 type CountdownData = { enabled: boolean; targetDate: string; label: string };
 
-export default function CountdownBanner({ initialConfig }: { initialConfig: CountdownData }) {
+export default function CountdownBanner({ initialConfig, variant = "row" }: { initialConfig: CountdownData; variant?: "row" | "stacked" }) {
   const [config, setConfig] = useState<CountdownData>(initialConfig);
   const [timeLeft, setTimeLeft] = useState({ d: 0, h: 0, m: 0, s: 0 });
 
@@ -36,6 +36,28 @@ export default function CountdownBanner({ initialConfig }: { initialConfig: Coun
   if (!config?.enabled) return null;
 
   const pad = (n: number) => String(n).padStart(2, "0");
+
+  if (variant === "stacked") {
+    return (
+      <div className="w-full max-w-[260px] lg:max-w-[340px] mx-auto aspect-square bg-black/85 border border-zinc-800 p-5 lg:p-7 flex flex-col mb-8">
+        <p className="text-[9px] uppercase tracking-[0.3em] text-zinc-500 mb-3 lg:mb-5 text-center">{config.label}</p>
+        <div className="flex-1 flex flex-col justify-center gap-2 lg:gap-4">
+          {[["Tage", timeLeft.d], ["Stunden", timeLeft.h], ["Minuten", timeLeft.m], ["Sekunden", timeLeft.s]].map(([label, val]) => {
+            const padded = pad(Number(val));
+            return (
+              <div key={label as string} className="flex items-center justify-between">
+                <span className="text-[10px] lg:text-xs uppercase tracking-[0.15em] text-zinc-500">{label as string}</span>
+                <span className="text-2xl lg:text-4xl font-black tabular-nums leading-none" style={{ fontFamily: "'Courier New', monospace" }}>
+                  <span className="text-red-500">{padded[0]}</span>
+                  <span className="text-zinc-300">{padded[1]}</span>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-[380px] mx-auto bg-black/85 border border-zinc-800 p-4 sm:p-5 text-center mb-8">
