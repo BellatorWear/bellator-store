@@ -1,5 +1,5 @@
 import {
-  pgTable, serial, text, boolean, timestamp, integer
+  pgTable, serial, text, boolean, timestamp, integer, jsonb
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -261,6 +261,8 @@ export const newsPosts = pgTable("news_posts", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   body: text("body").notNull(),
+  bodyHtml: text("body_html"),
+  attachments: jsonb("attachments").$type<{ url: string; name: string }[]>().default([]),
   createdAt: timestamp("created_at").defaultNow(),
   pushSentAt: timestamp("push_sent_at"),
   emailSentAt: timestamp("email_sent_at"),
@@ -276,6 +278,8 @@ export const homePosts = pgTable("home_posts", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   body: text("body"),
+  bodyHtml: text("body_html"),
+  attachments: jsonb("attachments").$type<{ url: string; name: string }[]>().default([]),
   imageUrl: text("image_url"),
   videoUrl: text("video_url"),
   category: text("category").notNull().default("article"),

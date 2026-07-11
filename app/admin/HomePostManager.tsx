@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createHomePost, deleteHomePost, toggleHomePostPublished } from "./actions";
 import ConfirmDialog from "./ConfirmDialog";
+import RichContentEditor, { type Attachment } from "./RichContentEditor";
 
 type Post = {
   id: number;
@@ -22,6 +23,8 @@ const CATEGORIES = [
 export default function HomePostManager({ posts }: { posts: Post[] }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [bodyHtml, setBodyHtml] = useState("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [imageUrl, setImageUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [category, setCategory] = useState("article");
@@ -40,13 +43,15 @@ export default function HomePostManager({ posts }: { posts: Post[] }) {
       const fd = new FormData();
       fd.append("title", title);
       fd.append("body", body);
+      fd.append("bodyHtml", bodyHtml);
+      fd.append("attachments", JSON.stringify(attachments));
       fd.append("imageUrl", imageUrl);
       fd.append("videoUrl", videoUrl);
       fd.append("category", category);
       const res = await createHomePost(fd);
       if (res?.error) { setMsg({ text: res.error, type: "error" }); return; }
       setMsg({ text: "✓ Post angelegt.", type: "success" });
-      setTitle(""); setBody(""); setImageUrl(""); setVideoUrl(""); setCategory("article");
+      setTitle(""); setBody(""); setBodyHtml(""); setAttachments([]); setImageUrl(""); setVideoUrl(""); setCategory("article");
       router.refresh();
     } catch (err) {
       console.error("Home-Post Fehler:", err);
@@ -85,8 +90,14 @@ export default function HomePostManager({ posts }: { posts: Post[] }) {
             {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
         </div>
-        <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="Text (optional)" rows={3}
+        <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="Kurztext (optional, für die Karten-Vorschau)" rows={2}
           className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white placeholder:text-zinc-600 resize-none" />
+        <div>
+          <p className="text-[9px] text-zinc-600 uppercase tracking-widest mb-1">
+            Erweiterter HTML-Inhalt für die Vollansicht (optional - Bilder direkt einfügen, frei formatieren)
+          </p>
+          <RichContentEditor value={bodyHtml} onChange={setBodyHtml} attachments={attachments} onAttachmentsChange={setAttachments} />
+        </div>
         <div className="flex gap-3">
           <input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="Bild-URL (optional)"
             className="flex-1 bg-zinc-900 border border-zinc-700 p-2 text-sm text-white placeholder:text-zinc-600" />

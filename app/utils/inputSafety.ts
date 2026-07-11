@@ -50,3 +50,34 @@ export function sanitizeText(input: string, maxLength = MAX_INPUT_LENGTH): strin
     .slice(0, maxLength)
     .trim();
 }
+
+/**
+ * Erlaubt Admins, freies HTML für Artikel/Newsletter zu schreiben (Bilder,
+ * Links, Formatierung), ohne eine externe Sanitizer-Library einzubinden.
+ * Kein vollständiger HTML-Parser, sondern eine gezielte Allow-/Deny-Liste:
+ * - <script>, <iframe>, <object>, <embed>, <link>, <meta>, <style> raus
+ * - alle "on*"-Event-Handler-Attribute raus (onerror, onclick, ...)
+ * - "javascript:"/"data:text/html"-URLs in href/src raus
+ * Reicht NICHT für nicht-vertrauenswürdigen User-Input, aber hier schreiben
+ * ausschließlich Admins - das ist eine zusätzliche Absicherung für den
+ * Fall eines kompromittierten Admin-Accounts, keine Verteidigung gegen
+ * die Admins selbst.
+ */
+export function sanitizeHtml(input: string, maxLength = 20000): string {
+  let html = input.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").slice(0, maxLength);
+
+  // Komplett verbotene Tags samt Inhalt entfernen.
+  html = html.replace(/<(script|style|iframe|object|embed|link|meta)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
+  html = html.replace(/<(script|style|iframe|object|embed|link|meta)\b[^>]*\/?>/gi, "");
+
+  // Event-Handler-Attribute (onerror=, onclick=, ...) entfernen.
+  html = html.replace(/\son\w+\s*=\s*"[^"]*"/gi, "");
+  html = html.replace(/\son\w+\s*=\s*'[^']*'/gi, "");
+  html = html.replace(/\son\w+\s*=\s*[^\s>]+/gi, "");
+
+  // javascript:/data:text/html - URLs in href/src entschärfen.
+  html = html.replace(/(href|src)\s*=\s*"(?:\s*javascript:|\s*data:text\/html)[^"]*"/gi, '$1="#"');
+  html = html.replace(/(href|src)\s*=\s*'(?:\s*javascript:|\s*data:text\/html)[^']*'/gi, "$1='#'");
+
+  return html.trim();
+}

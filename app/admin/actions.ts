@@ -4,7 +4,7 @@ import { products, productVariants, productColors, discountCodes, newsPosts, use
 import { eq, ilike, desc } from "drizzle-orm";
 import { del, list } from "@vercel/blob";
 import { getCurrentUser } from "@/app/actions";
-import { sanitizeText, isSuspiciousInput } from "@/app/utils/inputSafety";
+import { sanitizeText, isSuspiciousInput, sanitizeHtml } from "@/app/utils/inputSafety";
 import { isTrustedOrigin } from "@/app/utils/origin";
 import { setSetting, COUNTDOWN_KEY, EXCLUSIVE_CODE_KEY } from "@/app/utils/settings";
 import { sendPushToAll } from "@/app/utils/push";
@@ -584,21 +584,34 @@ export async function createNewsPost(formData: FormData) {
 
   const titleRaw = (formData.get("title") as string) ?? "";
   const bodyRaw = (formData.get("body") as string) ?? "";
+  const bodyHtmlRaw = (formData.get("bodyHtml") as string) ?? "";
+  const attachmentsRaw = (formData.get("attachments") as string) ?? "[]";
   if (isSuspiciousInput(titleRaw) || isSuspiciousInput(bodyRaw)) {
     return { error: "Ungültige Eingabe." };
   }
   const title = sanitizeText(titleRaw, 100);
   const body = sanitizeText(bodyRaw, 2000);
   if (!title || !body) return { error: "Titel und Text erforderlich." };
+  const bodyHtml = bodyHtmlRaw.trim() ? sanitizeHtml(bodyHtmlRaw, 20000) : null;
+  let attachments: { url: string; name: string }[] = [];
+  try {
+    const parsed = JSON.parse(attachmentsRaw);
+    if (Array.isArray(parsed)) {
+      attachments = parsed
+        .filter((a) => a && typeof a.url === "string" && typeof a.name === "string")
+        .slice(0, 10)
+        .map((a) => ({ url: sanitizeText(a.url, 500), name: sanitizeText(a.name, 200) }));
+    }
+  } catch { /* Anhänge sind optional, Fehler ignorieren */ }
 
-  const [post] = await db.insert(newsPosts).values({ title, body }).returning({ id: newsPosts.id });
+  const [post] = await db.insert(newsPosts).values({ title, body, bodyHtml, attachments }).returning({ id: newsPosts.id });
 
   const pushResult = await sendPushToAll({ title, body, url: "/shop" });
   if (!("error" in pushResult)) {
     await db.update(newsPosts).set({ pushSentAt: new Date() }).where(eq(newsPosts.id, post.id));
   }
 
-  const emailResult = await sendNewsletterEmailToAll(title, body);
+  const emailResult = await sendNewsletterEmailToAll(title, body, bodyHtml, attachments);
   if (emailResult.sent > 0) {
     await db.update(newsPosts).set({ emailSentAt: new Date() }).where(eq(newsPosts.id, post.id));
   }
@@ -621,6 +634,8 @@ export async function createHomePost(formData: FormData) {
 
   const titleRaw = (formData.get("title") as string) ?? "";
   const bodyRaw = (formData.get("body") as string) ?? "";
+  const bodyHtmlRaw = (formData.get("bodyHtml") as string) ?? "";
+  const attachmentsRaw = (formData.get("attachments") as string) ?? "[]";
   const imageUrl = (formData.get("imageUrl") as string) ?? "";
   const videoUrl = (formData.get("videoUrl") as string) ?? "";
   const categoryRaw = (formData.get("category") as string) ?? "article";
@@ -628,10 +643,23 @@ export async function createHomePost(formData: FormData) {
   if (isSuspiciousInput(titleRaw) || isSuspiciousInput(bodyRaw)) return { error: "Ungültige Eingabe." };
   const title = sanitizeText(titleRaw, 120);
   if (!title) return { error: "Titel erforderlich." };
+  const bodyHtml = bodyHtmlRaw.trim() ? sanitizeHtml(bodyHtmlRaw, 20000) : null;
+  let attachments: { url: string; name: string }[] = [];
+  try {
+    const parsed = JSON.parse(attachmentsRaw);
+    if (Array.isArray(parsed)) {
+      attachments = parsed
+        .filter((a) => a && typeof a.url === "string" && typeof a.name === "string")
+        .slice(0, 10)
+        .map((a) => ({ url: sanitizeText(a.url, 500), name: sanitizeText(a.name, 200) }));
+    }
+  } catch { /* Anhänge sind optional, Fehler ignorieren */ }
 
   await db.insert(homePosts).values({
     title,
     body: sanitizeText(bodyRaw, 5000) || null,
+    bodyHtml,
+    attachments,
     imageUrl: imageUrl || null,
     videoUrl: videoUrl || null,
     category: ["article", "video", "leak", "makingof"].includes(categoryRaw) ? categoryRaw : "article",
