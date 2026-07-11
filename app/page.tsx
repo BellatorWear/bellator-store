@@ -1,11 +1,13 @@
 import { db } from "@/db";
-import { homePosts } from "@/db/schema";
+import { homePosts, users, products } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import Link from "next/link";
 import GlobalHeader from "./components/GlobalHeader";
 import GlobalFooter from "./components/GlobalFooter";
 import LandingSound from "./components/LandingSound";
 import PageViewTracker from "./PageViewTracker";
+import CountdownBanner from "./shop/components/CountdownBanner";
+import { getSetting, COUNTDOWN_KEY, COUNTDOWN_DEFAULT } from "@/app/utils/settings";
 
 export const metadata = { title: "Bellator Streetwear — Home" };
 
@@ -17,11 +19,28 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export default async function HomePage() {
-  const posts = await db
-    .select()
-    .from(homePosts)
-    .where(eq(homePosts.published, true))
-    .orderBy(desc(homePosts.createdAt));
+  const [posts, userCountResult, countdownSetting, upcomingDrops] = await Promise.all([
+    db.select().from(homePosts).where(eq(homePosts.published, true)).orderBy(desc(homePosts.createdAt)),
+    db.select({ id: users.id }).from(users),
+    getSetting(COUNTDOWN_KEY, COUNTDOWN_DEFAULT),
+    db.select({ dropDate: products.dropDate }).from(products),
+  ]);
+
+  const userCount = userCountResult.length;
+
+  // Gleiche Fallback-Logik wie im Shop: wenn kein manueller Countdown aktiv
+  // ist, automatisch auf den nächsten anstehenden Drop-Termin zeigen.
+  let countdown = countdownSetting;
+  if (!countdown.enabled) {
+    const now = Date.now();
+    const nextDrop = upcomingDrops
+      .map((p) => p.dropDate)
+      .filter((d): d is Date => !!d && new Date(d).getTime() > now)
+      .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0];
+    if (nextDrop) {
+      countdown = { enabled: true, targetDate: new Date(nextDrop).toISOString().slice(0, 16), label: "Nächster Drop in" };
+    }
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-black text-white font-mono"
@@ -42,11 +61,21 @@ export default async function HomePage() {
             <p className="text-sm text-zinc-400 leading-relaxed mb-8 max-w-md">
               Streetwear ohne Kompromisse. Jedes Piece ist streng limitiert — wenn es weg ist, ist es weg.
             </p>
-            <Link href="/shop"
-              className="inline-block border-[3px] border-white px-8 py-4 text-sm font-black uppercase tracking-widest text-white hover:bg-white hover:text-black transition-all duration-200">
-              Zum Shop →
-            </Link>
+            <div className="flex items-center gap-3 mb-8">
+              <Link href="/shop"
+                className="inline-block border-[3px] border-white px-8 py-4 text-sm font-black uppercase tracking-widest text-white hover:bg-white hover:text-black transition-all duration-200">
+                Zum Shop →
+              </Link>
+              <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+                <span className="text-white font-bold">{userCount}</span> Aktive User
+              </span>
+            </div>
           </div>
+          {countdown.enabled && (
+            <div className="mt-4">
+              <CountdownBanner initialConfig={countdown} />
+            </div>
+          )}
         </section>
 
         {/* Blog Posts */}
@@ -101,7 +130,7 @@ export default async function HomePage() {
         <section className="w-full border-t border-zinc-800 bg-black/60">
           <div className="max-w-[1400px] mx-auto px-4 sm:px-8 md:px-16 py-12 flex flex-col sm:flex-row items-center justify-between gap-6">
             <div>
-              <h2 className="text-2xl font-black uppercase tracking-tighter text-white">Kein Drop verpassen.</h2>
+              <h2 className="text-2xl font-black uppercase tracking-tighter text-white">Keinen Drop verpassen.</h2>
               <p className="text-xs text-zinc-500 mt-1 uppercase tracking-widest">Discord beitreten für Early-Access und Previews</p>
             </div>
             <a href="https://discord.gg/T4RwVJRyRp" target="_blank" rel="noopener noreferrer"
