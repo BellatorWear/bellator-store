@@ -303,6 +303,47 @@ export async function addColor(formData: FormData) {
   return { success: true };
 }
 
+export async function updateColorImages(formData: FormData) {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
+
+  const id = Number(formData.get("id"));
+  if (!id) return { error: "Ungültig." };
+  const frontImage = (formData.get("frontImage") as string) ?? "";
+  const backImage = (formData.get("backImage") as string) ?? "";
+
+  const existing = await db.select().from(productColors).where(eq(productColors.id, id));
+  if (existing.length === 0) return { error: "Farbe nicht gefunden." };
+
+  const updates: { frontImage?: string; backImage?: string } = {};
+  if (frontImage) {
+    if (!isOwnBlobUrl(frontImage)) return { error: "Ungültiges Bild." };
+    updates.frontImage = frontImage;
+  }
+  if (backImage) {
+    if (!isOwnBlobUrl(backImage)) return { error: "Ungültiges Bild." };
+    updates.backImage = backImage;
+  }
+  if (Object.keys(updates).length === 0) return { error: "Kein neues Bild ausgewählt." };
+
+  await db.update(productColors).set(updates).where(eq(productColors.id, id));
+
+  // Alte Blobs aufräumen, nachdem sie durch die neuen ersetzt wurden.
+  const oldUrls = [
+    frontImage && existing[0].frontImage !== frontImage ? existing[0].frontImage : null,
+    backImage && existing[0].backImage !== backImage ? existing[0].backImage : null,
+  ].filter(Boolean) as string[];
+  for (const url of oldUrls) {
+    try {
+      await del(url);
+    } catch (e) {
+      console.error("Konnte altes Farb-Blob nicht löschen:", url, e);
+    }
+  }
+
+  return { success: true };
+}
+
 export async function deleteColor(formData: FormData) {
   const admin = await requireAdmin();
   if (!admin) return { error: "Keine Berechtigung." };
@@ -665,6 +706,50 @@ export async function createHomePost(formData: FormData) {
     category: ["article", "video", "leak", "makingof"].includes(categoryRaw) ? categoryRaw : "article",
     published: false,
   });
+
+  return { success: true };
+}
+
+export async function updateHomePost(formData: FormData) {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
+
+  const id = Number(formData.get("id"));
+  if (!id) return { error: "Ungültig." };
+
+  const titleRaw = (formData.get("title") as string) ?? "";
+  const bodyRaw = (formData.get("body") as string) ?? "";
+  const bodyHtmlRaw = (formData.get("bodyHtml") as string) ?? "";
+  const attachmentsRaw = (formData.get("attachments") as string) ?? "[]";
+  const imageUrl = (formData.get("imageUrl") as string) ?? "";
+  const videoUrl = (formData.get("videoUrl") as string) ?? "";
+  const categoryRaw = (formData.get("category") as string) ?? "article";
+
+  if (isSuspiciousInput(titleRaw) || isSuspiciousInput(bodyRaw)) return { error: "Ungültige Eingabe." };
+  const title = sanitizeText(titleRaw, 120);
+  if (!title) return { error: "Titel erforderlich." };
+  const bodyHtml = bodyHtmlRaw.trim() ? sanitizeHtml(bodyHtmlRaw, 20000) : null;
+  let attachments: { url: string; name: string }[] = [];
+  try {
+    const parsed = JSON.parse(attachmentsRaw);
+    if (Array.isArray(parsed)) {
+      attachments = parsed
+        .filter((a) => a && typeof a.url === "string" && typeof a.name === "string")
+        .slice(0, 10)
+        .map((a) => ({ url: sanitizeText(a.url, 500), name: sanitizeText(a.name, 200) }));
+    }
+  } catch { /* Anhänge sind optional, Fehler ignorieren */ }
+
+  await db.update(homePosts).set({
+    title,
+    body: sanitizeText(bodyRaw, 5000) || null,
+    bodyHtml,
+    attachments,
+    imageUrl: imageUrl || null,
+    videoUrl: videoUrl || null,
+    category: ["article", "video", "leak", "makingof"].includes(categoryRaw) ? categoryRaw : "article",
+    updatedAt: new Date(),
+  }).where(eq(homePosts.id, id));
 
   return { success: true };
 }

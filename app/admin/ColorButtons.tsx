@@ -1,6 +1,8 @@
 "use client";
 import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { upload } from "@vercel/blob/client";
+import { updateColorImages } from "./actions";
 
 export type ColorItem = { id?: number; name: string; hexColor: string; frontImage: string; backImage: string };
 
@@ -59,6 +61,62 @@ function ImageSlot({
   );
 }
 
+function ExistingColorEditor({ color, onClose, onSaved }: { color: ColorItem; onClose: () => void; onSaved: () => void }) {
+  const [frontImage, setFrontImage] = useState("");
+  const [backImage, setBackImage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function save() {
+    if (!frontImage && !backImage) { setErr("Neues Bild auswählen."); return; }
+    setSaving(true);
+    setErr("");
+    try {
+      const fd = new FormData();
+      fd.append("id", String(color.id));
+      fd.append("frontImage", frontImage);
+      fd.append("backImage", backImage);
+      const res = await updateColorImages(fd);
+      if (res?.error) { setErr(res.error); return; }
+      onSaved();
+    } catch (e) {
+      console.error("Farbbild speichern fehlgeschlagen:", e);
+      setErr("Fehler. Bitte nochmal versuchen.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="border border-zinc-700 p-3 space-y-3 max-w-sm">
+      <p className="text-[10px] text-zinc-400 uppercase tracking-widest">
+        Bilder für &quot;{color.name}&quot; ersetzen (leer lassen = unverändert)
+      </p>
+      <div className="flex gap-3">
+        <div>
+          <p className="text-[8px] text-zinc-600 uppercase tracking-widest mb-1 text-center">Aktuell</p>
+          <ImageSlot label="Vorderseite" url={frontImage || color.frontImage} onUploaded={setFrontImage} />
+        </div>
+        <div>
+          <p className="text-[8px] text-zinc-600 uppercase tracking-widest mb-1 text-center">Aktuell</p>
+          <ImageSlot label="Rückseite" url={backImage || color.backImage} onUploaded={setBackImage} />
+        </div>
+      </div>
+      {err && <p className="text-[9px] text-red-500 uppercase tracking-widest">{err}</p>}
+      <div className="flex gap-2">
+        <button type="button" onClick={save} disabled={saving}
+          className="border border-zinc-500 px-3 py-1.5 text-[10px] uppercase tracking-widest font-bold hover:bg-white hover:text-black transition disabled:opacity-50">
+          {saving ? "..." : "Speichern"}
+        </button>
+        <button type="button" onClick={onClose} disabled={saving}
+          className="border border-zinc-700 px-3 py-1.5 text-[10px] uppercase tracking-widest text-zinc-400">
+          Abbrechen
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ColorButtons({
   colors,
   onAdd,
@@ -76,6 +134,8 @@ export default function ColorButtons({
   const [frontImage, setFrontImage] = useState("");
   const [backImage, setBackImage] = useState("");
   const [err, setErr] = useState("");
+  const [editingColorId, setEditingColorId] = useState<number | null>(null);
+  const router = useRouter();
 
   async function confirmAdd() {
     setErr("");
@@ -88,23 +148,45 @@ export default function ColorButtons({
 
   return (
     <div>
-      <label className="block text-[10px] text-zinc-500 uppercase tracking-widest mb-2">Farben</label>
+      <label className="block text-[10px] text-zinc-500 uppercase tracking-widest mb-2">
+        Farben <span className="text-zinc-600 normal-case">(Klick = Bilder bearbeiten)</span>
+      </label>
       <div className="flex flex-wrap gap-2 mb-2">
         {colors.map((c) => (
-          <button
-            key={c.name}
-            type="button"
-            onClick={() => onRemove(c)}
-            disabled={loading}
-            title={`${c.name} - Klicken zum Entfernen`}
-            className="w-12 h-12 border border-zinc-600 hover:border-red-500 transition-all disabled:opacity-50"
-            style={{ backgroundColor: c.hexColor }}
-          />
+          <div key={c.id ?? c.name} className="flex flex-col items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setEditingColorId(editingColorId === c.id ? null : (c.id ?? null))}
+              disabled={loading}
+              title={`${c.name} - Klicken zum Bearbeiten`}
+              className={`w-12 h-12 border transition-all disabled:opacity-50 ${editingColorId === c.id ? "border-white border-2" : "border-zinc-600 hover:border-white"}`}
+              style={{ backgroundColor: c.hexColor }}
+            />
+            <button
+              type="button"
+              onClick={() => onRemove(c)}
+              disabled={loading}
+              title={`${c.name} entfernen`}
+              className="text-[8px] text-zinc-600 hover:text-red-500 transition uppercase tracking-widest"
+            >
+              Entfernen
+            </button>
+          </div>
         ))}
         {colors.length === 0 && !adding && (
           <p className="text-[10px] text-zinc-600 self-center">Noch keine Farben.</p>
         )}
       </div>
+
+      {editingColorId !== null && (
+        <div className="mb-3">
+          <ExistingColorEditor
+            color={colors.find((c) => c.id === editingColorId)!}
+            onClose={() => setEditingColorId(null)}
+            onSaved={() => { setEditingColorId(null); router.refresh(); }}
+          />
+        </div>
+      )}
 
       {adding ? (
         <div className="border border-zinc-700 p-3 space-y-3 max-w-sm">
