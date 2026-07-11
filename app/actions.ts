@@ -182,7 +182,7 @@ export async function handleAction(
       };
     }
 
-    const email = formData.get("email") as string;
+    const email = ((formData.get("email") as string) ?? "").trim().toLowerCase();
     const password = formData.get("password") as string;
 
     if (!email || !password)
@@ -282,7 +282,7 @@ export async function handleAction(
 
   // --- EMAIL BESTÄTIGUNG ANFORDERN (Magic Link) ---
   if (actionType === "request") {
-    const email = formData.get("email") as string;
+    const email = ((formData.get("email") as string) ?? "").trim().toLowerCase();
 
     if (!email || typeof email !== "string")
       return { error: "Ungültige Eingabe" };
@@ -317,21 +317,20 @@ export async function handleAction(
       // Access Key schon generieren und speichern (wird in der Email angezeigt)
       const accessKey = generateAccessKey();
 
-      // User anlegen falls nicht vorhanden
+      // User anlegen falls nicht vorhanden. Atomarer Upsert statt
+      // "select, dann insert falls leer" - bei zwei gleichzeitigen
+      // Anfragen (Doppelklick, zwei Tabs) konnten vorher beide die
+      // Existenzprüfung passieren, bevor die erste INSERT fertig war,
+      // wodurch zwei User-Zeilen mit derselben Email entstanden.
+      await db.insert(users).values({ email }).onConflictDoNothing({ target: users.email });
       const existingUser = await db
         .select()
         .from(users)
         .where(eq(users.email, email));
-      let userId: number;
       if (existingUser.length === 0) {
-        const newUser = await db
-          .insert(users)
-          .values({ email })
-          .returning({ id: users.id });
-        userId = newUser[0].id;
-      } else {
-        userId = existingUser[0].id;
+        return { error: "Account konnte nicht angelegt werden. Bitte nochmal versuchen." };
       }
+      const userId = existingUser[0].id;
 
       // Access Key in DB speichern (läuft nach 7 Tagen automatisch ab)
       const accessKeyExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -660,7 +659,7 @@ export async function handleAction(
   // Alter Name bleibt erhalten für das Sold-Out-Formular auf der Shop-Seite,
   // das auch von Gästen (ohne Account) genutzt werden kann.
   if (actionType === "subscribeNewsletter") {
-    const email = formData.get("email") as string;
+    const email = ((formData.get("email") as string) ?? "").trim().toLowerCase();
     if (!email) return { error: "Email erforderlich." };
     try {
       await db.insert(newsletter).values({ email }).onConflictDoNothing();
