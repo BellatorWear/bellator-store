@@ -705,6 +705,49 @@ export async function createNewsPost(formData: FormData) {
   };
 }
 
+export async function updateNewsPost(formData: FormData) {
+  const admin = await requireRole("news-channel");
+  if (!admin || !canEditPosts(admin.resolvedRole)) return { error: "Keine Berechtigung." };
+
+  const id = Number(formData.get("id"));
+  if (!id) return { error: "Ungültig." };
+  const titleRaw = (formData.get("title") as string) ?? "";
+  const bodyRaw = (formData.get("body") as string) ?? "";
+  const bodyHtmlRaw = (formData.get("bodyHtml") as string) ?? "";
+  const attachmentsRaw = (formData.get("attachments") as string) ?? "[]";
+
+  if (isSuspiciousInput(titleRaw) || isSuspiciousInput(bodyRaw)) return { error: "Ungültige Eingabe." };
+  const title = sanitizeText(titleRaw, 100);
+  const body = sanitizeText(bodyRaw, 2000);
+  if (!title || !body) return { error: "Titel und Text erforderlich." };
+  const bodyHtml = bodyHtmlRaw.trim() ? sanitizeHtml(bodyHtmlRaw, 20000) : null;
+  let attachments: { url: string; name: string }[] = [];
+  try {
+    const parsed = JSON.parse(attachmentsRaw);
+    if (Array.isArray(parsed)) {
+      attachments = parsed
+        .filter((a) => a && typeof a.url === "string" && typeof a.name === "string")
+        .slice(0, 10)
+        .map((a) => ({ url: sanitizeText(a.url, 500), name: sanitizeText(a.name, 200) }));
+    }
+  } catch { /* Anhänge sind optional, Fehler ignorieren */ }
+
+  // Bearbeiten korrigiert nur den gespeicherten Datensatz - schickt NICHT
+  // erneut Push/Mail raus, das ist schon einmal beim Anlegen passiert.
+  await db.update(newsPosts).set({ title, body, bodyHtml, attachments }).where(eq(newsPosts.id, id));
+  return { success: true };
+}
+
+export async function deleteNewsPost(formData: FormData) {
+  const admin = await requireRole("news-channel");
+  if (!admin || !canEditPosts(admin.resolvedRole)) return { error: "Keine Berechtigung." };
+
+  const id = Number(formData.get("id"));
+  if (!id) return { error: "Ungültig." };
+  await db.delete(newsPosts).where(eq(newsPosts.id, id));
+  return { success: true };
+}
+
 // ===================================================================
 // Startseiten-Blog-Posts
 // ===================================================================
@@ -719,6 +762,8 @@ export async function createHomePost(formData: FormData) {
   const imageUrl = (formData.get("imageUrl") as string) ?? "";
   const videoUrl = (formData.get("videoUrl") as string) ?? "";
   const categoryRaw = (formData.get("category") as string) ?? "article";
+  const scheduledForRaw = (formData.get("scheduledFor") as string) ?? "";
+  const scheduledFor = scheduledForRaw && new Date(scheduledForRaw) > new Date() ? new Date(scheduledForRaw) : null;
 
   if (isSuspiciousInput(titleRaw) || isSuspiciousInput(bodyRaw)) return { error: "Ungültige Eingabe." };
   const title = sanitizeText(titleRaw, 120);
@@ -744,6 +789,7 @@ export async function createHomePost(formData: FormData) {
     videoUrl: videoUrl || null,
     category: ["article", "video", "leak", "makingof"].includes(categoryRaw) ? categoryRaw : "article",
     published: false,
+    scheduledFor,
   });
 
   return { success: true };
@@ -763,6 +809,8 @@ export async function updateHomePost(formData: FormData) {
   const imageUrl = (formData.get("imageUrl") as string) ?? "";
   const videoUrl = (formData.get("videoUrl") as string) ?? "";
   const categoryRaw = (formData.get("category") as string) ?? "article";
+  const scheduledForRaw = (formData.get("scheduledFor") as string) ?? "";
+  const scheduledFor = scheduledForRaw && new Date(scheduledForRaw) > new Date() ? new Date(scheduledForRaw) : null;
 
   if (isSuspiciousInput(titleRaw) || isSuspiciousInput(bodyRaw)) return { error: "Ungültige Eingabe." };
   const title = sanitizeText(titleRaw, 120);
@@ -787,6 +835,7 @@ export async function updateHomePost(formData: FormData) {
     imageUrl: imageUrl || null,
     videoUrl: videoUrl || null,
     category: ["article", "video", "leak", "makingof"].includes(categoryRaw) ? categoryRaw : "article",
+    scheduledFor,
     updatedAt: new Date(),
   }).where(eq(homePosts.id, id));
 

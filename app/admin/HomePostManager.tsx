@@ -15,6 +15,7 @@ type Post = {
   videoUrl: string | null;
   category: string | null;
   published: boolean | null;
+  scheduledFor: Date | null;
   createdAt: Date | null;
 };
 
@@ -33,6 +34,7 @@ export default function HomePostManager({ posts, canEdit = true }: { posts: Post
   const [imageUrl, setImageUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [category, setCategory] = useState("article");
+  const [scheduledFor, setScheduledFor] = useState("");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -54,10 +56,11 @@ export default function HomePostManager({ posts, canEdit = true }: { posts: Post
       fd.append("imageUrl", imageUrl);
       fd.append("videoUrl", videoUrl);
       fd.append("category", category);
+      fd.append("scheduledFor", scheduledFor);
       const res = await createHomePost(fd);
       if (res?.error) { setMsg({ text: res.error, type: "error" }); return; }
-      setMsg({ text: "✓ Post angelegt.", type: "success" });
-      setTitle(""); setBody(""); setBodyHtml(""); setAttachments([]); setImageUrl(""); setVideoUrl(""); setCategory("article");
+      setMsg({ text: scheduledFor ? "✓ Post geplant." : "✓ Post angelegt.", type: "success" });
+      setTitle(""); setBody(""); setBodyHtml(""); setAttachments([]); setImageUrl(""); setVideoUrl(""); setCategory("article"); setScheduledFor("");
       router.refresh();
     } catch (err) {
       console.error("Home-Post Fehler:", err);
@@ -110,6 +113,13 @@ export default function HomePostManager({ posts, canEdit = true }: { posts: Post
           <input value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="Video-URL (optional, YouTube embed)"
             className="flex-1 bg-zinc-900 border border-zinc-700 p-2 text-sm text-white placeholder:text-zinc-600" />
         </div>
+        <div>
+          <p className="text-[9px] text-zinc-600 uppercase tracking-widest mb-1">
+            Automatisch veröffentlichen am (optional - leer lassen für sofort als Entwurf anlegen)
+          </p>
+          <input type="datetime-local" value={scheduledFor} onChange={e => setScheduledFor(e.target.value)}
+            className="bg-zinc-900 border border-zinc-700 p-2 text-sm text-white" />
+        </div>
         {msg && <p className={`text-[10px] uppercase tracking-widest ${msg.type === "error" ? "text-red-500" : "text-green-500"}`}>{msg.text}</p>}
         <button type="submit" disabled={loading}
           className="border border-zinc-500 px-4 py-2 text-[10px] uppercase tracking-widest font-bold hover:bg-white hover:text-black transition-all disabled:opacity-50">
@@ -129,6 +139,11 @@ export default function HomePostManager({ posts, canEdit = true }: { posts: Post
                 <span className="text-xs font-bold text-white truncate">{post.title}</span>
               </div>
               <div className="flex items-center gap-2">
+                {post.scheduledFor && !post.published && (
+                  <span className="text-[9px] border border-yellow-700 text-yellow-500 px-2 py-1 uppercase tracking-widest whitespace-nowrap">
+                    Geplant für {new Date(post.scheduledFor).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })}
+                  </span>
+                )}
                 <button onClick={() => togglePublish(post.id)}
                   className={`text-[10px] border px-2 py-1 uppercase tracking-widest transition ${
                     post.published ? "border-green-700 text-green-400 hover:bg-red-900/20 hover:border-red-700 hover:text-red-400" : "border-zinc-600 text-zinc-500 hover:border-green-700 hover:text-green-400"
@@ -176,6 +191,9 @@ function PostEditForm({ post, onSaved, onCancel }: { post: Post; onSaved: () => 
   const [imageUrl, setImageUrl] = useState(post.imageUrl ?? "");
   const [videoUrl, setVideoUrl] = useState(post.videoUrl ?? "");
   const [category, setCategory] = useState(post.category ?? "article");
+  const [scheduledFor, setScheduledFor] = useState(
+    post.scheduledFor ? new Date(post.scheduledFor).toISOString().slice(0, 16) : ""
+  );
   const [uploadingImage, setUploadingImage] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -212,6 +230,7 @@ function PostEditForm({ post, onSaved, onCancel }: { post: Post; onSaved: () => 
       fd.append("imageUrl", imageUrl);
       fd.append("videoUrl", videoUrl);
       fd.append("category", category);
+      fd.append("scheduledFor", scheduledFor);
       const res = await updateHomePost(fd);
       if (res?.error) { setErr(res.error); return; }
       onSaved();
@@ -265,6 +284,13 @@ function PostEditForm({ post, onSaved, onCancel }: { post: Post; onSaved: () => 
       </div>
       <input value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="Video-URL (optional)"
         className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white placeholder:text-zinc-600" />
+      <div>
+        <p className="text-[9px] text-zinc-600 uppercase tracking-widest mb-1">
+          Automatisch veröffentlichen am (optional - leer lassen, um es unverändert zu lassen)
+        </p>
+        <input type="datetime-local" value={scheduledFor} onChange={e => setScheduledFor(e.target.value)}
+          className="bg-zinc-900 border border-zinc-700 p-2 text-sm text-white" />
+      </div>
 
       {err && <p className="text-[10px] text-red-500 uppercase tracking-widest">{err}</p>}
       <div className="flex gap-2">

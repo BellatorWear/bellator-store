@@ -285,6 +285,7 @@ export const homePosts = pgTable("home_posts", {
   videoUrl: text("video_url"),
   category: text("category").notNull().default("article"),
   published: boolean("published").default(false),
+  scheduledFor: timestamp("scheduled_for"), // wenn gesetzt: automatisch veröffentlichen, sobald erreicht
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
