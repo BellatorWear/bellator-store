@@ -1,10 +1,16 @@
 export default function AdminLoading() {
   return (
-    <main className="min-h-screen bg-black p-4 sm:p-8 space-y-4 max-w-3xl mx-auto">
-      <div className="skeleton h-10 w-1/2" />
-      <div className="skeleton h-40 w-full" />
-      <div className="skeleton h-24 w-full" />
-      <div className="skeleton h-24 w-full" />
+    <main className="min-h-screen bg-black" style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed", filter: "brightness(0.85)" }}>
+      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-8 space-y-8">
+        <div className="skeleton h-14 w-1/2" />
+        <div className="skeleton h-12 w-full" />
+        <div className="space-y-3">
+          <div className="skeleton h-14 w-full" />
+          <div className="skeleton h-14 w-full" />
+          <div className="skeleton h-14 w-full" />
+          <div className="skeleton h-14 w-full" />
+        </div>
+      </div>
     </main>
   );
 }

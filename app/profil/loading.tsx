@@ -1,10 +1,16 @@
 export default function ProfilLoading() {
   return (
-    <main className="min-h-screen p-4 sm:p-8 space-y-4 max-w-2xl mx-auto">
-      <div className="skeleton h-16 w-full" />
-      <div className="skeleton h-32 w-full" />
-      <div className="skeleton h-24 w-full" />
-      <div className="skeleton h-24 w-full" />
+    <main className="min-h-screen bg-black" style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed", filter: "brightness(0.85)" }}>
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="skeleton h-20 w-full lg:col-span-2" />
+          <div className="skeleton h-40 w-full" />
+          <div className="skeleton h-40 w-full" />
+          <div className="skeleton h-32 w-full" />
+          <div className="skeleton h-32 w-full" />
+          <div className="skeleton h-24 w-full lg:col-span-2" />
+        </div>
+      </div>
     </main>
   );
 }
