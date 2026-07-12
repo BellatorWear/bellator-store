@@ -104,7 +104,7 @@ export default async function HomePage() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {posts.map((post) => (
-                <article key={post.id} className="border border-zinc-700 bg-black/80 flex flex-col hover:border-zinc-500 transition-all group">
+                <Link key={post.id} href={`/post/${post.id}`} className="border border-zinc-700 bg-black/80 flex flex-col hover:border-zinc-500 transition-all group">
                   {post.imageUrl && (
                     <div className="aspect-video overflow-hidden border-b border-zinc-800">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -112,8 +112,8 @@ export default async function HomePage() {
                     </div>
                   )}
                   {post.videoUrl && !post.imageUrl && (
-                    <div className="aspect-video border-b border-zinc-800">
-                      <iframe src={post.videoUrl} className="w-full h-full" allow="autoplay; encrypted-media" allowFullScreen />
+                    <div className="aspect-video border-b border-zinc-800 pointer-events-none">
+                      <iframe src={post.videoUrl} className="w-full h-full" allow="autoplay; encrypted-media" allowFullScreen tabIndex={-1} />
                     </div>
                   )}
                   <div className="p-5 flex-1 flex flex-col">
@@ -130,7 +130,7 @@ export default async function HomePage() {
                       <p className="text-xs text-zinc-400 mt-2 leading-relaxed line-clamp-3">{post.body}</p>
                     )}
                   </div>
-                </article>
+                </Link>
               ))}
             </div>
           )}

@@ -1,8 +1,11 @@
 "use client";
 import { useState, useMemo } from "react";
+import Link from "next/link";
 
 type Attachment = { url: string; name: string };
-type Post = {
+
+type NewsletterPost = {
+  type: "newsletter";
   id: number;
   title: string;
   body: string;
@@ -10,6 +13,28 @@ type Post = {
   attachments: Attachment[] | null;
   createdAt: Date | null;
   emailSentAt: Date | null;
+};
+
+type HomePost = {
+  type: "home";
+  id: number;
+  title: string;
+  body: string | null;
+  bodyHtml: string | null;
+  attachments: Attachment[] | null;
+  createdAt: Date | null;
+  category: string | null;
+  imageUrl: string | null;
+  videoUrl: string | null;
+};
+
+type Post = NewsletterPost | HomePost;
+
+const CATEGORY_LABELS: Record<string, string> = {
+  article: "Artikel",
+  video: "Video",
+  leak: "Leak",
+  makingof: "Making Of",
 };
 
 export default function NewsClient({ posts }: { posts: Post[] }) {
@@ -20,7 +45,7 @@ export default function NewsClient({ posts }: { posts: Post[] }) {
     if (!query.trim()) return posts;
     const q = query.toLowerCase();
     return posts.filter(p =>
-      p.title.toLowerCase().includes(q) || p.body.toLowerCase().includes(q)
+      p.title.toLowerCase().includes(q) || (p.body ?? "").toLowerCase().includes(q)
     );
   }, [posts, query]);
 
@@ -47,12 +72,47 @@ export default function NewsClient({ posts }: { posts: Post[] }) {
       ) : (
         <div className="space-y-4">
           {filtered.map(post => {
+            // Startseiten-Posts (Artikel/Video/Leak/Making-Of) verlinken direkt
+            // auf ihre eigene Detailseite statt hier inline aufzuklappen -
+            // dort gibt es auch das Titelbild/Video in voller Größe.
+            if (post.type === "home") {
+              return (
+                <Link
+                  key={`home-${post.id}`}
+                  href={`/post/${post.id}`}
+                  className="block border border-zinc-700 bg-black/80 p-5 sm:p-6 hover:border-zinc-500 transition-all"
+                >
+                  <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] uppercase tracking-widest text-zinc-500 border border-zinc-700 px-2 py-0.5">
+                        {CATEGORY_LABELS[post.category ?? "article"] ?? post.category}
+                      </span>
+                      <h2 className="text-base font-black uppercase tracking-tight text-white">{post.title}</h2>
+                    </div>
+                    <span className="text-[10px] text-zinc-600 uppercase tracking-widest whitespace-nowrap">
+                      {new Date(post.createdAt ?? Date.now()).toLocaleDateString("de-DE", {
+                        day: "2-digit", month: "2-digit", year: "numeric",
+                      })}
+                    </span>
+                  </div>
+                  {post.body && (
+                    <p className="text-sm text-zinc-400 leading-relaxed line-clamp-2">{post.body}</p>
+                  )}
+                  <span className="mt-4 inline-block text-[10px] uppercase tracking-widest border border-zinc-700 px-3 py-1.5 hover:bg-white hover:text-black transition-all">
+                    Weiterlesen →
+                  </span>
+                </Link>
+              );
+            }
+
+            // Newsletter-Mails behalten das bisherige Verhalten: Inline
+            // aufklappbar, zeigt die tatsächlich versendete Mail-Ansicht.
             const expanded = expandedId === post.id;
             const contentHtml = post.bodyHtml?.trim()
               ? post.bodyHtml
               : `<p style="line-height:1.6; white-space:pre-wrap;">${post.body}</p>`;
             return (
-              <article key={post.id} className="border border-zinc-700 bg-black/80 p-5 sm:p-6 hover:border-zinc-500 transition-all">
+              <article key={`newsletter-${post.id}`} className="border border-zinc-700 bg-black/80 p-5 sm:p-6 hover:border-zinc-500 transition-all">
                 <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
                   <h2 className="text-base font-black uppercase tracking-tight text-white">{post.title}</h2>
                   <span className="text-[10px] text-zinc-600 uppercase tracking-widest whitespace-nowrap">
