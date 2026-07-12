@@ -1,13 +1,17 @@
 "use client";
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { handleAction } from "../actions";
 
 // Nach erfolgreichem Login übernimmt ausschließlich der globale
 // ProfileSetupGuard (Root-Layout) das Passwort/Username-Setup - siehe
 // Kommentar in app/login/page.tsx für den Hintergrund.
-export default function AccessKeyPage() {
+function AccessKeyForm() {
   const [msg, setMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [loading, setLoading] = useState(false);
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") || "/";
+  const nextQuery = next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
@@ -16,7 +20,7 @@ export default function AccessKeyPage() {
       formData.append("actionType", "loginWithKey");
       const res = await handleAction(formData);
       if (res?.error) { setMsg({ text: res.error, type: "error" }); return; }
-      if (res?.success === true) window.location.href = "/";
+      if (res?.success === true) window.location.href = next;
     } catch (e) {
       console.error("Login mit Access Key fehlgeschlagen:", e);
       setMsg({ text: "Fehler. Bitte nochmal versuchen.", type: "error" });
@@ -33,6 +37,7 @@ export default function AccessKeyPage() {
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundAttachment: "fixed",
+        filter: "brightness(0.85)",
       }}
     >
       <div className="absolute inset-0 bg-black/60 z-0" />
@@ -52,9 +57,16 @@ export default function AccessKeyPage() {
             {loading ? "..." : "Einloggen"}
           </button>
         </form>
-        <a href="/login" className="mt-6 block w-full text-[10px] text-zinc-500 uppercase tracking-widest hover:text-white transition text-center">
-          ← Zurück zum Login
-        </a>
+        <div className="mt-6 flex flex-wrap gap-2">
+          <a href={`/login${nextQuery}`}
+            className="flex-1 min-w-[45%] border border-zinc-600 py-2 text-center text-[10px] text-zinc-400 uppercase tracking-widest font-bold hover:bg-white hover:text-black hover:border-white transition-all">
+            ← Zurück zum Login
+          </a>
+          <a href={`/auth${nextQuery}`}
+            className="flex-1 min-w-[45%] border border-zinc-600 py-2 text-center text-[10px] text-zinc-400 uppercase tracking-widest font-bold hover:bg-white hover:text-black hover:border-white transition-all">
+            Andere Methode
+          </a>
+        </div>
         {msg && (
           <p className={`mt-4 text-[10px] text-center uppercase tracking-widest ${msg.type === "error" ? "text-red-600" : "text-green-500"}`}>
             {msg.text}
@@ -62,5 +74,13 @@ export default function AccessKeyPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function AccessKeyPage() {
+  return (
+    <Suspense fallback={null}>
+      <AccessKeyForm />
+    </Suspense>
   );
 }

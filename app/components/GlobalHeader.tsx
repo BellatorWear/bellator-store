@@ -22,6 +22,7 @@ export default async function GlobalHeader() {
         cartCount={cartCount}
         isAdmin={user?.isAdmin ?? false}
         username={user?.username ?? null}
+        isLoggedIn={!!user}
       />
     </header>
   );

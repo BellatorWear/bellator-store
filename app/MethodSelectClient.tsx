@@ -1,10 +1,14 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { handleAction } from "./actions";
 
 export default function MethodSelectClient() {
   const [loading, setLoading] = useState(false);
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") || "/";
+  const nextQuery = next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
 
   async function handleGuest() {
     setLoading(true);
@@ -12,7 +16,7 @@ export default function MethodSelectClient() {
       const fd = new FormData();
       fd.append("actionType", "guestLogin");
       const res = await handleAction(fd);
-      if (res?.success) window.location.href = "/";
+      if (res?.success) window.location.href = next;
     } catch (e) {
       console.error("Gast-Login fehlgeschlagen:", e);
     } finally {
@@ -28,6 +32,7 @@ export default function MethodSelectClient() {
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundAttachment: "fixed",
+        filter: "brightness(0.85)",
       }}
     >
       <div className="absolute inset-0 bg-black/60 z-0" />
@@ -38,15 +43,15 @@ export default function MethodSelectClient() {
         </p>
 
         <div className="space-y-3">
-          <Link href="/login"
+          <Link href={`/login${nextQuery}`}
             className="block w-full border border-zinc-500 py-3 text-center font-bold text-xs uppercase tracking-widest hover:bg-white hover:text-black transition-all">
             Anmelden
           </Link>
-          <Link href="/accesskey"
+          <Link href={`/accesskey${nextQuery}`}
             className="block w-full border border-zinc-500 py-3 text-center font-bold text-xs uppercase tracking-widest hover:bg-white hover:text-black transition-all">
             Access-Key Eingeben
           </Link>
-          <Link href="/registrieren"
+          <Link href={`/registrieren${nextQuery}`}
             className="block w-full border border-zinc-500 py-3 text-center font-bold text-xs uppercase tracking-widest hover:bg-white hover:text-black transition-all">
             Registrieren
           </Link>

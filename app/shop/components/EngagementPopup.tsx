@@ -34,9 +34,18 @@ export default function EngagementPopup({
     return () => clearTimeout(timer);
   }, [initialNewsletterOptIn, initialPushEnabled]);
 
-  function dismiss() {
+  function finish() {
+    // Nur für diese Seitenansicht schließen - kein Cookie. Wenn beide
+    // Einstellungen jetzt an sind, taucht das Popup beim nächsten Besuch
+    // ohnehin nicht mehr auf. Vorher setzte "Fertig" fälschlich dasselbe
+    // 14-Tage-Cookie wie ein Snooze, wodurch das Popup nach einmaligem
+    // Wegklicken wochenlang gar nicht mehr auftauchte.
+    setShow(false);
+  }
+
+  function dismissForAWeek() {
     // Nicht sicherheitsrelevant — reines UI-Cookie, daher direkt im Client gesetzt.
-    document.cookie = `${DISMISS_COOKIE}=1; max-age=${60 * 60 * 24 * 14}; path=/; samesite=strict`;
+    document.cookie = `${DISMISS_COOKIE}=1; max-age=${60 * 60 * 24 * 7}; path=/; samesite=strict`;
     setShow(false);
   }
 
@@ -74,9 +83,13 @@ export default function EngagementPopup({
           )}
         </div>
 
-        <button onClick={dismiss}
+        <button onClick={finish}
           className="mt-6 w-full t-btn-outline py-3 font-black text-xs uppercase tracking-widest transition-all">
           Fertig
+        </button>
+        <button onClick={dismissForAWeek}
+          className="mt-3 w-full text-[10px] t-muted uppercase tracking-widest hover:t-text transition text-center">
+          Ignorieren (für 7 Tage nicht mehr zeigen)
         </button>
       </div>
     </div>,

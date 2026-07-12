@@ -1,12 +1,16 @@
 "use client";
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { handleAction } from "../actions";
 import { Eye, EyeOff } from "lucide-react";
 
-export default function LoginPage() {
+function LoginForm() {
   const [msg, setMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") || "/";
+  const nextQuery = next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
 
   // Nach erfolgreichem Login übernimmt AUSSCHLIESSLICH der globale
   // ProfileSetupGuard (im Root-Layout) das Abfragen von Passwort/Username,
@@ -21,7 +25,7 @@ export default function LoginPage() {
     try {
       const res = await handleAction(formData);
       if (res?.error) { setMsg({ text: res.error, type: "error" }); return; }
-      if (res?.success === true) window.location.href = "/";
+      if (res?.success === true) window.location.href = next;
     } catch (e) {
       console.error("Login fehlgeschlagen:", e);
       setMsg({ text: "Fehler. Bitte nochmal versuchen.", type: "error" });
@@ -35,7 +39,7 @@ export default function LoginPage() {
       const fd = new FormData();
       fd.append("actionType", "guestLogin");
       const res = await handleAction(fd);
-      if (res?.success) window.location.href = "/";
+      if (res?.success) window.location.href = next;
     } catch (e) {
       console.error("Gast-Login fehlgeschlagen:", e);
     }
@@ -49,6 +53,7 @@ export default function LoginPage() {
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundAttachment: "fixed",
+        filter: "brightness(0.85)",
       }}
     >
       <div className="absolute inset-0 bg-black/60 z-0" />
@@ -76,17 +81,17 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 space-y-3 border-t border-white/20 pt-4">
-          <a href="/" className="block w-full text-[11px] text-white/60 uppercase tracking-widest hover:text-white transition text-center">
-            ← Andere Methode wählen
+        <div className="mt-6 flex flex-wrap gap-2 border-t border-white/20 pt-4">
+          <a href={`/auth${nextQuery}`}
+            className="flex-1 min-w-[45%] border border-white/30 py-2 text-center text-[10px] text-white/70 uppercase tracking-widest font-bold hover:bg-white hover:text-black hover:border-white transition-all">
+            ← Andere Methode
           </a>
-          <a href="/accesskey" className="block w-full text-[11px] text-white/60 uppercase tracking-widest hover:text-white transition text-center">
-            Mit Access Key einloggen
+          <a href={`/registrieren${nextQuery}`}
+            className="flex-1 min-w-[45%] border border-white/30 py-2 text-center text-[10px] text-white/70 uppercase tracking-widest font-bold hover:bg-white hover:text-black hover:border-white transition-all">
+            Registrieren
           </a>
-          <a href="/registrieren" className="block w-full text-[11px] text-white/80 uppercase tracking-widest hover:text-white transition text-center">
-            Noch kein Account? → Registrieren
-          </a>
-          <button onClick={handleGuest} className="w-full text-[11px] text-white/50 uppercase tracking-widest hover:text-white/80 transition">
+          <button onClick={handleGuest}
+            className="w-full border border-white/30 py-2 text-center text-[10px] text-white/70 uppercase tracking-widest font-bold hover:bg-white hover:text-black hover:border-white transition-all">
             Als Gast fortfahren →
           </button>
         </div>
@@ -102,5 +107,13 @@ export default function LoginPage() {
         Impressum
       </a>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

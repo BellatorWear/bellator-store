@@ -8,6 +8,7 @@ type NavProps = {
   cartCount?: number;
   isAdmin?: boolean;
   username?: string | null;
+  isLoggedIn?: boolean;
 };
 
 const LINKS = [
@@ -20,7 +21,7 @@ const LINKS = [
   { href: "/mehr", label: "Mehr" },
 ];
 
-export default function HamburgerNav({ cartCount = 0, isAdmin, username }: NavProps) {
+export default function HamburgerNav({ cartCount = 0, isAdmin, username, isLoggedIn }: NavProps) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const redeemRef = useRef<RedeemCodeButtonHandle | null>(null);
@@ -57,6 +58,18 @@ export default function HamburgerNav({ cartCount = 0, isAdmin, username }: NavPr
           <div className="px-5 py-3 border-b border-zinc-800">
             <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Eingeloggt als</p>
             <p className="text-sm font-bold text-white mt-0.5">{username}</p>
+          </div>
+        )}
+
+        {!isLoggedIn && (
+          <div className="px-5 py-4 border-b border-zinc-800">
+            <Link
+              href="/login"
+              onClick={() => setOpen(false)}
+              className="block w-full bg-white text-black text-center py-3 text-xs font-black uppercase tracking-widest hover:bg-zinc-200 transition-all"
+            >
+              Login
+            </Link>
           </div>
         )}
 

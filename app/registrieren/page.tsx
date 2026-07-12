@@ -1,13 +1,17 @@
 "use client";
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { handleAction } from "../actions";
 
-export default function RegistrierenPage() {
+function RegistrierenForm() {
   const [msg, setMsg] = useState<{
     text: string;
     type: "success" | "error";
   } | null>(null);
   const [loading, setLoading] = useState(false);
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") || "/";
+  const nextQuery = next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
@@ -47,12 +51,16 @@ export default function RegistrierenPage() {
             {loading ? "..." : "Zugang anfordern"}
           </button>
         </form>
-        <a
-          href="/login"
-          className="mt-6 block w-full text-[10px] text-zinc-500 uppercase tracking-widest hover:text-white transition text-center"
-        >
-          ← Zurück zum Login
-        </a>
+        <div className="mt-6 flex flex-wrap gap-2">
+          <a href={`/login${nextQuery}`}
+            className="flex-1 min-w-[45%] border border-zinc-600 py-2 text-center text-[10px] text-zinc-400 uppercase tracking-widest font-bold hover:bg-white hover:text-black hover:border-white transition-all">
+            ← Zurück zum Login
+          </a>
+          <a href={`/auth${nextQuery}`}
+            className="flex-1 min-w-[45%] border border-zinc-600 py-2 text-center text-[10px] text-zinc-400 uppercase tracking-widest font-bold hover:bg-white hover:text-black hover:border-white transition-all">
+            Andere Methode
+          </a>
+        </div>
         {msg && (
           <p
             className={`mt-4 text-[10px] text-center uppercase tracking-widest ${msg.type === "error" ? "text-red-600" : "text-green-500"}`}
@@ -62,5 +70,13 @@ export default function RegistrierenPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function RegistrierenPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegistrierenForm />
+    </Suspense>
   );
 }

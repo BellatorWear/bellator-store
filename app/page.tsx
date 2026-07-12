@@ -48,7 +48,7 @@ export default async function HomePage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-black text-white font-mono"
-      style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
+      style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed", filter: "brightness(0.85)" }}>
       <div className="relative z-10 flex flex-col min-h-screen t-invert">
       <div className="absolute inset-0 bg-black/35 z-0 pointer-events-none" />
         <GlobalHeader />
@@ -67,12 +67,12 @@ export default async function HomePage() {
             </p>
             <div className="mb-8 lg:mb-0 flex flex-wrap items-center gap-3">
               <Link href="/shop"
-                className="inline-block border-[3px] border-white px-8 py-4 text-sm font-black uppercase tracking-widest text-white hover:bg-white hover:text-black transition-all duration-200">
+                className="inline-block bg-white border-[3px] border-white px-8 py-4 text-sm font-black uppercase tracking-widest text-black hover:bg-transparent hover:text-white transition-all duration-200">
                 Zum Shop →
               </Link>
               {!user && (
                 <Link href="/login"
-                  className="inline-block border-[3px] border-zinc-600 px-8 py-4 text-sm font-black uppercase tracking-widest text-zinc-300 hover:border-white hover:text-white transition-all duration-200">
+                  className="inline-block bg-white border-[3px] border-white px-8 py-4 text-sm font-black uppercase tracking-widest text-black hover:bg-transparent hover:text-white transition-all duration-200">
                   Login / Registrieren
                 </Link>
               )}
