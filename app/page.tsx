@@ -6,6 +6,7 @@ import GlobalHeader from "./components/GlobalHeader";
 import GlobalFooter from "./components/GlobalFooter";
 import LandingSound from "./components/LandingSound";
 import PageViewTracker from "./PageViewTracker";
+import { publishDueScheduledPosts } from "./utils/publishScheduled";
 import CountdownBanner from "./shop/components/CountdownBanner";
 import { getSetting, COUNTDOWN_KEY, COUNTDOWN_DEFAULT } from "@/app/utils/settings";
 
@@ -19,6 +20,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export default async function HomePage() {
+  await publishDueScheduledPosts();
   const [posts, userCountResult, countdownSetting, upcomingDrops] = await Promise.all([
     db.select().from(homePosts).where(eq(homePosts.published, true)).orderBy(desc(homePosts.createdAt)),
     db.select({ id: users.id }).from(users),
@@ -46,13 +48,13 @@ export default async function HomePage() {
     <div className="min-h-screen flex flex-col bg-black text-white font-mono"
       style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
       <div className="relative z-10 flex flex-col min-h-screen t-invert">
-      <div className="absolute inset-0 bg-black/70 z-0 pointer-events-none" />
+      <div className="absolute inset-0 bg-black/35 z-0 pointer-events-none" />
         <GlobalHeader />
         <LandingSound />
         <PageViewTracker />
 
         {/* Hero */}
-        <section className="w-full max-w-[1400px] mx-auto px-4 sm:px-8 md:px-16 py-16 md:py-24">
+        <section className="w-full max-w-[1400px] mx-auto px-4 sm:px-8 md:px-16 py-16 md:py-24 lg:flex lg:items-center lg:justify-between lg:gap-12">
           <div className="max-w-2xl">
             <p className="text-[10px] uppercase tracking-[0.4em] text-zinc-500 mb-4">Bellator Streetwear</p>
             <h1 className="text-5xl sm:text-7xl md:text-8xl font-black uppercase tracking-tighter leading-[0.9] mb-6">
@@ -61,7 +63,7 @@ export default async function HomePage() {
             <p className="text-sm text-zinc-400 leading-relaxed mb-8 max-w-md">
               Streetwear ohne Kompromisse. Jedes Piece ist streng limitiert — wenn es weg ist, ist es weg.
             </p>
-            <div className="mb-8">
+            <div className="mb-8 lg:mb-0">
               <Link href="/shop"
                 className="inline-block border-[3px] border-white px-8 py-4 text-sm font-black uppercase tracking-widest text-white hover:bg-white hover:text-black transition-all duration-200">
                 Zum Shop →
@@ -69,7 +71,7 @@ export default async function HomePage() {
             </div>
           </div>
           {countdown.enabled && (
-            <div className="mt-4">
+            <div className="lg:shrink-0">
               <p className="text-center text-[10px] uppercase tracking-widest text-zinc-500 mb-3">
                 <span className="text-white font-bold">{userCount}</span> Aktive User
               </p>

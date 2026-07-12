@@ -17,6 +17,7 @@ import PreReleaseCodeManager from "./PreReleaseCodeManager";
 import EmailLogViewer from "./EmailLogViewer";
 import HomePostManager from "./HomePostManager";
 import AdminDashboard, { type AdminFunctionGroup } from "./AdminDashboard";
+import { publishDueScheduledPosts } from "@/app/utils/publishScheduled";
 import RoleManager from "./RoleManager";
 import { hasSection, canEditPosts, isValidRole, type Role } from "./permissions";
 import { getSetting, COUNTDOWN_KEY, COUNTDOWN_DEFAULT, EXCLUSIVE_CODE_KEY, EXCLUSIVE_CODE_DEFAULT } from "@/app/utils/settings";
@@ -27,6 +28,8 @@ export default async function AdminPage() {
   if (!user.role && !user.isAdmin) redirect("/shop");
   const role: Role | null = isValidRole(user.role) ? user.role : (user.isAdmin ? "admin" : null);
   if (!role) redirect("/shop");
+
+  await publishDueScheduledPosts();
 
   const [allProducts, allVariants, allColors, userCountResult, countdown, exclusiveCode, recentPosts, allPreReleaseCodes, allPreReleaseRedemptions, viewCountResult, emailEntries, homePostList] = await Promise.all([
     db.select().from(products),
@@ -185,7 +188,7 @@ export default async function AdminPage() {
     <div className="min-h-screen flex flex-col bg-black text-white font-mono"
       style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
       <div className="relative z-10 flex flex-col min-h-screen t-invert">
-      <div className="absolute inset-0 bg-black/70 z-0 pointer-events-none" />
+      <div className="absolute inset-0 bg-black/35 z-0 pointer-events-none" />
       <GlobalHeader />
       <main className="flex-1 w-full max-w-[1400px] mx-auto px-3 sm:px-6 py-8 space-y-8">
         <div className="flex justify-between items-center flex-wrap gap-3">
