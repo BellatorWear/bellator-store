@@ -53,7 +53,6 @@ function LoginForm() {
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundAttachment: "fixed",
-        filter: "brightness(0.85)",
       }}
     >
       <div className="absolute inset-0 bg-black/60 z-0" />

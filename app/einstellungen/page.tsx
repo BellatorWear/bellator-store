@@ -17,9 +17,9 @@ export default async function EinstellungenPage() {
 
   return (
     <div className="min-h-screen flex flex-col font-mono t-text"
-      style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed", filter: "brightness(0.85)" }}>
+      style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
       <div className="relative z-10 flex flex-col min-h-screen t-invert">
-      <div className="absolute inset-0 bg-black/30 pointer-events-none z-0" />
+      <div className="absolute inset-0 bg-black/35 pointer-events-none z-0" />
         <GlobalHeader />
         <main className="flex-1 w-full max-w-[1400px] mx-auto px-4 sm:px-8 py-8">
           <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
