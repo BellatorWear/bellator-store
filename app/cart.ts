@@ -51,6 +51,8 @@ export async function getCart() {
 
 export async function addToCart(formData: FormData) {
   if (!(await isTrustedOrigin())) return { error: "Anfrage abgelehnt." };
+  const user = await getCurrentUser();
+  if (!user) return { error: "Bitte melde dich an, um Artikel in den Warenkorb zu legen.", requiresLogin: true };
   const productId = Number(formData.get("productId"));
   const variantId = formData.get("variantId") ? Number(formData.get("variantId")) : null;
   const colorId = formData.get("colorId") ? Number(formData.get("colorId")) : null;

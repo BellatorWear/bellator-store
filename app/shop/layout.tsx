@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/app/actions";
 import { getCart } from "@/app/cart";
 import EngagementPopup from "./components/EngagementPopup";
@@ -7,7 +6,6 @@ import GlobalFooter from "@/app/components/GlobalFooter";
 
 export default async function ShopLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
   const cart = await getCart();
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 

@@ -19,6 +19,10 @@ export default function AddToCartButton({ productId }: { productId: string }) {
       fd.append("quantity", "1");
       const res = await addToCart(fd);
       if (res?.error) {
+        if ((res as { requiresLogin?: boolean }).requiresLogin) {
+          router.push("/login");
+          return;
+        }
         setErr(res.error);
       } else {
         setAdded(true);
