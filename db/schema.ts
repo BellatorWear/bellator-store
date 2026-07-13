@@ -25,6 +25,11 @@ export const users = pgTable("users", {
   newsletterOptIn: boolean("newsletter_opt_in").default(false),
   username: text("username").unique(),
   usernameChangedAt: timestamp("username_changed_at"),
+  // Team-Chat-Zugriff: null = vom Rollen-Standard erben (siehe siteSettings
+  // Key "chat_role_access"), true/false = expliziter Override durch einen
+  // Admin (z.B. einem einzelnen Marketing-User Zugriff geben/entziehen,
+  // ohne gleich die ganze Rolle umzustellen).
+  chatAccess: boolean("chat_access"),
 });
 
 export const emailVerifications = pgTable("email_verifications", {
@@ -298,6 +303,38 @@ export const emailLog = pgTable("email_log", {
   bodyHtml: text("body_html").notNull(),
   source: text("source").notNull(), // "newsletter"|"reward"|"verification"|"news"|"reminder"
   sentAt: timestamp("sent_at").defaultNow(),
+});
+
+// ===================================================================
+// Neue Tabellen (v18) - Interner Team-Chat
+// ===================================================================
+
+// Ein "Channel" ist entweder ein benannter Gruppen-Channel (type="channel",
+// name gesetzt) oder eine Direktnachricht zwischen genau 2 Usern
+// (type="dm", name=null - der Anzeigename wird clientseitig aus dem
+// jeweils anderen Mitglied berechnet).
+export const chatChannels = pgTable("chat_channels", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull().default("channel"), // "channel" | "dm"
+  name: text("name"),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const chatChannelMembers = pgTable("chat_channel_members", {
+  id: serial("id").primaryKey(),
+  channelId: integer("channel_id").notNull().references(() => chatChannels.id),
+  userId: integer("user_id").notNull().references(() => users.id),
+  lastReadAt: timestamp("last_read_at"),
+  joinedAt: timestamp("joined_at").defaultNow(),
+});
+
+export const chatMessages = pgTable("chat_messages", {
+  id: serial("id").primaryKey(),
+  channelId: integer("channel_id").notNull().references(() => chatChannels.id),
+  userId: integer("user_id").notNull().references(() => users.id),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Produkt-Erweiterungen: Kategorie, Geschlecht, Collection

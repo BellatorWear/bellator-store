@@ -26,5 +26,6 @@ export const config = {
     "/einstellungen/:path*",
     "/admin/:path*",
     "/belege/:path*",
+    "/chat/:path*",
   ],
 };

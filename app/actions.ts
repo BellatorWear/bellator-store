@@ -89,6 +89,8 @@ export async function getCurrentUser() {
     newsletterOptIn: user.newsletterOptIn ?? false,
     username: user.username ?? null,
     usernameChangedAt: user.usernameChangedAt ?? null,
+    // null = Rollen-Standard erben (siehe app/admin/permissions.ts::hasChatAccess)
+    chatAccess: user.chatAccess ?? null,
     // Fail-safe: bei NULL (z.B. alte Zeilen ohne NOT NULL Constraint)
     // lieber einmal zu viel zum Passwort-Setzen auffordern als einen
     // Account ganz ohne Passwort durchrutschen zu lassen.

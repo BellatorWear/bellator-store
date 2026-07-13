@@ -28,6 +28,10 @@ export const COUNTDOWN_DEFAULT: CountdownSetting = {
   label: "Nächster Drop in",
 };
 
+// Team-Chat: Rollen-Standard für Zugriff (siehe app/admin/permissions.ts
+// für die Typdefinition und die Override-Logik pro User).
+export const CHAT_ROLE_ACCESS_KEY = "chat_role_access";
+
 export type ExclusiveCodeSetting = {
   enabled: boolean;
   firstNOrders: number; // Code gilt für die ersten N Bestellungen insgesamt

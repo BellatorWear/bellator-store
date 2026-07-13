@@ -1,0 +1,161 @@
+"use client";
+import { useState } from "react";
+import { saveChatRoleAccess, setUserChatAccess, searchUserByUsername } from "./actions";
+import { ROLE_LABELS, type ChatRoleAccess } from "./permissions";
+
+const ROLES = ["admin", "developer", "marketing"] as const;
+
+type UserResult = { id: number; email: string; username: string | null; role: string | null; chatAccess: boolean | null };
+
+export default function TeamChatAccess({ initialRoleAccess }: { initialRoleAccess: ChatRoleAccess }) {
+  const [roleAccess, setRoleAccess] = useState(initialRoleAccess);
+  const [savingRole, setSavingRole] = useState(false);
+  const [roleSaved, setRoleSaved] = useState(false);
+
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const [msg, setMsg] = useState("");
+  const [user, setUser] = useState<UserResult | null>(null);
+
+  async function toggleRole(role: typeof ROLES[number]) {
+    const next = { ...roleAccess, [role]: !roleAccess[role] };
+    setRoleAccess(next);
+    setSavingRole(true);
+    try {
+      const fd = new FormData();
+      fd.append("admin", String(next.admin));
+      fd.append("developer", String(next.developer));
+      fd.append("marketing", String(next.marketing));
+      await saveChatRoleAccess(fd);
+      setRoleSaved(true);
+      setTimeout(() => setRoleSaved(false), 1500);
+    } finally {
+      setSavingRole(false);
+    }
+  }
+
+  async function search(e: React.FormEvent) {
+    e.preventDefault();
+    if (!query.trim() || loading) return;
+    setLoading(true);
+    setErr("");
+    setMsg("");
+    setUser(null);
+    try {
+      const fd = new FormData();
+      fd.append("username", query.trim());
+      const res = await searchUserByUsername(fd);
+      if (res?.error) { setErr(res.error); return; }
+      if (res?.success) setUser({ id: res.user.id, email: res.user.email, username: res.user.username, role: res.user.role ?? null, chatAccess: res.user.chatAccess ?? null });
+    } catch (e) {
+      console.error("User-Suche fehlgeschlagen:", e);
+      setErr("Fehler. Bitte nochmal versuchen.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function changeAccess(value: "true" | "false" | "inherit") {
+    if (!user || saving) return;
+    setSaving(true);
+    setErr("");
+    setMsg("");
+    try {
+      const fd = new FormData();
+      fd.append("userId", String(user.id));
+      fd.append("value", value);
+      const res = await setUserChatAccess(fd);
+      if (res?.error) { setErr(res.error); return; }
+      setUser({ ...user, chatAccess: value === "true" ? true : value === "false" ? false : null });
+      setMsg("✓ Zugriff aktualisiert.");
+    } catch (e) {
+      console.error("Chat-Zugriff setzen fehlgeschlagen:", e);
+      setErr("Fehler. Bitte nochmal versuchen.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <p className="text-[9px] text-zinc-600 leading-relaxed mb-3">
+          Rollen-Standard: Wer diese Rolle hat, bekommt automatisch Team-Chat-Zugriff, außer bei einem User weiter unten
+          explizit anders eingestellt. Volle Admins haben immer Zugriff.
+        </p>
+        <div className="grid sm:grid-cols-3 gap-2">
+          {ROLES.map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => toggleRole(r)}
+              disabled={savingRole}
+              className={`border p-3 text-left transition-all disabled:opacity-50 ${
+                roleAccess[r] ? "border-green-700 bg-green-900/10" : "border-zinc-800"
+              }`}
+            >
+              <p className="text-[10px] font-bold text-white uppercase tracking-widest">{ROLE_LABELS[r]}</p>
+              <p className={`text-[9px] mt-1 uppercase tracking-widest ${roleAccess[r] ? "text-green-400" : "text-zinc-600"}`}>
+                {roleAccess[r] ? "Zugriff aktiv" : "Kein Zugriff"}
+              </p>
+            </button>
+          ))}
+        </div>
+        {roleSaved && <p className="text-[9px] text-green-500 uppercase tracking-widest mt-2">✓ Gespeichert</p>}
+      </div>
+
+      <div className="border-t border-zinc-800 pt-4">
+        <p className="text-[9px] text-zinc-600 leading-relaxed mb-3">
+          Einzelnen User suchen, um den Rollen-Standard für genau diesen Account zu übersteuern (z.B. einem Marketing-User
+          Zugriff geben, ohne die ganze Rolle umzustellen).
+        </p>
+        <form onSubmit={search} className="flex gap-2">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Email oder Benutzername"
+            className="flex-1 bg-zinc-900 border border-zinc-700 p-2 text-sm text-white placeholder:text-zinc-600"
+          />
+          <button type="submit" disabled={loading}
+            className="border border-zinc-500 px-4 py-2 text-[10px] uppercase tracking-widest font-bold hover:bg-white hover:text-black transition-all disabled:opacity-50">
+            {loading ? "..." : "Suchen"}
+          </button>
+        </form>
+
+        {err && <p className="text-[10px] text-red-500 uppercase tracking-widest mt-2">{err}</p>}
+        {msg && <p className="text-[10px] text-green-500 uppercase tracking-widest mt-2">{msg}</p>}
+
+        {user && (
+          <div className="border border-zinc-800 p-4 space-y-3 mt-3">
+            <div>
+              <p className="text-sm font-bold text-white">{user.username ?? <span className="text-zinc-500 italic">kein Username</span>}</p>
+              <p className="text-xs text-zinc-500">{user.email} {user.role && <span className="text-zinc-600">— {ROLE_LABELS[user.role as keyof typeof ROLE_LABELS] ?? user.role}</span>}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => changeAccess("inherit")} disabled={saving}
+                className={`text-[10px] border px-3 py-1.5 uppercase tracking-widest transition disabled:opacity-50 ${
+                  user.chatAccess === null ? "border-white bg-white text-black" : "border-zinc-700 text-zinc-400 hover:border-zinc-400"
+                }`}>
+                Rollen-Standard erben
+              </button>
+              <button type="button" onClick={() => changeAccess("true")} disabled={saving}
+                className={`text-[10px] border px-3 py-1.5 uppercase tracking-widest transition disabled:opacity-50 ${
+                  user.chatAccess === true ? "border-green-500 bg-green-900/30 text-green-400" : "border-zinc-700 text-zinc-400 hover:border-zinc-400"
+                }`}>
+                Immer Zugriff
+              </button>
+              <button type="button" onClick={() => changeAccess("false")} disabled={saving}
+                className={`text-[10px] border px-3 py-1.5 uppercase tracking-widest transition disabled:opacity-50 ${
+                  user.chatAccess === false ? "border-red-500 bg-red-900/30 text-red-400" : "border-zinc-700 text-zinc-400 hover:border-zinc-400"
+                }`}>
+                Nie Zugriff
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

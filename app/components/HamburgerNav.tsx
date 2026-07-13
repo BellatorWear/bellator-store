@@ -9,6 +9,7 @@ type NavProps = {
   isAdmin?: boolean;
   username?: string | null;
   isLoggedIn?: boolean;
+  hasChatAccess?: boolean;
 };
 
 const LINKS = [
@@ -21,7 +22,7 @@ const LINKS = [
   { href: "/mehr", label: "Mehr" },
 ];
 
-export default function HamburgerNav({ cartCount = 0, isAdmin, username, isLoggedIn }: NavProps) {
+export default function HamburgerNav({ cartCount = 0, isAdmin, username, isLoggedIn, hasChatAccess }: NavProps) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const redeemRef = useRef<RedeemCodeButtonHandle | null>(null);
@@ -105,6 +106,16 @@ export default function HamburgerNav({ cartCount = 0, isAdmin, username, isLogge
               className="flex items-center px-4 py-3 text-sm font-bold uppercase tracking-widest text-purple-400 hover:text-purple-300 hover:bg-zinc-900 transition-all border border-transparent hover:border-purple-800"
             >
               Admin Panel
+            </Link>
+          )}
+
+          {hasChatAccess && (
+            <Link
+              href="/chat"
+              onClick={() => setOpen(false)}
+              className="flex items-center px-4 py-3 text-sm font-bold uppercase tracking-widest text-blue-400 hover:text-blue-300 hover:bg-zinc-900 transition-all border border-transparent hover:border-blue-800"
+            >
+              Team-Chat
             </Link>
           )}
 

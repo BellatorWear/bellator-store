@@ -5,9 +5,9 @@ import { eq, ilike, desc } from "drizzle-orm";
 import { del, list } from "@vercel/blob";
 import { getCurrentUser } from "@/app/actions";
 import { sanitizeText, isSuspiciousInput, sanitizeHtml } from "@/app/utils/inputSafety";
-import { hasSection, canEditPosts, isValidRole, type Role, type AdminSectionId } from "./permissions";
+import { hasSection, canEditPosts, isValidRole, type Role, type AdminSectionId, type ChatRoleAccess } from "./permissions";
 import { isTrustedOrigin } from "@/app/utils/origin";
-import { setSetting, COUNTDOWN_KEY, EXCLUSIVE_CODE_KEY } from "@/app/utils/settings";
+import { setSetting, COUNTDOWN_KEY, EXCLUSIVE_CODE_KEY, CHAT_ROLE_ACCESS_KEY } from "@/app/utils/settings";
 import { sendPushToAll } from "@/app/utils/push";
 import { sendNewsletterEmailToAll } from "@/app/utils/newsletterMail";
 
@@ -557,6 +557,7 @@ export async function searchUserByUsername(formData: FormData) {
       username: user.username,
       isAdmin: user.isAdmin,
       role: user.role,
+      chatAccess: user.chatAccess,
       points: user.points,
       orderCount: user.orderCount,
       discountPercent: user.discountPercent,
@@ -863,5 +864,35 @@ export async function deleteHomePost(formData: FormData) {
   const id = Number(formData.get("id"));
   if (!id) return { error: "Ungültig." };
   await db.delete(homePosts).where(eq(homePosts.id, id));
+  return { success: true };
+}
+
+// ===================================================================
+// Team-Chat: Zugriffssteuerung (Rollen-Standard + Per-User-Override)
+// ===================================================================
+
+export async function saveChatRoleAccess(formData: FormData) {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
+
+  const next: ChatRoleAccess = {
+    admin: formData.get("admin") === "true",
+    developer: formData.get("developer") === "true",
+    marketing: formData.get("marketing") === "true",
+  };
+  await setSetting(CHAT_ROLE_ACCESS_KEY, next);
+  return { success: true };
+}
+
+export async function setUserChatAccess(formData: FormData) {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
+
+  const userId = Number(formData.get("userId"));
+  const value = (formData.get("value") as string) ?? "inherit"; // "true" | "false" | "inherit"
+  if (!userId) return { error: "Ungültig." };
+
+  const chatAccess = value === "true" ? true : value === "false" ? false : null;
+  await db.update(users).set({ chatAccess }).where(eq(users.id, userId));
   return { success: true };
 }

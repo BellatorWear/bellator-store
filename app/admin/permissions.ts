@@ -15,6 +15,7 @@ export const ADMIN_SECTION_IDS = [
   "prerelease-codes",
   "countdown",
   "roles",
+  "team-chat",
 ] as const;
 
 export type AdminSectionId = typeof ADMIN_SECTION_IDS[number];
@@ -57,4 +58,38 @@ export function hasSection(role: Role | null, section: AdminSectionId): boolean 
 
 export function isValidRole(value: string | null | undefined): value is Role {
   return value === "admin" || value === "developer" || value === "marketing";
+}
+
+// ===================================================================
+// Team-Chat-Zugriff
+// ===================================================================
+// Zwei Ebenen, wie angefragt: ein Rollen-Standard (in siteSettings unter
+// dem Key CHAT_ROLE_ACCESS_KEY gespeichert, im Adminpanel einstellbar) und
+// ein optionaler Per-User-Override (users.chat_access), der den Standard
+// für genau diesen einen Account übersteuert - z.B. um einem einzelnen
+// Marketing-User Zugriff zu geben, ohne gleich die ganze Rolle umzustellen,
+// oder umgekehrt einem einzelnen Developer den Zugriff zu entziehen.
+export type ChatRoleAccess = Record<Role, boolean>;
+
+export const CHAT_ROLE_ACCESS_DEFAULT: ChatRoleAccess = {
+  admin: true,
+  developer: true,
+  marketing: true,
+};
+
+type ChatAccessUser = {
+  role: string | null;
+  isAdmin?: boolean | null;
+  chatAccess?: boolean | null;
+};
+
+export function hasChatAccess(user: ChatAccessUser | null, roleDefaults: ChatRoleAccess): boolean {
+  if (!user) return false;
+  // Expliziter Override gewinnt immer - egal ob er Zugriff gibt oder entzieht.
+  if (user.chatAccess !== null && user.chatAccess !== undefined) return user.chatAccess;
+  // Volle Admins haben immer Zugriff, unabhängig vom konfigurierten Standard.
+  if (user.isAdmin) return true;
+  const role = isValidRole(user.role) ? user.role : null;
+  if (!role) return false; // normale Kunden ohne Team-Rolle nie, außer expliziter Override oben
+  return roleDefaults[role] ?? false;
 }

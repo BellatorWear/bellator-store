@@ -19,8 +19,9 @@ import HomePostManager from "./HomePostManager";
 import AdminDashboard, { type AdminFunctionGroup } from "./AdminDashboard";
 import { publishDueScheduledPosts } from "@/app/utils/publishScheduled";
 import RoleManager from "./RoleManager";
-import { hasSection, canEditPosts, isValidRole, type Role } from "./permissions";
-import { getSetting, COUNTDOWN_KEY, COUNTDOWN_DEFAULT, EXCLUSIVE_CODE_KEY, EXCLUSIVE_CODE_DEFAULT } from "@/app/utils/settings";
+import TeamChatAccess from "./TeamChatAccess";
+import { hasSection, canEditPosts, isValidRole, type Role, CHAT_ROLE_ACCESS_DEFAULT } from "./permissions";
+import { getSetting, COUNTDOWN_KEY, COUNTDOWN_DEFAULT, EXCLUSIVE_CODE_KEY, EXCLUSIVE_CODE_DEFAULT, CHAT_ROLE_ACCESS_KEY } from "@/app/utils/settings";
 
 export default async function AdminPage() {
   const user = await getCurrentUser();
@@ -31,7 +32,7 @@ export default async function AdminPage() {
 
   await publishDueScheduledPosts();
 
-  const [allProducts, allVariants, allColors, userCountResult, countdown, exclusiveCode, recentPosts, allPreReleaseCodes, allPreReleaseRedemptions, viewCountResult, emailEntries, homePostList] = await Promise.all([
+  const [allProducts, allVariants, allColors, userCountResult, countdown, exclusiveCode, recentPosts, allPreReleaseCodes, allPreReleaseRedemptions, viewCountResult, emailEntries, homePostList, chatRoleAccess] = await Promise.all([
     db.select().from(products),
     db.select().from(productVariants),
     db.select().from(productColors),
@@ -45,6 +46,7 @@ export default async function AdminPage() {
     db.select({ id: emailLog.id, to: emailLog.to, subject: emailLog.subject, source: emailLog.source, sentAt: emailLog.sentAt })
       .from(emailLog).orderBy(desc(emailLog.sentAt)).limit(200),
     db.select().from(homePosts).orderBy(desc(homePosts.createdAt)),
+    getSetting(CHAT_ROLE_ACCESS_KEY, CHAT_ROLE_ACCESS_DEFAULT),
   ]);
 
   const userCount = userCountResult.length;
@@ -174,6 +176,13 @@ export default async function AdminPage() {
           description: "Bellator Team-Mitgliedern Admin/Developer/Marketing-Zugriff geben",
           keywords: ["rolle", "team", "berechtigung", "rechte", "marketing", "developer"],
           content: <RoleManager />,
+        },
+        {
+          id: "team-chat",
+          title: "Team-Chat-Zugriff",
+          description: "Wer darf den internen Team-Chat unter /chat nutzen",
+          keywords: ["chat", "team-chat", "nachrichten", "zugriff", "berechtigung"],
+          content: <TeamChatAccess initialRoleAccess={chatRoleAccess} />,
         },
       ],
     },
