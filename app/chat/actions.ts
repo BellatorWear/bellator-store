@@ -220,11 +220,39 @@ export async function markChannelRead(channelId: number): Promise<{ error?: stri
   if (!user) return { error: "Keine Berechtigung." };
   if (!(await isMember(channelId, user.id))) return { error: "Kein Zugriff auf diesen Channel." };
 
+  const now = new Date();
   await db
     .update(chatChannelMembers)
-    .set({ lastReadAt: new Date() })
+    .set({ lastReadAt: now })
     .where(and(eq(chatChannelMembers.channelId, channelId), eq(chatChannelMembers.userId, user.id)));
+
+  try {
+    await getPusherServer().trigger(channelEventName(channelId), "read-receipt", {
+      channelId,
+      userId: user.id,
+      lastReadAt: now,
+    });
+  } catch (e) {
+    console.error("Pusher-Trigger fehlgeschlagen:", e);
+  }
+
   return { success: true };
+}
+
+export type ChatReadReceipt = { userId: number; lastReadAt: Date | null };
+
+// Lese-Zeitpunkte aller Mitglieder eines Channels - Grundlage für die
+// "Gelesen"-Haken bei den eigenen Nachrichten.
+export async function getReadReceipts(channelId: number): Promise<{ error?: string; receipts?: ChatReadReceipt[] }> {
+  const user = await requireChatUser();
+  if (!user) return { error: "Keine Berechtigung." };
+  if (!(await isMember(channelId, user.id))) return { error: "Kein Zugriff auf diesen Channel." };
+
+  const rows = await db
+    .select({ userId: chatChannelMembers.userId, lastReadAt: chatChannelMembers.lastReadAt })
+    .from(chatChannelMembers)
+    .where(eq(chatChannelMembers.channelId, channelId));
+  return { receipts: rows };
 }
 
 export type ChatUserResult = { id: number; username: string | null; email: string };

@@ -6,7 +6,8 @@ import {
   listMyChannels, getChannelMessages, sendMessage, markChannelRead,
   searchChatUsers, getOrCreateDirectMessage, createChannel,
   deleteMessage, listChannelMembers, removeChannelMember, addChannelMember,
-  type ChatChannelSummary, type ChatMessageDto, type ChatUserResult, type ChatChannelMemberDto,
+  getReadReceipts,
+  type ChatChannelSummary, type ChatMessageDto, type ChatUserResult, type ChatChannelMemberDto, type ChatReadReceipt,
 } from "./actions";
 
 type CurrentUser = { id: number; username: string | null; isAdmin: boolean };
@@ -25,6 +26,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   const [channels, setChannels] = useState<ChatChannelSummary[]>(initialChannels);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessageDto[]>([]);
+  const [readReceipts, setReadReceipts] = useState<ChatReadReceipt[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -79,8 +81,9 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
       pusherRef.current?.unsubscribe(activeBindingRef.current.name);
       activeBindingRef.current = null;
     }
-    if (!activeId || !pusherRef.current) {
+    if (!activeId) {
       setMessages([]);
+      setReadReceipts([]);
       return;
     }
 
@@ -89,9 +92,17 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
       setMessages(res.messages ?? []);
       setLoadingMessages(false);
     });
+    getReadReceipts(activeId).then((res) => {
+      setReadReceipts(res.receipts ?? []);
+    });
     markChannelRead(activeId).then(() => {
       setChannels((prev) => prev.map((c) => (c.id === activeId ? { ...c, unread: false } : c)));
     });
+
+    // Live-Zustellung (neue Nachrichten, Löschungen, Lese-Status) braucht
+    // Pusher - falls das (noch) nicht konfiguriert ist, sieht man den
+    // Verlauf trotzdem, nur eben ohne Live-Updates bis zum nächsten Öffnen.
+    if (!pusherRef.current) return;
 
     const binding = pusherRef.current.subscribe(`private-chat-${activeId}`);
     binding.bind("new-message", (msg: ChatMessageDto) => {
@@ -109,6 +120,13 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
     });
     binding.bind("message-deleted", (data: { id: number }) => {
       setMessages((prev) => prev.filter((m) => m.id !== data.id));
+    });
+    binding.bind("read-receipt", (data: { userId: number; lastReadAt: string }) => {
+      setReadReceipts((prev) => {
+        const exists = prev.some((r) => r.userId === data.userId);
+        if (exists) return prev.map((r) => (r.userId === data.userId ? { ...r, lastReadAt: data.lastReadAt as unknown as Date } : r));
+        return [...prev, { userId: data.userId, lastReadAt: data.lastReadAt as unknown as Date }];
+      });
     });
     activeBindingRef.current = binding;
   }, [activeId, currentUser.id]);
@@ -149,6 +167,16 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
     fd.append("messageId", String(messageId));
     const res = await deleteMessage(fd);
     if (res?.error) alert(res.error);
+  }
+
+  // "Gelesen"-Haken für eigene Nachrichten: gilt als gelesen, wenn ALLE
+  // übrigen Mitglieder des Channels (bei DMs: die eine andere Person) die
+  // Nachricht nach ihrem letzten lastReadAt-Zeitstempel gesehen haben.
+  function isMessageRead(msg: ChatMessageDto): boolean {
+    if (!msg.createdAt) return false;
+    const otherReceipts = readReceipts.filter((r) => r.userId !== currentUser.id);
+    if (otherReceipts.length === 0) return false;
+    return otherReceipts.every((r) => r.lastReadAt && new Date(r.lastReadAt) >= new Date(msg.createdAt!));
   }
 
   return (
@@ -255,7 +283,14 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                               {m.body}
                             </div>
                           </div>
-                          <span className="text-[9px] text-zinc-700 mt-1">{formatTime(m.createdAt)}</span>
+                          <span className="text-[9px] text-zinc-700 mt-1 flex items-center gap-1">
+                            {formatTime(m.createdAt)}
+                            {own && (
+                              <span className={isMessageRead(m) ? "text-white" : "text-zinc-700"} title={isMessageRead(m) ? "Gelesen" : "Gesendet"}>
+                                {isMessageRead(m) ? "✓✓" : "✓"}
+                              </span>
+                            )}
+                          </span>
                         </div>
                       </div>
                     );
