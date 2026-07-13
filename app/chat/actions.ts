@@ -164,7 +164,7 @@ export async function getChannelMessages(channelId: number): Promise<{ error?: s
   };
 }
 
-export async function sendMessage(formData: FormData): Promise<{ error?: string; success?: boolean }> {
+export async function sendMessage(formData: FormData): Promise<{ error?: string; success?: boolean; message?: ChatMessageDto }> {
   const user = await requireChatUser();
   if (!user) return { error: "Keine Berechtigung." };
 
@@ -246,7 +246,20 @@ export async function sendMessage(formData: FormData): Promise<{ error?: string;
       .map((m) => sendPushToUser(m.userId, { title: pushTitle, body: pushBody, url: "/chat" })),
   );
 
-  return { success: true };
+  return {
+    success: true,
+    message: {
+      id: message.id,
+      channelId,
+      userId: user.id,
+      username: user.username,
+      body: message.body,
+      attachmentUrl: message.attachmentUrl,
+      attachmentName: message.attachmentName,
+      attachmentType: message.attachmentType,
+      createdAt: message.createdAt,
+    },
+  };
 }
 
 export async function markChannelRead(channelId: number): Promise<{ error?: string; success?: boolean }> {

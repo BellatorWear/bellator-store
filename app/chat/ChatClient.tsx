@@ -1,8 +1,10 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Pusher, { Channel as PusherChannel } from "pusher-js";
 import { upload } from "@vercel/blob/client";
+import { handleAction } from "@/app/actions";
 import {
   listMyChannels, getChannelMessages, sendMessage, markChannelRead,
   searchChatUsers, getOrCreateDirectMessage, createChannel,
@@ -42,6 +44,8 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   const [showNewModal, setShowNewModal] = useState(false);
   const [showMembersPanel, setShowMembersPanel] = useState(false);
   const [mobileShowList, setMobileShowList] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const router = useRouter();
 
   const pusherRef = useRef<Pusher | null>(null);
   const activeBindingRef = useRef<PusherChannel | null>(null);
@@ -66,7 +70,20 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
     const pusher = new Pusher(key, { cluster, authEndpoint: "/api/pusher/auth" });
     pusherRef.current = pusher;
 
+    // Diagnose: ohne das hier sieht man im Browser nichts, wenn z.B. die
+    // Auth am Server fehlschlägt oder der Key/Cluster nicht passt - der
+    // Chat würde einfach "leise" ohne Live-Updates dastehen.
+    pusher.connection.bind("state_change", (states: { previous: string; current: string }) => {
+      console.log(`Pusher-Verbindung: ${states.previous} → ${states.current}`);
+    });
+    pusher.connection.bind("error", (err: unknown) => {
+      console.error("Pusher-Verbindungsfehler:", err);
+    });
+
     const userChannel = pusher.subscribe(`private-chat-user-${currentUser.id}`);
+    userChannel.bind("pusher:subscription_error", (err: unknown) => {
+      console.error("Pusher-Abo-Fehler (persönlicher Kanal):", err);
+    });
     userChannel.bind("new-channel", () => {
       refreshChannels();
     });
@@ -114,6 +131,9 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
     if (!pusherRef.current) return;
 
     const binding = pusherRef.current.subscribe(`private-chat-${activeId}`);
+    binding.bind("pusher:subscription_error", (err: unknown) => {
+      console.error(`Pusher-Abo-Fehler (Channel ${activeId}):`, err);
+    });
     binding.bind("new-message", (msg: ChatMessageDto) => {
       setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
       if (msg.userId !== currentUser.id) {
@@ -166,6 +186,27 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
         setDraft(body);
         setPendingAttachment(attachment);
         alert(res.error);
+      } else if (res?.message) {
+        // Nicht auf den Pusher-Live-Weg warten, um die eigene Nachricht zu
+        // sehen - kommt direkt aus der Server-Antwort. Das Pusher-Event
+        // trifft danach trotzdem noch ein (für andere offene Tabs/Geräte),
+        // die Dedupe-Prüfung über die id verhindert ein doppeltes Anzeigen.
+        setMessages((prev) => (prev.some((m) => m.id === res.message!.id) ? prev : [...prev, res.message!]));
+        setChannels((prev) =>
+          prev.map((c) =>
+            c.id === activeId
+              ? {
+                  ...c,
+                  lastMessage: {
+                    body: res.message!.body || (res.message!.attachmentName ? `📎 ${res.message!.attachmentName}` : ""),
+                    createdAt: res.message!.createdAt,
+                    authorUsername: res.message!.username,
+                  },
+                  unread: false,
+                }
+              : c,
+          ),
+        );
       }
     } finally {
       setSending(false);
@@ -195,6 +236,15 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   function selectChannel(id: number) {
     setActiveId(id);
     setMobileShowList(false);
+  }
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    const fd = new FormData();
+    fd.append("actionType", "logout");
+    await handleAction(fd);
+    router.push("/");
+    router.refresh();
   }
 
   async function handleDelete(messageId: number) {
@@ -237,8 +287,8 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
 
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar: Channel-/DM-Liste */}
-        <aside className={`w-full sm:w-72 shrink-0 border-r border-zinc-800 flex-col overflow-y-auto ${mobileShowList ? "flex" : "hidden sm:flex"}`}>
-          <div className="p-3 border-b border-zinc-800">
+        <aside className={`w-full sm:w-72 shrink-0 border-r border-zinc-800 flex-col ${mobileShowList ? "flex" : "hidden sm:flex"}`}>
+          <div className="p-3 border-b border-zinc-800 shrink-0">
             <button
               onClick={() => setShowNewModal(true)}
               className="w-full border border-zinc-600 text-[10px] uppercase tracking-widest font-bold py-2.5 hover:bg-white hover:text-black transition-all"
@@ -246,7 +296,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
               + Neuer Chat
             </button>
           </div>
-          <div className="flex-1">
+          <div className="flex-1 overflow-y-auto">
             {channels.length === 0 ? (
               <p className="text-[10px] text-zinc-600 uppercase tracking-widest p-4">Noch keine Chats. Starte einen neuen.</p>
             ) : (
@@ -271,7 +321,18 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
               ))
             )}
           </div>
+          <div className="shrink-0 border-t border-zinc-800 p-3 flex items-center justify-between gap-2">
+            <span className="text-xs text-zinc-500 truncate">{currentUser.username ?? "Account"}</span>
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="text-[10px] uppercase tracking-widest text-red-500 border border-red-900 px-2.5 py-1.5 hover:bg-red-900/30 transition disabled:opacity-50 shrink-0"
+            >
+              {loggingOut ? "..." : "Abmelden"}
+            </button>
+          </div>
         </aside>
+
 
         {/* Thread */}
         <main className={`flex-1 flex-col ${mobileShowList ? "hidden sm:flex" : "flex"}`}>
