@@ -46,6 +46,9 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   const [mobileShowList, setMobileShowList] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
   const router = useRouter();
+  const [notice, setNotice] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const pusherRef = useRef<Pusher | null>(null);
   const activeBindingRef = useRef<PusherChannel | null>(null);
@@ -185,7 +188,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
       if (res?.error) {
         setDraft(body);
         setPendingAttachment(attachment);
-        alert(res.error);
+        setNotice(res.error);
       } else if (res?.message) {
         // Nicht auf den Pusher-Live-Weg warten, um die eigene Nachricht zu
         // sehen - kommt direkt aus der Server-Antwort. Das Pusher-Event
@@ -218,7 +221,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
     e.target.value = ""; // damit dieselbe Datei erneut ausgewählt werden kann
     if (!file) return;
     if (file.size > 25 * 1024 * 1024) {
-      alert("Datei ist zu groß (max. 25 MB).");
+      setNotice("Datei ist zu groß (max. 25 MB).");
       return;
     }
     setUploadingAttachment(true);
@@ -227,7 +230,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
       setPendingAttachment({ url: blob.url, name: file.name, type: file.type || "application/octet-stream" });
     } catch (err) {
       console.error("Chat-Upload fehlgeschlagen:", err);
-      alert("Upload fehlgeschlagen. Dateityp erlaubt? (Bilder, PDF, ZIP, Office, Video, max. 25 MB)");
+      setNotice("Upload fehlgeschlagen. Dateityp erlaubt? (Bilder, PDF, ZIP, Office, Video, max. 25 MB)");
     } finally {
       setUploadingAttachment(false);
     }
@@ -247,13 +250,24 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
     router.refresh();
   }
 
-  async function handleDelete(messageId: number) {
-    if (!confirm("Nachricht wirklich löschen?")) return;
-    setMessages((prev) => prev.filter((m) => m.id !== messageId));
-    const fd = new FormData();
-    fd.append("messageId", String(messageId));
-    const res = await deleteMessage(fd);
-    if (res?.error) alert(res.error);
+  function handleDelete(messageId: number) {
+    setConfirmDelete(messageId);
+  }
+
+  async function confirmDeleteMessage() {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    const messageId = confirmDelete;
+    try {
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      const fd = new FormData();
+      fd.append("messageId", String(messageId));
+      const res = await deleteMessage(fd);
+      if (res?.error) setNotice(res.error);
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(null);
+    }
   }
 
   // "Gelesen"-Haken für eigene Nachrichten: gilt als gelesen, wenn ALLE
@@ -474,6 +488,17 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
           onClose={() => setShowMembersPanel(false)}
         />
       )}
+
+      {confirmDelete !== null && (
+        <ChatConfirmDialog
+          message="Nachricht wirklich löschen?"
+          loading={deleting}
+          onConfirm={confirmDeleteMessage}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+
+      {notice && <ChatNotice message={notice} onClose={() => setNotice(null)} />}
     </div>
   );
 }
@@ -648,6 +673,7 @@ function MembersPanel({ channelId, currentUserId, onClose }: { channelId: number
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ChatUserResult[]>([]);
   const [busy, setBusy] = useState(false);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -690,8 +716,13 @@ function MembersPanel({ channelId, currentUserId, onClose }: { channelId: number
     }
   }
 
-  async function handleRemove(userId: number) {
-    if (!confirm("Dieses Mitglied wirklich aus dem Channel entfernen?")) return;
+  function handleRemove(userId: number) {
+    setConfirmRemoveId(userId);
+  }
+
+  async function confirmRemoveMember() {
+    if (!confirmRemoveId) return;
+    const userId = confirmRemoveId;
     setBusy(true);
     setErr("");
     try {
@@ -706,12 +737,14 @@ function MembersPanel({ channelId, currentUserId, onClose }: { channelId: number
       await load();
     } finally {
       setBusy(false);
+      setConfirmRemoveId(null);
     }
   }
 
   const amCreator = members.some((m) => m.id === currentUserId && m.isCreator);
 
   return (
+    <>
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-black border border-zinc-700 w-full max-w-md max-h-[80vh] flex flex-col font-mono" onClick={(e) => e.stopPropagation()}>
         <div className="border-b border-zinc-800 px-4 py-3">
@@ -768,6 +801,78 @@ function MembersPanel({ channelId, currentUserId, onClose }: { channelId: number
             Schließen
           </button>
         </div>
+      </div>
+    </div>
+
+      {confirmRemoveId !== null && (
+        <ChatConfirmDialog
+          message="Dieses Mitglied wirklich aus dem Channel entfernen?"
+          confirmLabel="Entfernen"
+          loading={busy}
+          onConfirm={confirmRemoveMember}
+          onCancel={() => setConfirmRemoveId(null)}
+        />
+      )}
+    </>
+  );
+}
+
+// Ersetzt die rohen Browser-confirm()/alert()-Popups im Chat durch etwas,
+// das zum Rest der Seite passt (dunkel, monospace, uppercase tracking).
+function ChatConfirmDialog({
+  message,
+  confirmLabel = "Löschen",
+  loading,
+  onConfirm,
+  onCancel,
+}: {
+  message: string;
+  confirmLabel?: string;
+  loading?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4" onClick={onCancel}>
+      <div className="bg-black border-[2px] border-red-800 w-full max-w-sm p-6 font-mono" onClick={(e) => e.stopPropagation()}>
+        <p className="text-xs text-zinc-300 uppercase tracking-widest leading-relaxed mb-6">{message}</p>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={loading}
+            className="flex-1 border border-zinc-700 text-zinc-300 py-2.5 text-[10px] uppercase tracking-widest font-bold hover:bg-white hover:text-black transition-all disabled:opacity-50"
+          >
+            Abbrechen
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={loading}
+            className="flex-1 border-[2px] border-red-700 text-red-500 py-2.5 text-[10px] uppercase tracking-widest font-bold hover:bg-red-700 hover:text-white transition-all disabled:opacity-50"
+          >
+            {loading ? "..." : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Kurzer Hinweis-Popup für Fehler (z.B. fehlgeschlagener Upload) statt
+// einem nativen alert().
+function ChatNotice({ message, onClose }: { message: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-black border-[2px] border-zinc-600 w-full max-w-sm p-6 font-mono" onClick={(e) => e.stopPropagation()}>
+        <p className="text-xs text-zinc-300 leading-relaxed mb-6">{message}</p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-full border border-white bg-white text-black py-2.5 text-[10px] uppercase tracking-widest font-black hover:bg-black hover:text-white transition-all"
+        >
+          OK
+        </button>
       </div>
     </div>
   );
