@@ -5,7 +5,8 @@ import Pusher, { Channel as PusherChannel } from "pusher-js";
 import {
   listMyChannels, getChannelMessages, sendMessage, markChannelRead,
   searchChatUsers, getOrCreateDirectMessage, createChannel,
-  type ChatChannelSummary, type ChatMessageDto, type ChatUserResult,
+  deleteMessage, listChannelMembers, removeChannelMember, addChannelMember,
+  type ChatChannelSummary, type ChatMessageDto, type ChatUserResult, type ChatChannelMemberDto,
 } from "./actions";
 
 type CurrentUser = { id: number; username: string | null; isAdmin: boolean };
@@ -28,6 +29,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [showNewModal, setShowNewModal] = useState(false);
+  const [showMembersPanel, setShowMembersPanel] = useState(false);
   const [mobileShowList, setMobileShowList] = useState(true);
 
   const pusherRef = useRef<Pusher | null>(null);
@@ -56,6 +58,10 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
     const userChannel = pusher.subscribe(`private-chat-user-${currentUser.id}`);
     userChannel.bind("new-channel", () => {
       refreshChannels();
+    });
+    userChannel.bind("removed-from-channel", (data: { channelId: number }) => {
+      refreshChannels();
+      setActiveId((prev) => (prev === data.channelId ? null : prev));
     });
 
     return () => {
@@ -101,6 +107,9 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
         ),
       );
     });
+    binding.bind("message-deleted", (data: { id: number }) => {
+      setMessages((prev) => prev.filter((m) => m.id !== data.id));
+    });
     activeBindingRef.current = binding;
   }, [activeId, currentUser.id]);
 
@@ -131,6 +140,15 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   function selectChannel(id: number) {
     setActiveId(id);
     setMobileShowList(false);
+  }
+
+  async function handleDelete(messageId: number) {
+    if (!confirm("Nachricht wirklich löschen?")) return;
+    setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    const fd = new FormData();
+    fd.append("messageId", String(messageId));
+    const res = await deleteMessage(fd);
+    if (res?.error) alert(res.error);
   }
 
   return (
@@ -198,10 +216,18 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
             </div>
           ) : (
             <>
-              <div className="shrink-0 border-b border-zinc-800 px-4 py-3">
+              <div className="shrink-0 border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
                 <p className="text-sm font-black uppercase tracking-tight text-white">
                   {activeChannel.type === "dm" ? "@" : "#"}{channelDisplayName(activeChannel)}
                 </p>
+                {activeChannel.type === "channel" && (
+                  <button
+                    onClick={() => setShowMembersPanel(true)}
+                    className="text-[9px] uppercase tracking-widest text-zinc-500 border border-zinc-700 px-2.5 py-1.5 hover:border-zinc-400 hover:text-white transition"
+                  >
+                    Mitglieder
+                  </button>
+                )}
               </div>
               <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
                 {loadingMessages ? (
@@ -212,11 +238,22 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                   messages.map((m) => {
                     const own = m.userId === currentUser.id;
                     return (
-                      <div key={m.id} className={`flex ${own ? "justify-end" : "justify-start"}`}>
+                      <div key={m.id} className={`flex ${own ? "justify-end" : "justify-start"} group`}>
                         <div className={`max-w-[80%] sm:max-w-[60%] ${own ? "items-end" : "items-start"} flex flex-col`}>
                           {!own && <span className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1">{m.username ?? "?"}</span>}
-                          <div className={`px-3 py-2 text-sm break-words ${own ? "bg-white text-black" : "bg-zinc-900 border border-zinc-800 text-zinc-200"}`}>
-                            {m.body}
+                          <div className="flex items-center gap-1.5">
+                            {own && (
+                              <button
+                                onClick={() => handleDelete(m.id)}
+                                className="opacity-0 group-hover:opacity-100 text-[10px] text-zinc-600 hover:text-red-500 transition"
+                                title="Löschen"
+                              >
+                                ✕
+                              </button>
+                            )}
+                            <div className={`px-3 py-2 text-sm break-words ${own ? "bg-white text-black" : "bg-zinc-900 border border-zinc-800 text-zinc-200"}`}>
+                              {m.body}
+                            </div>
                           </div>
                           <span className="text-[9px] text-zinc-700 mt-1">{formatTime(m.createdAt)}</span>
                         </div>
@@ -254,6 +291,14 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
             setShowNewModal(false);
             selectChannel(channelId);
           }}
+        />
+      )}
+
+      {showMembersPanel && activeChannel && (
+        <MembersPanel
+          channelId={activeChannel.id}
+          currentUserId={currentUser.id}
+          onClose={() => setShowMembersPanel(false)}
         />
       )}
     </div>
@@ -416,6 +461,138 @@ function NewChatModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
         <div className="border-t border-zinc-800 p-3">
           <button onClick={onClose} className="w-full text-[10px] uppercase tracking-widest text-zinc-500 hover:text-white transition py-1.5">
             Abbrechen
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MembersPanel({ channelId, currentUserId, onClose }: { channelId: number; currentUserId: number; onClose: () => void }) {
+  const [members, setMembers] = useState<ChatChannelMemberDto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<ChatUserResult[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await listChannelMembers(channelId);
+    if (res.error) setErr(res.error);
+    setMembers(res.members ?? []);
+    setLoading(false);
+  }, [channelId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    let active = true;
+    searchChatUsers(query).then((res) => {
+      if (active) setResults(res.filter((u) => !members.some((m) => m.id === u.id)));
+    });
+    return () => {
+      active = false;
+    };
+  }, [query, members]);
+
+  async function handleAdd(userId: number) {
+    setBusy(true);
+    setErr("");
+    try {
+      const fd = new FormData();
+      fd.append("channelId", String(channelId));
+      fd.append("userId", String(userId));
+      const res = await addChannelMember(fd);
+      if (res.error) {
+        setErr(res.error);
+        return;
+      }
+      await load();
+      setQuery("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRemove(userId: number) {
+    if (!confirm("Dieses Mitglied wirklich aus dem Channel entfernen?")) return;
+    setBusy(true);
+    setErr("");
+    try {
+      const fd = new FormData();
+      fd.append("channelId", String(channelId));
+      fd.append("userId", String(userId));
+      const res = await removeChannelMember(fd);
+      if (res.error) {
+        setErr(res.error);
+        return;
+      }
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const amCreator = members.some((m) => m.id === currentUserId && m.isCreator);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-black border border-zinc-700 w-full max-w-md max-h-[80vh] flex flex-col font-mono" onClick={(e) => e.stopPropagation()}>
+        <div className="border-b border-zinc-800 px-4 py-3">
+          <p className="text-[10px] uppercase tracking-widest font-bold text-white">Mitglieder</p>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {err && <p className="text-[10px] text-red-500 uppercase tracking-widest">{err}</p>}
+          {loading ? (
+            <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Lädt...</p>
+          ) : (
+            <div className="space-y-1">
+              {members.map((m) => (
+                <div key={m.id} className="flex items-center justify-between px-3 py-2 border border-zinc-800 text-sm">
+                  <span>
+                    {m.username ?? m.email} {m.isCreator && <span className="text-[9px] text-zinc-500 uppercase tracking-widest ml-1">(Ersteller)</span>}
+                  </span>
+                  {!m.isCreator && amCreator && (
+                    <button
+                      onClick={() => handleRemove(m.id)}
+                      disabled={busy}
+                      className="text-[10px] text-zinc-600 hover:text-red-500 transition disabled:opacity-50"
+                    >
+                      Entfernen
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="border-t border-zinc-800 pt-3 space-y-2">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Mitglied hinzufügen..."
+              className="w-full bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-white outline-none transition"
+            />
+            <div className="space-y-1 max-h-32 overflow-y-auto">
+              {results.map((u) => (
+                <button
+                  key={u.id}
+                  disabled={busy}
+                  onClick={() => handleAdd(u.id)}
+                  className="w-full text-left px-3 py-2 border border-zinc-800 hover:border-zinc-500 transition text-sm disabled:opacity-50"
+                >
+                  + {u.username ?? u.email}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="border-t border-zinc-800 p-3">
+          <button onClick={onClose} className="w-full text-[10px] uppercase tracking-widest text-zinc-500 hover:text-white transition py-1.5">
+            Schließen
           </button>
         </div>
       </div>

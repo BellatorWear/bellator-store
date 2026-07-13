@@ -10,6 +10,7 @@ import { getSetting } from "@/app/utils/settings";
 import { CHAT_ROLE_ACCESS_KEY } from "@/app/utils/settings";
 import { hasChatAccess, CHAT_ROLE_ACCESS_DEFAULT } from "@/app/admin/permissions";
 import { getPusherServer, channelEventName, userEventName } from "@/lib/pusher";
+import { sendPushToUser } from "@/app/utils/push";
 
 const MAX_MESSAGE_LENGTH = 4000;
 
@@ -192,6 +193,25 @@ export async function sendMessage(formData: FormData): Promise<{ error?: string;
     console.error("Pusher-Trigger fehlgeschlagen:", e);
   }
 
+  // Push-Benachrichtigung an die übrigen Mitglieder (auch wenn sie /chat
+  // gerade nicht offen haben). Vereinfachung: es wird nicht unterschieden,
+  // ob jemand den Channel gerade aktiv ansieht - wer pushEnabled hat,
+  // bekommt die Benachrichtigung immer. Für ein Team-Tool in dieser Größe
+  // unkritisch, ließe sich aber später mit einem Presence-Kanal verfeinern.
+  const otherMembers = await db
+    .select()
+    .from(chatChannelMembers)
+    .where(eq(chatChannelMembers.channelId, channelId));
+  const channelRows = await db.select().from(chatChannels).where(eq(chatChannels.id, channelId));
+  const channel = channelRows[0];
+  const senderLabel = user.username ?? "Team-Chat";
+  const pushTitle = channel?.type === "channel" && channel.name ? `#${channel.name} — ${senderLabel}` : senderLabel;
+  await Promise.all(
+    otherMembers
+      .filter((m) => m.userId !== user.id)
+      .map((m) => sendPushToUser(m.userId, { title: pushTitle, body: body.slice(0, 140), url: "/chat" })),
+  );
+
   return { success: true };
 }
 
@@ -353,5 +373,91 @@ export async function leaveChannel(formData: FormData): Promise<{ error?: string
   await db
     .delete(chatChannelMembers)
     .where(and(eq(chatChannelMembers.channelId, channelId), eq(chatChannelMembers.userId, user.id)));
+  return { success: true };
+}
+
+// ===================================================================
+// Nachricht löschen
+// ===================================================================
+export async function deleteMessage(formData: FormData): Promise<{ error?: string; success?: boolean }> {
+  const user = await requireChatUser();
+  if (!user) return { error: "Keine Berechtigung." };
+
+  const messageId = Number(formData.get("messageId"));
+  if (!messageId) return { error: "Ungültig." };
+
+  const rows = await db.select().from(chatMessages).where(eq(chatMessages.id, messageId));
+  const message = rows[0];
+  if (!message) return { error: "Nachricht nicht gefunden." };
+  // Nur die eigene Nachricht oder ein voller Admin darf löschen.
+  if (message.userId !== user.id && !user.isAdmin) return { error: "Keine Berechtigung." };
+
+  await db.delete(chatMessages).where(eq(chatMessages.id, messageId));
+
+  try {
+    await getPusherServer().trigger(channelEventName(message.channelId), "message-deleted", {
+      id: messageId,
+      channelId: message.channelId,
+    });
+  } catch (e) {
+    console.error("Pusher-Trigger fehlgeschlagen:", e);
+  }
+
+  return { success: true };
+}
+
+// ===================================================================
+// Mitgliederverwaltung (nur Gruppen-Channels, nicht DMs)
+// ===================================================================
+export type ChatChannelMemberDto = { id: number; username: string | null; email: string; isCreator: boolean };
+
+export async function listChannelMembers(channelId: number): Promise<{ error?: string; members?: ChatChannelMemberDto[] }> {
+  const user = await requireChatUser();
+  if (!user) return { error: "Keine Berechtigung." };
+  if (!(await isMember(channelId, user.id))) return { error: "Kein Zugriff auf diesen Channel." };
+
+  const channelRows = await db.select().from(chatChannels).where(eq(chatChannels.id, channelId));
+  const channel = channelRows[0];
+  if (!channel) return { error: "Channel nicht gefunden." };
+
+  const memberships = await db.select().from(chatChannelMembers).where(eq(chatChannelMembers.channelId, channelId));
+  const memberIds = memberships.map((m) => m.userId);
+  const memberUsers = memberIds.length
+    ? await db.select({ id: users.id, username: users.username, email: users.email }).from(users).where(inArray(users.id, memberIds))
+    : [];
+
+  return {
+    members: memberUsers.map((u) => ({ id: u.id, username: u.username, email: u.email, isCreator: u.id === channel.createdBy })),
+  };
+}
+
+export async function removeChannelMember(formData: FormData): Promise<{ error?: string; success?: boolean }> {
+  const user = await requireChatUser();
+  if (!user) return { error: "Keine Berechtigung." };
+
+  const channelId = Number(formData.get("channelId"));
+  const targetUserId = Number(formData.get("userId"));
+  if (!channelId || !targetUserId) return { error: "Ungültig." };
+
+  const channelRows = await db.select().from(chatChannels).where(eq(chatChannels.id, channelId));
+  const channel = channelRows[0];
+  if (!channel || channel.type !== "channel") return { error: "Ungültiger Channel." };
+
+  // Nur der Ersteller des Channels oder ein voller Admin darf Mitglieder
+  // entfernen - sonst könnte jedes Mitglied jedes andere rauswerfen.
+  const isCreator = channel.createdBy === user.id;
+  if (!isCreator && !user.isAdmin) return { error: "Nur der Channel-Ersteller kann Mitglieder entfernen." };
+  if (targetUserId === channel.createdBy) return { error: "Der Ersteller kann nicht entfernt werden - Channel stattdessen verlassen lassen." };
+
+  await db
+    .delete(chatChannelMembers)
+    .where(and(eq(chatChannelMembers.channelId, channelId), eq(chatChannelMembers.userId, targetUserId)));
+
+  try {
+    await getPusherServer().trigger(userEventName(targetUserId), "removed-from-channel", { channelId });
+  } catch (e) {
+    console.error("Pusher-Trigger fehlgeschlagen:", e);
+  }
+
   return { success: true };
 }
