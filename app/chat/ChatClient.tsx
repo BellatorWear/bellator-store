@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import Pusher, { Channel as PusherChannel } from "pusher-js";
+import { upload } from "@vercel/blob/client";
 import {
   listMyChannels, getChannelMessages, sendMessage, markChannelRead,
   searchChatUsers, getOrCreateDirectMessage, createChannel,
@@ -11,6 +12,11 @@ import {
 } from "./actions";
 
 type CurrentUser = { id: number; username: string | null; isAdmin: boolean };
+type PendingAttachment = { url: string; name: string; type: string } | null;
+
+function isImageType(type: string | null): boolean {
+  return !!type && type.startsWith("image/");
+}
 
 function channelDisplayName(c: ChatChannelSummary): string {
   if (c.type === "dm") return c.otherMember?.username ?? c.otherMember?.email ?? "Unbekannt";
@@ -30,6 +36,9 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment>(null);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
   const [showMembersPanel, setShowMembersPanel] = useState(false);
   const [mobileShowList, setMobileShowList] = useState(true);
@@ -113,7 +122,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
       setChannels((prev) =>
         prev.map((c) =>
           c.id === activeId
-            ? { ...c, lastMessage: { body: msg.body, createdAt: msg.createdAt, authorUsername: msg.username }, unread: false }
+            ? { ...c, lastMessage: { body: msg.body || (msg.attachmentName ? `📎 ${msg.attachmentName}` : ""), createdAt: msg.createdAt, authorUsername: msg.username }, unread: false }
             : c,
         ),
       );
@@ -137,21 +146,49 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
-    if (!draft.trim() || !activeId || sending) return;
+    if ((!draft.trim() && !pendingAttachment) || !activeId || sending) return;
     setSending(true);
     const body = draft;
+    const attachment = pendingAttachment;
     setDraft("");
+    setPendingAttachment(null);
     try {
       const fd = new FormData();
       fd.append("channelId", String(activeId));
       fd.append("body", body);
+      if (attachment) {
+        fd.append("attachmentUrl", attachment.url);
+        fd.append("attachmentName", attachment.name);
+        fd.append("attachmentType", attachment.type);
+      }
       const res = await sendMessage(fd);
       if (res?.error) {
         setDraft(body);
+        setPendingAttachment(attachment);
         alert(res.error);
       }
     } finally {
       setSending(false);
+    }
+  }
+
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // damit dieselbe Datei erneut ausgewählt werden kann
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) {
+      alert("Datei ist zu groß (max. 25 MB).");
+      return;
+    }
+    setUploadingAttachment(true);
+    try {
+      const blob = await upload(file.name, file, { access: "public", handleUploadUrl: "/api/chat/upload" });
+      setPendingAttachment({ url: blob.url, name: file.name, type: file.type || "application/octet-stream" });
+    } catch (err) {
+      console.error("Chat-Upload fehlgeschlagen:", err);
+      alert("Upload fehlgeschlagen. Dateityp erlaubt? (Bilder, PDF, ZIP, Office, Video, max. 25 MB)");
+    } finally {
+      setUploadingAttachment(false);
     }
   }
 
@@ -279,8 +316,24 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                                 ✕
                               </button>
                             )}
-                            <div className={`px-3 py-2 text-sm break-words ${own ? "bg-white text-black" : "bg-zinc-900 border border-zinc-800 text-zinc-200"}`}>
-                              {m.body}
+                            <div className={`px-3 py-2 text-sm break-words space-y-2 ${own ? "bg-white text-black" : "bg-zinc-900 border border-zinc-800 text-zinc-200"}`}>
+                              {m.attachmentUrl && isImageType(m.attachmentType) && (
+                                <a href={m.attachmentUrl} target="_blank" rel="noopener noreferrer" className="block">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={m.attachmentUrl} alt={m.attachmentName ?? "Anhang"} className="max-w-full max-h-64 rounded-sm" />
+                                </a>
+                              )}
+                              {m.attachmentUrl && !isImageType(m.attachmentType) && (
+                                <a
+                                  href={m.attachmentUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={`flex items-center gap-2 text-xs underline break-all ${own ? "text-black" : "text-zinc-200"}`}
+                                >
+                                  📎 {m.attachmentName ?? "Anhang"}
+                                </a>
+                              )}
+                              {m.body && <span>{m.body}</span>}
                             </div>
                           </div>
                           <span className="text-[9px] text-zinc-700 mt-1 flex items-center gap-1">
@@ -298,17 +351,41 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                 )}
                 <div ref={messagesEndRef} />
               </div>
+              {pendingAttachment && (
+                <div className="shrink-0 border-t border-zinc-800 px-3 py-2 flex items-center justify-between bg-zinc-950">
+                  <span className="text-xs text-zinc-400 truncate flex items-center gap-1.5">
+                    {isImageType(pendingAttachment.type) ? "🖼️" : "📎"} {pendingAttachment.name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setPendingAttachment(null)}
+                    className="text-[10px] text-zinc-600 hover:text-red-500 transition uppercase tracking-widest ml-3 shrink-0"
+                  >
+                    Entfernen
+                  </button>
+                </div>
+              )}
               <form onSubmit={handleSend} className="shrink-0 border-t border-zinc-800 p-3 flex gap-2">
+                <input ref={fileInputRef} type="file" onChange={handleFileSelect} className="hidden" />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingAttachment}
+                  title="Datei anhängen"
+                  className="border border-zinc-700 text-zinc-400 px-3 py-2.5 text-sm hover:border-zinc-400 hover:text-white transition-all disabled:opacity-40 shrink-0"
+                >
+                  {uploadingAttachment ? "..." : "📎"}
+                </button>
                 <input
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   placeholder="Nachricht schreiben..."
-                  className="flex-1 bg-zinc-900 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:border-white outline-none transition"
+                  className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:border-white outline-none transition"
                 />
                 <button
                   type="submit"
-                  disabled={!draft.trim() || sending}
-                  className="border border-white bg-white text-black px-5 py-2.5 text-[10px] uppercase tracking-widest font-black hover:bg-black hover:text-white transition-all disabled:opacity-40"
+                  disabled={(!draft.trim() && !pendingAttachment) || sending}
+                  className="border border-white bg-white text-black px-5 py-2.5 text-[10px] uppercase tracking-widest font-black hover:bg-black hover:text-white transition-all disabled:opacity-40 shrink-0"
                 >
                   Senden
                 </button>

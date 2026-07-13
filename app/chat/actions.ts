@@ -100,7 +100,11 @@ export async function listMyChannels(): Promise<ChatChannelSummary[]> {
       name: channel.name,
       otherMember,
       lastMessage: lastMsg
-        ? { body: lastMsg.body, createdAt: lastMsg.createdAt, authorUsername: userById.get(lastMsg.userId)?.username ?? null }
+        ? {
+            body: lastMsg.body || (lastMsg.attachmentName ? `📎 ${lastMsg.attachmentName}` : ""),
+            createdAt: lastMsg.createdAt,
+            authorUsername: userById.get(lastMsg.userId)?.username ?? null,
+          }
         : null,
       unread,
     });
@@ -121,6 +125,9 @@ export type ChatMessageDto = {
   userId: number;
   username: string | null;
   body: string;
+  attachmentUrl: string | null;
+  attachmentName: string | null;
+  attachmentType: string | null;
   createdAt: Date | null;
 };
 
@@ -149,6 +156,9 @@ export async function getChannelMessages(channelId: number): Promise<{ error?: s
       userId: r.userId,
       username: usernameById.get(r.userId) ?? null,
       body: r.body,
+      attachmentUrl: r.attachmentUrl,
+      attachmentName: r.attachmentName,
+      attachmentType: r.attachmentType,
       createdAt: r.createdAt,
     })),
   };
@@ -160,15 +170,35 @@ export async function sendMessage(formData: FormData): Promise<{ error?: string;
 
   const channelId = Number(formData.get("channelId"));
   const bodyRaw = ((formData.get("body") as string) ?? "").trim();
-  if (!channelId || !bodyRaw) return { error: "Ungültig." };
+  const attachmentUrlRaw = ((formData.get("attachmentUrl") as string) ?? "").trim();
+  const attachmentNameRaw = ((formData.get("attachmentName") as string) ?? "").trim();
+  const attachmentTypeRaw = ((formData.get("attachmentType") as string) ?? "").trim();
+
+  if (!channelId) return { error: "Ungültig." };
+  if (!bodyRaw && !attachmentUrlRaw) return { error: "Nachricht darf nicht leer sein." };
   if (bodyRaw.length > MAX_MESSAGE_LENGTH) return { error: "Nachricht zu lang." };
-  if (isSuspiciousInput(bodyRaw.slice(0, 200))) return { error: "Ungültige Eingabe." };
+  if (bodyRaw && isSuspiciousInput(bodyRaw.slice(0, 200))) return { error: "Ungültige Eingabe." };
   if (!(await isMember(channelId, user.id))) return { error: "Kein Zugriff auf diesen Channel." };
 
-  const body = sanitizeText(bodyRaw, MAX_MESSAGE_LENGTH);
+  // Nur echte Vercel-Blob-URLs akzeptieren (kommen vom eigenen Upload-Token-
+  // Endpoint) - verhindert, dass jemand beliebige externe URLs als
+  // "Anhang" einschleust.
+  let attachmentUrl: string | null = null;
+  let attachmentName: string | null = null;
+  let attachmentType: string | null = null;
+  if (attachmentUrlRaw) {
+    if (!attachmentUrlRaw.startsWith("https://") || !attachmentUrlRaw.includes(".public.blob.vercel-storage.com/")) {
+      return { error: "Ungültiger Anhang." };
+    }
+    attachmentUrl = attachmentUrlRaw;
+    attachmentName = attachmentNameRaw ? sanitizeText(attachmentNameRaw, 200) : "Anhang";
+    attachmentType = attachmentTypeRaw.slice(0, 100);
+  }
+
+  const body = bodyRaw ? sanitizeText(bodyRaw, MAX_MESSAGE_LENGTH) : "";
   const [message] = await db
     .insert(chatMessages)
-    .values({ channelId, userId: user.id, body })
+    .values({ channelId, userId: user.id, body, attachmentUrl, attachmentName, attachmentType })
     .returning();
 
   // Eigene Nachricht gilt für einen selbst sofort als gelesen.
@@ -184,6 +214,9 @@ export async function sendMessage(formData: FormData): Promise<{ error?: string;
       userId: user.id,
       username: user.username,
       body: message.body,
+      attachmentUrl: message.attachmentUrl,
+      attachmentName: message.attachmentName,
+      attachmentType: message.attachmentType,
       createdAt: message.createdAt,
     });
   } catch (e) {
@@ -206,10 +239,11 @@ export async function sendMessage(formData: FormData): Promise<{ error?: string;
   const channel = channelRows[0];
   const senderLabel = user.username ?? "Team-Chat";
   const pushTitle = channel?.type === "channel" && channel.name ? `#${channel.name} — ${senderLabel}` : senderLabel;
+  const pushBody = body ? body.slice(0, 140) : attachmentUrl ? `📎 ${attachmentName}` : "";
   await Promise.all(
     otherMembers
       .filter((m) => m.userId !== user.id)
-      .map((m) => sendPushToUser(m.userId, { title: pushTitle, body: body.slice(0, 140), url: "/chat" })),
+      .map((m) => sendPushToUser(m.userId, { title: pushTitle, body: pushBody, url: "/chat" })),
   );
 
   return { success: true };
@@ -488,4 +522,28 @@ export async function removeChannelMember(formData: FormData): Promise<{ error?:
   }
 
   return { success: true };
+}
+
+// ===================================================================
+// Ungelesen-Indikator fürs Hauptmenü (leichtgewichtig, ohne die
+// Nachrichten-/Mitglieder-Details von listMyChannels() zu laden - das hier
+// läuft potenziell auf jedem Seitenaufruf über GlobalHeader).
+// ===================================================================
+export async function hasUnreadChats(): Promise<boolean> {
+  const user = await requireChatUser();
+  if (!user) return false;
+
+  const memberships = await db.select().from(chatChannelMembers).where(eq(chatChannelMembers.userId, user.id));
+  for (const m of memberships) {
+    const lastMsgRows = await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.channelId, m.channelId))
+      .orderBy(desc(chatMessages.createdAt))
+      .limit(1);
+    const lastMsg = lastMsgRows[0];
+    if (!lastMsg || lastMsg.userId === user.id) continue;
+    if (!m.lastReadAt || new Date(lastMsg.createdAt ?? 0) > new Date(m.lastReadAt)) return true;
+  }
+  return false;
 }

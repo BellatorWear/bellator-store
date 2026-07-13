@@ -4,6 +4,7 @@ import { getCart } from "@/app/cart";
 import HamburgerNav from "./HamburgerNav";
 import { getSetting, CHAT_ROLE_ACCESS_KEY } from "@/app/utils/settings";
 import { hasChatAccess, CHAT_ROLE_ACCESS_DEFAULT } from "@/app/admin/permissions";
+import { hasUnreadChats } from "@/app/chat/actions";
 
 export default async function GlobalHeader() {
   const user = await getCurrentUser();
@@ -19,9 +20,11 @@ export default async function GlobalHeader() {
   // haben, das spart die zusätzliche siteSettings-Abfrage bei jedem
   // Seitenaufruf für nicht eingeloggte Besucher.
   let chatAccess = false;
+  let chatUnread = false;
   if (user) {
     const roleDefaults = await getSetting(CHAT_ROLE_ACCESS_KEY, CHAT_ROLE_ACCESS_DEFAULT);
     chatAccess = hasChatAccess(user, roleDefaults);
+    if (chatAccess) chatUnread = await hasUnreadChats();
   }
 
   return (
@@ -35,6 +38,7 @@ export default async function GlobalHeader() {
         username={user?.username ?? null}
         isLoggedIn={!!user}
         hasChatAccess={chatAccess}
+        hasUnreadChat={chatUnread}
       />
     </header>
   );

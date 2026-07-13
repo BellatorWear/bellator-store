@@ -334,6 +334,11 @@ export const chatMessages = pgTable("chat_messages", {
   channelId: integer("channel_id").notNull().references(() => chatChannels.id),
   userId: integer("user_id").notNull().references(() => users.id),
   body: text("body").notNull(),
+  // Optionaler Datei-/Bild-Anhang - body darf dann leer sein (siehe
+  // sendMessage-Validierung: body ODER Anhang muss gesetzt sein).
+  attachmentUrl: text("attachment_url"),
+  attachmentName: text("attachment_name"),
+  attachmentType: text("attachment_type"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

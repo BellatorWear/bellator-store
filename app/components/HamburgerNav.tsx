@@ -10,6 +10,7 @@ type NavProps = {
   username?: string | null;
   isLoggedIn?: boolean;
   hasChatAccess?: boolean;
+  hasUnreadChat?: boolean;
 };
 
 const LINKS = [
@@ -22,7 +23,7 @@ const LINKS = [
   { href: "/mehr", label: "Mehr" },
 ];
 
-export default function HamburgerNav({ cartCount = 0, isAdmin, username, isLoggedIn, hasChatAccess }: NavProps) {
+export default function HamburgerNav({ cartCount = 0, isAdmin, username, isLoggedIn, hasChatAccess, hasUnreadChat }: NavProps) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const redeemRef = useRef<RedeemCodeButtonHandle | null>(null);
@@ -113,9 +114,10 @@ export default function HamburgerNav({ cartCount = 0, isAdmin, username, isLogge
             <Link
               href="/chat"
               onClick={() => setOpen(false)}
-              className="flex items-center px-4 py-3 text-sm font-bold uppercase tracking-widest text-blue-400 hover:text-blue-300 hover:bg-zinc-900 transition-all border border-transparent hover:border-blue-800"
+              className="flex items-center gap-2 px-4 py-3 text-sm font-bold uppercase tracking-widest text-blue-400 hover:text-blue-300 hover:bg-zinc-900 transition-all border border-transparent hover:border-blue-800"
             >
               Team-Chat
+              {hasUnreadChat && <span className="w-2 h-2 rounded-full bg-blue-400" aria-label="Neue Nachrichten" />}
             </Link>
           )}
 
@@ -154,9 +156,12 @@ export default function HamburgerNav({ cartCount = 0, isAdmin, username, isLogge
     <>
       <button
         onClick={() => setOpen(true)}
-        className="border border-zinc-600 p-2 hover:border-white transition text-white flex flex-col gap-[4px] items-center justify-center w-9 h-9"
+        className="relative border border-zinc-600 p-2 hover:border-white transition text-white flex flex-col gap-[4px] items-center justify-center w-9 h-9"
         aria-label="Menü öffnen"
       >
+        {hasUnreadChat && (
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-white border border-black" aria-label="Neue Nachrichten" />
+        )}
         <span className="w-4 h-[2px] bg-current" />
         <span className="w-4 h-[2px] bg-current" />
         <span className="w-4 h-[2px] bg-current" />
