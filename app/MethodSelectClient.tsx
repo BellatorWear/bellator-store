@@ -34,7 +34,7 @@ export default function MethodSelectClient() {
         backgroundAttachment: "fixed",
       }}
     >
-      <div className="absolute inset-0 bg-black/60 z-0" />
+      <div className="absolute inset-0 bg-black/35 z-0" />
       <div className="relative z-10 w-full max-w-[320px] sm:max-w-sm border border-zinc-700 p-6 sm:p-8 bg-black/60 backdrop-blur-md">
         <h1 className="text-3xl font-black uppercase tracking-tighter mb-1 text-center italic">Bellator.</h1>
         <p className="text-[11px] text-zinc-500 uppercase tracking-widest mb-8 text-center">

@@ -197,7 +197,7 @@ export default async function AdminPage() {
     <div className="min-h-screen flex flex-col bg-black text-white font-mono"
       style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
       <div className="relative z-10 flex flex-col min-h-screen t-invert">
-      <div className="absolute inset-0 bg-black/40 z-0 pointer-events-none" />
+      <div className="absolute inset-0 bg-black/35 z-0 pointer-events-none" />
       <GlobalHeader />
       <main className="flex-1 w-full max-w-[1400px] mx-auto px-3 sm:px-6 py-8 space-y-8">
         <div className="flex justify-between items-center flex-wrap gap-3">
