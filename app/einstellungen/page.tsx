@@ -22,13 +22,13 @@ export default async function EinstellungenPage() {
       <div className="absolute inset-0 bg-black/35 pointer-events-none z-0" />
         <GlobalHeader />
         <main className="flex-1 w-full max-w-[1400px] mx-auto px-4 sm:px-8 py-8">
-          <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-            <div className="t-card border p-4 lg:col-span-2">
+          <div className="w-full columns-1 lg:columns-2 gap-6">
+            <div className="t-card border p-4 mb-6 [column-span:all]">
               <h1 className="text-2xl font-black uppercase tracking-tighter">Einstellungen</h1>
             </div>
 
             {/* Theme */}
-            <section className="t-card border p-4">
+            <section className="t-card border p-4 mb-6 break-inside-avoid-column">
               <div className="flex justify-between items-center">
                 <div>
                   <h2 className="text-xs font-bold uppercase tracking-widest t-muted">Erscheinungsbild</h2>
@@ -39,7 +39,7 @@ export default async function EinstellungenPage() {
             </section>
 
             {/* Benutzername */}
-            <section className="t-card border p-4 space-y-4">
+            <section className="t-card border p-4 mb-6 space-y-4 break-inside-avoid-column">
               <h2 className="text-xs font-bold uppercase tracking-widest t-muted">Benutzername</h2>
               <UsernameEditor
                 currentUsername={user.username}
@@ -48,13 +48,13 @@ export default async function EinstellungenPage() {
             </section>
 
             {/* Passwort */}
-            <section className="t-card border p-4 space-y-4">
+            <section className="t-card border p-4 mb-6 space-y-4 break-inside-avoid-column">
               <h2 className="text-xs font-bold uppercase tracking-widest t-muted">Passwort ändern</h2>
               <ChangePasswordForm />
             </section>
 
             {/* Push */}
-            <section className="t-card border p-4">
+            <section className="t-card border p-4 mb-6 break-inside-avoid-column">
               <div className="flex justify-between items-center">
                 <div>
                   <h2 className="text-xs font-bold uppercase tracking-widest t-muted">Push-Benachrichtigungen</h2>
@@ -65,7 +65,7 @@ export default async function EinstellungenPage() {
             </section>
 
             {/* Newsletter */}
-            <section className="t-card border p-4">
+            <section className="t-card border p-4 mb-6 break-inside-avoid-column">
               <div className="flex justify-between items-center">
                 <div>
                   <h2 className="text-xs font-bold uppercase tracking-widest t-muted">Newsletter</h2>
@@ -76,7 +76,7 @@ export default async function EinstellungenPage() {
             </section>
 
             {/* Info */}
-            <section className="t-card border p-4 space-y-2 text-xs">
+            <section className="t-card border p-4 mb-6 space-y-2 text-xs break-inside-avoid-column">
               <h2 className="font-bold uppercase tracking-widest t-muted">Konto</h2>
               <div className="flex justify-between py-1 border-b t-border-s">
                 <span className="t-muted uppercase tracking-widest">Email</span>

@@ -60,15 +60,15 @@ export default async function Page() {
       <div className="absolute inset-0 bg-black/35 pointer-events-none z-0" />
         <GlobalHeader />
         <main className="flex-1 w-full max-w-[1400px] mx-auto px-4 sm:px-8 py-8">
-        <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <div className="w-full columns-1 lg:columns-2 gap-6">
 
-          <div className="t-card border p-4 lg:col-span-2">
+          <div className="t-card border p-4 mb-6 [column-span:all]">
             <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter mb-1">Mein Profil</h1>
             <p className="text-xs t-muted uppercase tracking-widest">Account verwalten</p>
           </div>
 
           {/* Accountdaten */}
-          <section className="t-card border p-5 sm:p-6 space-y-3">
+          <section className="t-card border p-5 sm:p-6 mb-6 space-y-3 break-inside-avoid-column">
             <h2 className="text-xs font-bold uppercase tracking-widest t-muted mb-2">Accountdaten</h2>
             {user.username && (
               <div className="flex justify-between text-sm gap-4">
@@ -109,7 +109,7 @@ export default async function Page() {
           </section>
 
           {/* Bestellhistorie */}
-          <section className="t-card border p-5 sm:p-6">
+          <section className="t-card border p-5 sm:p-6 mb-6 break-inside-avoid-column">
             <h2 className="text-xs font-bold uppercase tracking-widest t-muted mb-4">Bestellhistorie</h2>
             {userOrders.length === 0 ? (
               <p className="text-xs t-faint uppercase tracking-widest">Noch keine Bestellungen.</p>
@@ -132,7 +132,7 @@ export default async function Page() {
           </section>
 
           {/* Belege */}
-          <section className="t-card border p-5 sm:p-6">
+          <section className="t-card border p-5 sm:p-6 mb-6 break-inside-avoid-column">
             <h2 className="text-xs font-bold uppercase tracking-widest t-muted mb-4">Belege</h2>
             <p className="text-xs t-muted mb-4">Sieh dir deine Belege ein und lade sie herunter. Passwortgeschützt.</p>
             <a href="/belege" className="inline-block border t-border py-2 px-4 text-xs uppercase tracking-widest hover:bg-white hover:text-black transition font-bold t-text">
@@ -141,7 +141,7 @@ export default async function Page() {
           </section>
 
           {/* Challenges */}
-          <section className="t-card border p-5 sm:p-6">
+          <section className="t-card border p-5 sm:p-6 mb-6 break-inside-avoid-column">
             <h2 className="text-xs font-bold uppercase tracking-widest t-muted mb-4">Achievements & Challenges</h2>
             {completedChallenges.length === 0 ? (
               <p className="text-xs t-faint uppercase tracking-widest">Noch keine Challenges abgeschlossen.</p>
@@ -174,20 +174,20 @@ export default async function Page() {
           </section>
 
           {/* Passwort ändern */}
-          <section className="t-card border p-5 sm:p-6">
+          <section className="t-card border p-5 sm:p-6 mb-6 break-inside-avoid-column">
             <h2 className="text-xs font-bold uppercase tracking-widest t-muted mb-4">Passwort ändern</h2>
             <ChangePasswordForm />
           </section>
 
           {/* Sitzung */}
-          <section className="t-card border p-5 sm:p-6">
+          <section className="t-card border p-5 sm:p-6 mb-6 break-inside-avoid-column">
             <h2 className="text-xs font-bold uppercase tracking-widest t-muted mb-4">Sitzung</h2>
             <p className="text-xs t-muted mb-4">Dadurch wirst du auf diesem Gerät ausgeloggt.</p>
             <LogoutButton />
           </section>
 
           {/* Account löschen */}
-          <section className="border border-red-900 bg-black/80 p-5 sm:p-6 lg:col-span-2">
+          <section className="border border-red-900 bg-black/80 p-5 sm:p-6 [column-span:all]">
             <h2 className="text-xs font-bold uppercase tracking-widest text-red-700 mb-4">Gefahrenzone</h2>
             <p className="text-xs t-muted mb-4">Das Löschen deines Accounts ist unwiderruflich. Alle Daten werden permanent entfernt.</p>
             <DeleteAccountButton />
