@@ -15,6 +15,10 @@ import {
 
 type CurrentUser = { id: number; username: string | null; isAdmin: boolean };
 type PendingAttachment = { url: string; name: string; type: string } | null;
+// Client-seitige Erweiterung für optimistisch angezeigte, noch nicht vom
+// Server bestätigte Nachrichten (negative id, damit sie nie mit einer
+// echten DB-id kollidiert).
+type LocalChatMessage = ChatMessageDto & { pending?: boolean };
 
 function isImageType(type: string | null): boolean {
   return !!type && type.startsWith("image/");
@@ -33,7 +37,7 @@ function formatTime(d: Date | string | null): string {
 export default function ChatClient({ currentUser, initialChannels }: { currentUser: CurrentUser; initialChannels: ChatChannelSummary[] }) {
   const [channels, setChannels] = useState<ChatChannelSummary[]>(initialChannels);
   const [activeId, setActiveId] = useState<number | null>(null);
-  const [messages, setMessages] = useState<ChatMessageDto[]>([]);
+  const [messages, setMessages] = useState<LocalChatMessage[]>([]);
   const [readReceipts, setReadReceipts] = useState<ChatReadReceipt[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState("");
@@ -138,7 +142,15 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
       console.error(`Pusher-Abo-Fehler (Channel ${activeId}):`, err);
     });
     binding.bind("new-message", (msg: ChatMessageDto) => {
-      setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        // Falls das die eigene Nachricht ist, für die gerade noch ein
+        // optimistischer Platzhalter (pending) angezeigt wird, den
+        // Platzhalter entfernen statt die Nachricht doppelt anzuzeigen.
+        const withoutOwnPending =
+          msg.userId === currentUser.id ? prev.filter((m) => !(m.pending && m.userId === currentUser.id)) : prev;
+        return [...withoutOwnPending, msg];
+      });
       if (msg.userId !== currentUser.id) {
         markChannelRead(activeId);
       }
@@ -175,6 +187,41 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
     const attachment = pendingAttachment;
     setDraft("");
     setPendingAttachment(null);
+
+    // Sofort anzeigen, statt auf die Server-Antwort zu warten - negative
+    // Temp-id, damit sie nie mit einer echten DB-id kollidiert. Zeigt eine
+    // Uhr statt Haken, solange sie noch nicht bestätigt ist (siehe
+    // Render-Logik weiter unten).
+    const tempId = -Date.now();
+    const optimisticMsg: LocalChatMessage = {
+      id: tempId,
+      channelId: activeId,
+      userId: currentUser.id,
+      username: currentUser.username,
+      body,
+      attachmentUrl: attachment?.url ?? null,
+      attachmentName: attachment?.name ?? null,
+      attachmentType: attachment?.type ?? null,
+      createdAt: new Date(),
+      pending: true,
+    };
+    setMessages((prev) => [...prev, optimisticMsg]);
+    setChannels((prev) =>
+      prev.map((c) =>
+        c.id === activeId
+          ? {
+              ...c,
+              lastMessage: {
+                body: body || (attachment ? `📎 ${attachment.name}` : ""),
+                createdAt: optimisticMsg.createdAt,
+                authorUsername: currentUser.username,
+              },
+              unread: false,
+            }
+          : c,
+      ),
+    );
+
     try {
       const fd = new FormData();
       fd.append("channelId", String(activeId));
@@ -186,30 +233,23 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
       }
       const res = await sendMessage(fd);
       if (res?.error) {
+        // Fehlgeschlagen - Platzhalter wieder entfernen, Entwurf zurückgeben.
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
         setDraft(body);
         setPendingAttachment(attachment);
         setNotice(res.error);
       } else if (res?.message) {
-        // Nicht auf den Pusher-Live-Weg warten, um die eigene Nachricht zu
-        // sehen - kommt direkt aus der Server-Antwort. Das Pusher-Event
-        // trifft danach trotzdem noch ein (für andere offene Tabs/Geräte),
-        // die Dedupe-Prüfung über die id verhindert ein doppeltes Anzeigen.
-        setMessages((prev) => (prev.some((m) => m.id === res.message!.id) ? prev : [...prev, res.message!]));
-        setChannels((prev) =>
-          prev.map((c) =>
-            c.id === activeId
-              ? {
-                  ...c,
-                  lastMessage: {
-                    body: res.message!.body || (res.message!.attachmentName ? `📎 ${res.message!.attachmentName}` : ""),
-                    createdAt: res.message!.createdAt,
-                    authorUsername: res.message!.username,
-                  },
-                  unread: false,
-                }
-              : c,
-          ),
-        );
+        const real = res.message;
+        setMessages((prev) => {
+          // Falls das Pusher-Event für die eigene Nachricht schneller war
+          // als diese Server-Antwort, ist die echte Nachricht schon in der
+          // Liste (siehe new-message-Handler) - dann nur den Platzhalter
+          // entfernen statt ein zweites Mal einzufügen.
+          if (prev.some((m) => m.id === real.id)) {
+            return prev.filter((m) => m.id !== tempId);
+          }
+          return prev.map((m) => (m.id === tempId ? real : m));
+        });
       }
     } finally {
       setSending(false);
@@ -382,7 +422,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                         <div className={`max-w-[80%] sm:max-w-[60%] ${own ? "items-end" : "items-start"} flex flex-col`}>
                           {!own && <span className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1">{m.username ?? "?"}</span>}
                           <div className="flex items-center gap-1.5">
-                            {own && (
+                            {own && !m.pending && (
                               <button
                                 onClick={() => handleDelete(m.id)}
                                 className="opacity-0 group-hover:opacity-100 text-[10px] text-zinc-600 hover:text-red-500 transition"
@@ -391,7 +431,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                                 ✕
                               </button>
                             )}
-                            <div className={`px-3 py-2 text-sm break-words space-y-2 ${own ? "bg-white text-black" : "bg-zinc-900 border border-zinc-800 text-zinc-200"}`}>
+                            <div className={`px-3 py-2 text-sm break-words space-y-2 ${own ? "bg-white text-black" : "bg-zinc-900 border border-zinc-800 text-zinc-200"} ${m.pending ? "opacity-60" : ""}`}>
                               {m.attachmentUrl && isImageType(m.attachmentType) && (
                                 <a href={m.attachmentUrl} target="_blank" rel="noopener noreferrer" className="block">
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -414,8 +454,11 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                           <span className="text-[9px] text-zinc-700 mt-1 flex items-center gap-1">
                             {formatTime(m.createdAt)}
                             {own && (
-                              <span className={isMessageRead(m) ? "text-white" : "text-zinc-700"} title={isMessageRead(m) ? "Gelesen" : "Gesendet"}>
-                                {isMessageRead(m) ? "✓✓" : "✓"}
+                              <span
+                                className={m.pending ? "text-zinc-700" : isMessageRead(m) ? "text-white" : "text-zinc-700"}
+                                title={m.pending ? "Wird gesendet..." : isMessageRead(m) ? "Gelesen" : "Gesendet"}
+                              >
+                                {m.pending ? "🕓" : isMessageRead(m) ? "✓✓" : "✓"}
                               </span>
                             )}
                           </span>
