@@ -57,7 +57,6 @@ export default async function Page() {
     <div className="min-h-screen flex flex-col font-mono t-text"
       style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
       <div className="relative z-10 flex flex-col min-h-screen t-invert">
-      <div className="absolute inset-0 bg-black/35 pointer-events-none z-0" />
         <GlobalHeader />
         <main className="flex-1 w-full max-w-[1400px] mx-auto px-4 sm:px-8 py-8">
         <div className="w-full columns-1 lg:columns-2 gap-6">

@@ -55,7 +55,6 @@ function LoginForm() {
         backgroundAttachment: "fixed",
       }}
     >
-      <div className="absolute inset-0 bg-black/35 z-0" />
 
       <div className="relative z-10 w-full max-w-[320px] sm:max-w-sm border border-white/20 p-5 sm:p-8 bg-black/75 backdrop-blur-md">
         <a href="/shop">
