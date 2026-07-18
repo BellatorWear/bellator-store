@@ -53,6 +53,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [readBreakdownFor, setReadBreakdownFor] = useState<LocalChatMessage | null>(null);
 
   const pusherRef = useRef<Pusher | null>(null);
   const activeBindingRef = useRef<PusherChannel | null>(null);
@@ -453,13 +454,24 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                           </div>
                           <span className="text-[9px] text-zinc-700 mt-1 flex items-center gap-1">
                             {formatTime(m.createdAt)}
-                            {own && (
-                              <span
-                                className={m.pending ? "text-zinc-700" : isMessageRead(m) ? "text-white" : "text-zinc-700"}
-                                title={m.pending ? "Wird gesendet..." : isMessageRead(m) ? "Gelesen" : "Gesendet"}
+                            {own && activeChannel.type === "channel" && !m.pending ? (
+                              <button
+                                type="button"
+                                onClick={() => setReadBreakdownFor(m)}
+                                className={`hover:underline ${isMessageRead(m) ? "text-white" : "text-zinc-700"}`}
+                                title="Wer hat gelesen?"
                               >
-                                {m.pending ? "🕓" : isMessageRead(m) ? "✓✓" : "✓"}
-                              </span>
+                                {isMessageRead(m) ? "✓✓" : "✓"}
+                              </button>
+                            ) : (
+                              own && (
+                                <span
+                                  className={m.pending ? "text-zinc-700" : isMessageRead(m) ? "text-white" : "text-zinc-700"}
+                                  title={m.pending ? "Wird gesendet..." : isMessageRead(m) ? "Gelesen" : "Gesendet"}
+                                >
+                                  {m.pending ? "🕓" : isMessageRead(m) ? "✓✓" : "✓"}
+                                </span>
+                              )
                             )}
                           </span>
                         </div>
@@ -542,6 +554,16 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
       )}
 
       {notice && <ChatNotice message={notice} onClose={() => setNotice(null)} />}
+
+      {readBreakdownFor && activeId && (
+        <ReadBreakdownDialog
+          message={readBreakdownFor}
+          channelId={activeId}
+          readReceipts={readReceipts}
+          currentUserId={currentUser.id}
+          onClose={() => setReadBreakdownFor(null)}
+        />
+      )}
     </div>
   );
 }
@@ -916,6 +938,77 @@ function ChatNotice({ message, onClose }: { message: string; onClose: () => void
         >
           OK
         </button>
+      </div>
+    </div>
+  );
+}
+
+// Zeigt bei Gruppen-Channels auf, WER genau eine eigene Nachricht schon
+// gelesen hat, statt nur "gelesen von allen oder noch nicht". DMs brauchen
+// das nicht - da ist der einfache Haken schon eindeutig (nur 1 Person).
+function ReadBreakdownDialog({
+  message,
+  channelId,
+  readReceipts,
+  currentUserId,
+  onClose,
+}: {
+  message: LocalChatMessage;
+  channelId: number;
+  readReceipts: ChatReadReceipt[];
+  currentUserId: number;
+  onClose: () => void;
+}) {
+  const [members, setMembers] = useState<ChatChannelMemberDto[] | null>(null);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    listChannelMembers(channelId).then((res) => {
+      if (!active) return;
+      if (res.error) setErr(res.error);
+      setMembers((res.members ?? []).filter((m) => m.id !== currentUserId));
+    });
+    return () => {
+      active = false;
+    };
+  }, [channelId, currentUserId]);
+
+  const receiptByUserId = new Map(readReceipts.map((r) => [r.userId, r.lastReadAt]));
+  const msgTime = message.createdAt ? new Date(message.createdAt).getTime() : 0;
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-black border border-zinc-700 w-full max-w-sm max-h-[70vh] flex flex-col font-mono" onClick={(e) => e.stopPropagation()}>
+        <div className="border-b border-zinc-800 px-4 py-3">
+          <p className="text-[10px] uppercase tracking-widest font-bold text-white">Gelesen von</p>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {err && <p className="text-[10px] text-red-500 uppercase tracking-widest">{err}</p>}
+          {members === null ? (
+            <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Lädt...</p>
+          ) : members.length === 0 ? (
+            <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Keine weiteren Mitglieder.</p>
+          ) : (
+            members.map((m) => {
+              const lastReadAt = receiptByUserId.get(m.id);
+              const hasRead = !!lastReadAt && new Date(lastReadAt).getTime() >= msgTime;
+              return (
+                <div key={m.id} className="flex items-center justify-between px-3 py-2 border border-zinc-800 text-sm">
+                  <span className="truncate">{m.username ?? m.email}</span>
+                  <span className={`text-[10px] uppercase tracking-widest shrink-0 ml-3 ${hasRead ? "text-white" : "text-zinc-600"}`}>
+                    {hasRead ? "✓✓ Gelesen" : "✓ Gesendet"}
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </div>
+        <div className="border-t border-zinc-800 p-3">
+          <button onClick={onClose} className="w-full text-[10px] uppercase tracking-widest text-zinc-500 hover:text-white transition py-1.5">
+            Schließen
+          </button>
+        </div>
       </div>
     </div>
   );
