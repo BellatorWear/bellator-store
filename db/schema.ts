@@ -30,6 +30,9 @@ export const users = pgTable("users", {
   // Admin (z.B. einem einzelnen Marketing-User Zugriff geben/entziehen,
   // ohne gleich die ganze Rolle umzustellen).
   chatAccess: boolean("chat_access"),
+  // Team-Attribut: bei Rollenzuteilung anklickbar, sorgt für automatische
+  // Mitgliedschaft im globalen Team-Channel (siehe app/chat/team.ts).
+  isTeam: boolean("is_team").default(false),
 });
 
 export const emailVerifications = pgTable("email_verifications", {
@@ -339,6 +342,8 @@ export const chatMessages = pgTable("chat_messages", {
   attachmentUrl: text("attachment_url"),
   attachmentName: text("attachment_name"),
   attachmentType: text("attachment_type"),
+  // Antwort auf eine andere Nachricht im selben Channel (optional).
+  replyToId: integer("reply_to_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

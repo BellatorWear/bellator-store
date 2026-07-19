@@ -1,11 +1,11 @@
 "use client";
 import { useState } from "react";
-import { saveChatRoleAccess, setUserChatAccess, searchUserByUsername } from "./actions";
+import { saveChatRoleAccess, setUserChatAccess, setUserTeamMembership, searchUserByUsername } from "./actions";
 import { ROLE_LABELS, type ChatRoleAccess } from "./permissions";
 
 const ROLES = ["admin", "developer", "marketing"] as const;
 
-type UserResult = { id: number; email: string; username: string | null; role: string | null; chatAccess: boolean | null };
+type UserResult = { id: number; email: string; username: string | null; role: string | null; chatAccess: boolean | null; isTeam: boolean | null };
 
 export default function TeamChatAccess({ initialRoleAccess }: { initialRoleAccess: ChatRoleAccess }) {
   const [roleAccess, setRoleAccess] = useState(initialRoleAccess);
@@ -48,7 +48,7 @@ export default function TeamChatAccess({ initialRoleAccess }: { initialRoleAcces
       fd.append("username", query.trim());
       const res = await searchUserByUsername(fd);
       if (res?.error) { setErr(res.error); return; }
-      if (res?.success) setUser({ id: res.user.id, email: res.user.email, username: res.user.username, role: res.user.role ?? null, chatAccess: res.user.chatAccess ?? null });
+      if (res?.success) setUser({ id: res.user.id, email: res.user.email, username: res.user.username, role: res.user.role ?? null, chatAccess: res.user.chatAccess ?? null, isTeam: res.user.isTeam ?? false });
     } catch (e) {
       console.error("User-Suche fehlgeschlagen:", e);
       setErr("Fehler. Bitte nochmal versuchen.");
@@ -72,6 +72,28 @@ export default function TeamChatAccess({ initialRoleAccess }: { initialRoleAcces
       setMsg("✓ Zugriff aktualisiert.");
     } catch (e) {
       console.error("Chat-Zugriff setzen fehlgeschlagen:", e);
+      setErr("Fehler. Bitte nochmal versuchen.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleTeamMembership() {
+    if (!user || saving) return;
+    const next = !user.isTeam;
+    setSaving(true);
+    setErr("");
+    setMsg("");
+    try {
+      const fd = new FormData();
+      fd.append("userId", String(user.id));
+      fd.append("isTeam", String(next));
+      const res = await setUserTeamMembership(fd);
+      if (res?.error) { setErr(res.error); return; }
+      setUser({ ...user, isTeam: next });
+      setMsg(next ? "✓ Zum Team-Channel hinzugefügt." : "✓ Aus dem Team-Channel entfernt.");
+    } catch (e) {
+      console.error("Team-Mitgliedschaft setzen fehlgeschlagen:", e);
       setErr("Fehler. Bitte nochmal versuchen.");
     } finally {
       setSaving(false);
@@ -151,6 +173,18 @@ export default function TeamChatAccess({ initialRoleAccess }: { initialRoleAcces
                   user.chatAccess === false ? "border-red-500 bg-red-900/30 text-red-400" : "border-zinc-700 text-zinc-400 hover:border-zinc-400"
                 }`}>
                 Nie Zugriff
+              </button>
+            </div>
+
+            <div className="border-t border-zinc-800 pt-3 mt-1">
+              <p className="text-[9px] text-zinc-600 leading-relaxed mb-2">
+                Team-Attribut: Mitglied wird automatisch zum globalen &quot;Team&quot;-Channel hinzugefügt/entfernt.
+              </p>
+              <button type="button" onClick={toggleTeamMembership} disabled={saving}
+                className={`text-[10px] border px-3 py-1.5 uppercase tracking-widest transition disabled:opacity-50 ${
+                  user.isTeam ? "border-blue-500 bg-blue-900/30 text-blue-400" : "border-zinc-700 text-zinc-400 hover:border-zinc-400"
+                }`}>
+                {user.isTeam ? "✓ Team-Mitglied" : "Kein Team-Mitglied"}
               </button>
             </div>
           </div>

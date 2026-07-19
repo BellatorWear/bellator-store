@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { upload } from "@vercel/blob/client";
+import { uploadImageFile } from "@/app/utils/uploadImageFile";
 import { createProduct } from "./actions";
 import PriceDisplay from "../shop/components/PriceDisplay";
 import SizeButtons, { type SizeItem } from "./SizeButtons";
@@ -28,23 +28,12 @@ export default function NewProductForm() {
   const [isPreRelease, setIsPreRelease] = useState(false);
 
   async function uploadFile(file: File): Promise<PendingImage> {
-    try {
-      const blob = await upload(file.name, file, {
-        access: "public",
-        handleUploadUrl: "/api/admin/upload",
-      });
-      return { url: blob.url, uploading: false };
-    } catch (uploadErr) {
-      const raw = uploadErr instanceof Error ? uploadErr.message : "Unbekannter Fehler";
-      // "NetworkError when attempting to fetch resource" tritt auf, wenn
-      // BLOB_READ_WRITE_TOKEN nicht gesetzt ist oder der Vercel Blob Store
-      // nicht mit dem Projekt verbunden ist (Dashboard → Storage → Blob).
-      const friendly = raw.includes("NetworkError")
-        ? "Verbindungsfehler. Bitte prüfe: Vercel Dashboard → Storage → Blob-Store mit Projekt verbinden → Neu deployen."
-        : raw;
-      console.error("Bild-Upload fehlgeschlagen:", raw);
-      return { url: "", uploading: false, error: friendly };
+    const result = await uploadImageFile(file);
+    if (result.error) {
+      console.error("Bild-Upload fehlgeschlagen:", result.error);
+      return { url: "", uploading: false, error: result.error };
     }
+    return { url: result.url!, uploading: false };
   }
 
   async function handleMainImageClick() {

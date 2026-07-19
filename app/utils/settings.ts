@@ -32,6 +32,10 @@ export const COUNTDOWN_DEFAULT: CountdownSetting = {
 // für die Typdefinition und die Override-Logik pro User).
 export const CHAT_ROLE_ACCESS_KEY = "chat_role_access";
 
+// id des einzigen, globalen "Team"-Channels - jeder User mit dem
+// is_team-Attribut wird dort automatisch Mitglied (siehe app/chat/team.ts).
+export const TEAM_CHANNEL_ID_KEY = "team_channel_id";
+
 export type ExclusiveCodeSetting = {
   enabled: boolean;
   firstNOrders: number; // Code gilt für die ersten N Bestellungen insgesamt

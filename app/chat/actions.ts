@@ -128,6 +128,13 @@ export type ChatMessageDto = {
   attachmentUrl: string | null;
   attachmentName: string | null;
   attachmentType: string | null;
+  replyToId: number | null;
+  // Denormalisierte Vorschau der Nachricht, auf die geantwortet wird -
+  // vermeidet einen extra Lookup im Client, falls die Original-Nachricht
+  // außerhalb des geladenen Verlaufsfensters liegt.
+  replyToBody: string | null;
+  replyToUsername: string | null;
+  replyToAttachmentName: string | null;
   createdAt: Date | null;
 };
 
@@ -149,18 +156,38 @@ export async function getChannelMessages(channelId: number): Promise<{ error?: s
     : [];
   const usernameById = new Map(authors.map((a) => [a.id, a.username]));
 
+  // Reply-Vorschauen auflösen - eigener Lookup statt Join, weil manche
+  // Original-Nachrichten außerhalb des 200er-Fensters liegen können.
+  const replyToIds = [...new Set(rows.map((r) => r.replyToId).filter((id): id is number => id !== null))];
+  const replyToMessages = replyToIds.length
+    ? await db.select().from(chatMessages).where(inArray(chatMessages.id, replyToIds))
+    : [];
+  const replyToAuthorIds = [...new Set(replyToMessages.map((m) => m.userId))];
+  const replyToAuthors = replyToAuthorIds.length
+    ? await db.select({ id: users.id, username: users.username }).from(users).where(inArray(users.id, replyToAuthorIds))
+    : [];
+  const replyToUsernameById = new Map(replyToAuthors.map((a) => [a.id, a.username]));
+  const replyToById = new Map(replyToMessages.map((m) => [m.id, m]));
+
   return {
-    messages: rows.map((r) => ({
-      id: r.id,
-      channelId: r.channelId,
-      userId: r.userId,
-      username: usernameById.get(r.userId) ?? null,
-      body: r.body,
-      attachmentUrl: r.attachmentUrl,
-      attachmentName: r.attachmentName,
-      attachmentType: r.attachmentType,
-      createdAt: r.createdAt,
-    })),
+    messages: rows.map((r) => {
+      const replyTo = r.replyToId ? replyToById.get(r.replyToId) : null;
+      return {
+        id: r.id,
+        channelId: r.channelId,
+        userId: r.userId,
+        username: usernameById.get(r.userId) ?? null,
+        body: r.body,
+        attachmentUrl: r.attachmentUrl,
+        attachmentName: r.attachmentName,
+        attachmentType: r.attachmentType,
+        replyToId: r.replyToId,
+        replyToBody: replyTo?.body ?? null,
+        replyToUsername: replyTo ? (replyToUsernameById.get(replyTo.userId) ?? null) : null,
+        replyToAttachmentName: replyTo?.attachmentName ?? null,
+        createdAt: r.createdAt,
+      };
+    }),
   };
 }
 
@@ -173,6 +200,8 @@ export async function sendMessage(formData: FormData): Promise<{ error?: string;
   const attachmentUrlRaw = ((formData.get("attachmentUrl") as string) ?? "").trim();
   const attachmentNameRaw = ((formData.get("attachmentName") as string) ?? "").trim();
   const attachmentTypeRaw = ((formData.get("attachmentType") as string) ?? "").trim();
+  const replyToIdRaw = formData.get("replyToId");
+  const replyToId = replyToIdRaw ? Number(replyToIdRaw) : null;
 
   if (!channelId) return { error: "Ungültig." };
   if (!bodyRaw && !attachmentUrlRaw) return { error: "Nachricht darf nicht leer sein." };
@@ -195,10 +224,28 @@ export async function sendMessage(formData: FormData): Promise<{ error?: string;
     attachmentType = attachmentTypeRaw.slice(0, 100);
   }
 
+  // Antwort-Referenz validieren - muss im selben Channel liegen, sonst
+  // könnte man theoretisch auf Nachrichten aus fremden Channels verweisen.
+  let replyPreview: { id: number; body: string; username: string | null; attachmentName: string | null } | null = null;
+  if (replyToId) {
+    const replyRows = await db.select().from(chatMessages).where(eq(chatMessages.id, replyToId));
+    const replyMsg = replyRows[0];
+    if (!replyMsg || replyMsg.channelId !== channelId) {
+      return { error: "Ungültige Antwort-Referenz." };
+    }
+    const replyAuthorRows = await db.select({ username: users.username }).from(users).where(eq(users.id, replyMsg.userId));
+    replyPreview = {
+      id: replyMsg.id,
+      body: replyMsg.body,
+      username: replyAuthorRows[0]?.username ?? null,
+      attachmentName: replyMsg.attachmentName,
+    };
+  }
+
   const body = bodyRaw ? sanitizeText(bodyRaw, MAX_MESSAGE_LENGTH) : "";
   const [message] = await db
     .insert(chatMessages)
-    .values({ channelId, userId: user.id, body, attachmentUrl, attachmentName, attachmentType })
+    .values({ channelId, userId: user.id, body, attachmentUrl, attachmentName, attachmentType, replyToId: replyPreview?.id ?? null })
     .returning();
 
   // Eigene Nachricht gilt für einen selbst sofort als gelesen.
@@ -217,6 +264,10 @@ export async function sendMessage(formData: FormData): Promise<{ error?: string;
       attachmentUrl: message.attachmentUrl,
       attachmentName: message.attachmentName,
       attachmentType: message.attachmentType,
+      replyToId: message.replyToId,
+      replyToBody: replyPreview?.body ?? null,
+      replyToUsername: replyPreview?.username ?? null,
+      replyToAttachmentName: replyPreview?.attachmentName ?? null,
       createdAt: message.createdAt,
     });
   } catch (e) {
@@ -238,12 +289,23 @@ export async function sendMessage(formData: FormData): Promise<{ error?: string;
   const channelRows = await db.select().from(chatChannels).where(eq(chatChannels.id, channelId));
   const channel = channelRows[0];
   const senderLabel = user.username ?? "Team-Chat";
-  const pushTitle = channel?.type === "channel" && channel.name ? `#${channel.name} — ${senderLabel}` : senderLabel;
+  const pushTitlePrefix = /@(everyone|here)\b/i.test(body) ? "🔔 " : "";
+  const pushTitle = `${pushTitlePrefix}${channel?.type === "channel" && channel.name ? `#${channel.name} — ${senderLabel}` : senderLabel}`;
   const pushBody = body ? body.slice(0, 140) : attachmentUrl ? `📎 ${attachmentName}` : "";
+  const memberUsernames = otherMembers.length
+    ? await db.select({ id: users.id, username: users.username }).from(users).where(inArray(users.id, otherMembers.map((m) => m.userId)))
+    : [];
+  const usernameByMemberId = new Map(memberUsernames.map((u) => [u.id, u.username]));
   await Promise.all(
     otherMembers
       .filter((m) => m.userId !== user.id)
-      .map((m) => sendPushToUser(m.userId, { title: pushTitle, body: pushBody, url: "/chat" })),
+      .map((m) => {
+        const mentionedDirectly = usernameByMemberId.get(m.userId)
+          ? new RegExp(`@${usernameByMemberId.get(m.userId)}\\b`, "i").test(body)
+          : false;
+        const title = mentionedDirectly && !pushTitlePrefix ? `🔔 ${pushTitle}` : pushTitle;
+        return sendPushToUser(m.userId, { title, body: pushBody, url: "/chat" });
+      }),
   );
 
   return {
@@ -257,6 +319,10 @@ export async function sendMessage(formData: FormData): Promise<{ error?: string;
       attachmentUrl: message.attachmentUrl,
       attachmentName: message.attachmentName,
       attachmentType: message.attachmentType,
+      replyToId: message.replyToId,
+      replyToBody: replyPreview?.body ?? null,
+      replyToUsername: replyPreview?.username ?? null,
+      replyToAttachmentName: replyPreview?.attachmentName ?? null,
       createdAt: message.createdAt,
     },
   };

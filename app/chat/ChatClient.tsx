@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Pusher, { Channel as PusherChannel } from "pusher-js";
-import { upload } from "@vercel/blob/client";
+import { uploadFileViaServer } from "@/app/utils/uploadImageFile";
 import { handleAction } from "@/app/actions";
 import {
   listMyChannels, getChannelMessages, sendMessage, markChannelRead,
@@ -24,6 +24,33 @@ function isImageType(type: string | null): boolean {
   return !!type && type.startsWith("image/");
 }
 
+const MENTION_PATTERN = /(@[A-Za-z0-9_]+)/g;
+
+// Hebt @mentions (inkl. @everyone/@here) im Nachrichtentext optisch hervor.
+// Prüft nicht streng gegen die echte Mitgliederliste - ein "@irgendwas"
+// wird trotzdem hervorgehoben, das ist ein bewusster, harmloser Kompromiss.
+function renderMessageBody(text: string, own: boolean): React.ReactNode {
+  const parts = text.split(MENTION_PATTERN);
+  return parts.map((part, i) =>
+    MENTION_PATTERN.test(part) ? (
+      <span key={i} className={`font-bold ${own ? "text-blue-700" : "text-blue-400"}`}>
+        {part}
+      </span>
+    ) : (
+      <span key={i}>{part}</span>
+    ),
+  );
+}
+
+// Ob die aktuell eingeloggte Person in dieser Nachricht direkt erwähnt
+// wurde (eigener Username, @everyone oder @here) - hebt die Bubble optisch
+// hervor, damit man Pings nicht überliest.
+function isSelfMentioned(body: string, username: string | null): boolean {
+  if (/@(everyone|here)\b/i.test(body)) return true;
+  if (username && new RegExp(`@${username}\\b`, "i").test(body)) return true;
+  return false;
+}
+
 function channelDisplayName(c: ChatChannelSummary): string {
   if (c.type === "dm") return c.otherMember?.username ?? c.otherMember?.email ?? "Unbekannt";
   return c.name ?? "Channel";
@@ -39,6 +66,8 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   const [activeId, setActiveId] = useState<number | null>(null);
   const [messages, setMessages] = useState<LocalChatMessage[]>([]);
   const [readReceipts, setReadReceipts] = useState<ChatReadReceipt[]>([]);
+  const [channelMembersForMention, setChannelMembersForMention] = useState<ChatChannelMemberDto[]>([]);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -54,6 +83,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [readBreakdownFor, setReadBreakdownFor] = useState<LocalChatMessage | null>(null);
+  const [replyingTo, setReplyingTo] = useState<LocalChatMessage | null>(null);
 
   const pusherRef = useRef<Pusher | null>(null);
   const activeBindingRef = useRef<PusherChannel | null>(null);
@@ -129,6 +159,9 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
     getReadReceipts(activeId).then((res) => {
       setReadReceipts(res.receipts ?? []);
     });
+    listChannelMembers(activeId).then((res) => {
+      setChannelMembersForMention(res.members ?? []);
+    });
     markChannelRead(activeId).then(() => {
       setChannels((prev) => prev.map((c) => (c.id === activeId ? { ...c, unread: false } : c)));
     });
@@ -186,8 +219,10 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
     setSending(true);
     const body = draft;
     const attachment = pendingAttachment;
+    const replyTarget = replyingTo;
     setDraft("");
     setPendingAttachment(null);
+    setReplyingTo(null);
 
     // Sofort anzeigen, statt auf die Server-Antwort zu warten - negative
     // Temp-id, damit sie nie mit einer echten DB-id kollidiert. Zeigt eine
@@ -203,6 +238,10 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
       attachmentUrl: attachment?.url ?? null,
       attachmentName: attachment?.name ?? null,
       attachmentType: attachment?.type ?? null,
+      replyToId: replyTarget?.id ?? null,
+      replyToBody: replyTarget?.body ?? null,
+      replyToUsername: replyTarget?.username ?? null,
+      replyToAttachmentName: replyTarget?.attachmentName ?? null,
       createdAt: new Date(),
       pending: true,
     };
@@ -232,12 +271,16 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
         fd.append("attachmentName", attachment.name);
         fd.append("attachmentType", attachment.type);
       }
+      if (replyTarget) {
+        fd.append("replyToId", String(replyTarget.id));
+      }
       const res = await sendMessage(fd);
       if (res?.error) {
         // Fehlgeschlagen - Platzhalter wieder entfernen, Entwurf zurückgeben.
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         setDraft(body);
         setPendingAttachment(attachment);
+        setReplyingTo(replyTarget);
         setNotice(res.error);
       } else if (res?.message) {
         const real = res.message;
@@ -257,21 +300,54 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
     }
   }
 
+  function handleDraftChange(value: string) {
+    setDraft(value);
+    // Simple Erkennung: endet der bisher getippte Text auf "@" + Wortzeichen
+    // ohne Leerzeichen dazwischen? Reicht für den Regelfall (Mention am
+    // Ende der Nachricht), ignoriert bewusst Cursor-Position mitten im Text.
+    const match = value.match(/(?:^|\s)@(\w*)$/);
+    setMentionQuery(match ? match[1] : null);
+  }
+
+  function insertMention(name: string) {
+    const withoutTrailingMention = draft.replace(/(?:^|\s)@\w*$/, (m) => (m.startsWith(" ") ? " " : ""));
+    setDraft(`${withoutTrailingMention}@${name} `);
+    setMentionQuery(null);
+  }
+
+  const mentionMatches = mentionQuery === null
+    ? []
+    : [
+        ...(activeChannel?.type === "channel"
+          ? [
+              { key: "everyone", label: "everyone", hint: "Alle im Channel" },
+              { key: "here", label: "here", hint: "Alle im Channel" },
+            ].filter((m) => m.label.startsWith(mentionQuery.toLowerCase()))
+          : []),
+        ...channelMembersForMention
+          .filter((m) => m.username && m.username.toLowerCase().startsWith(mentionQuery.toLowerCase()))
+          .map((m) => ({ key: `u${m.id}`, label: m.username!, hint: m.isCreator ? "Ersteller" : "" })),
+      ].slice(0, 6);
+
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = ""; // damit dieselbe Datei erneut ausgewählt werden kann
     if (!file) return;
-    if (file.size > 25 * 1024 * 1024) {
-      setNotice("Datei ist zu groß (max. 25 MB).");
+    if (file.size > 4 * 1024 * 1024) {
+      setNotice("Datei ist zu groß (max. 4 MB).");
       return;
     }
     setUploadingAttachment(true);
     try {
-      const blob = await upload(file.name, file, { access: "public", handleUploadUrl: "/api/chat/upload" });
-      setPendingAttachment({ url: blob.url, name: file.name, type: file.type || "application/octet-stream" });
+      const result = await uploadFileViaServer(file, "/api/chat/upload");
+      if (result.error) {
+        setNotice(result.error);
+      } else if (result.url) {
+        setPendingAttachment({ url: result.url, name: file.name, type: file.type || "application/octet-stream" });
+      }
     } catch (err) {
       console.error("Chat-Upload fehlgeschlagen:", err);
-      setNotice("Upload fehlgeschlagen. Dateityp erlaubt? (Bilder, PDF, ZIP, Office, Video, max. 25 MB)");
+      setNotice("Upload fehlgeschlagen. Dateityp erlaubt? (Bilder, PDF, ZIP, Office, Video, max. 4 MB)");
     } finally {
       setUploadingAttachment(false);
     }
@@ -418,11 +494,21 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                 ) : (
                   messages.map((m) => {
                     const own = m.userId === currentUser.id;
+                    const mentioned = !own && isSelfMentioned(m.body, currentUser.username);
                     return (
                       <div key={m.id} className={`flex ${own ? "justify-end" : "justify-start"} group`}>
                         <div className={`max-w-[80%] sm:max-w-[60%] ${own ? "items-end" : "items-start"} flex flex-col`}>
                           {!own && <span className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1">{m.username ?? "?"}</span>}
                           <div className="flex items-center gap-1.5">
+                            {!m.pending && (
+                              <button
+                                onClick={() => setReplyingTo(m)}
+                                className="opacity-0 group-hover:opacity-100 text-[10px] text-zinc-600 hover:text-white transition"
+                                title="Antworten"
+                              >
+                                ↩
+                              </button>
+                            )}
                             {own && !m.pending && (
                               <button
                                 onClick={() => handleDelete(m.id)}
@@ -432,7 +518,15 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                                 ✕
                               </button>
                             )}
-                            <div className={`px-3 py-2 text-sm break-words space-y-2 ${own ? "bg-white text-black" : "bg-zinc-900 border border-zinc-800 text-zinc-200"} ${m.pending ? "opacity-60" : ""}`}>
+                            <div className={`px-3 py-2 text-sm break-words space-y-2 ${own ? "bg-white text-black" : "bg-zinc-900 border border-zinc-800 text-zinc-200"} ${m.pending ? "opacity-60" : ""} ${mentioned ? "ring-2 ring-blue-500" : ""}`}>
+                              {m.replyToId && (
+                                <div className={`border-l-2 pl-2 text-xs opacity-70 ${own ? "border-black" : "border-zinc-500"}`}>
+                                  <p className="font-bold">{m.replyToUsername ?? "?"}</p>
+                                  <p className="truncate">
+                                    {m.replyToBody || (m.replyToAttachmentName ? `📎 ${m.replyToAttachmentName}` : "…")}
+                                  </p>
+                                </div>
+                              )}
                               {m.attachmentUrl && isImageType(m.attachmentType) && (
                                 <a href={m.attachmentUrl} target="_blank" rel="noopener noreferrer" className="block">
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -449,7 +543,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                                   📎 {m.attachmentName ?? "Anhang"}
                                 </a>
                               )}
-                              {m.body && <span>{m.body}</span>}
+                              {m.body && <span>{renderMessageBody(m.body, own)}</span>}
                             </div>
                           </div>
                           <span className="text-[9px] text-zinc-700 mt-1 flex items-center gap-1">
@@ -481,6 +575,21 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                 )}
                 <div ref={messagesEndRef} />
               </div>
+              {replyingTo && (
+                <div className="shrink-0 border-t border-zinc-800 px-3 py-2 flex items-center justify-between bg-zinc-950">
+                  <div className="text-xs text-zinc-400 truncate">
+                    <span className="text-zinc-600 uppercase tracking-widest text-[9px]">Antwort an {replyingTo.username ?? "?"}: </span>
+                    {replyingTo.body || (replyingTo.attachmentName ? `📎 ${replyingTo.attachmentName}` : "…")}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReplyingTo(null)}
+                    className="text-[10px] text-zinc-600 hover:text-red-500 transition uppercase tracking-widest ml-3 shrink-0"
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              )}
               {pendingAttachment && (
                 <div className="shrink-0 border-t border-zinc-800 px-3 py-2 flex items-center justify-between bg-zinc-950">
                   <span className="text-xs text-zinc-400 truncate flex items-center gap-1.5">
@@ -495,31 +604,48 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                   </button>
                 </div>
               )}
-              <form onSubmit={handleSend} className="shrink-0 border-t border-zinc-800 p-3 flex gap-2">
-                <input ref={fileInputRef} type="file" onChange={handleFileSelect} className="hidden" />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingAttachment}
-                  title="Datei anhängen"
-                  className="border border-zinc-700 text-zinc-400 px-3 py-2.5 text-sm hover:border-zinc-400 hover:text-white transition-all disabled:opacity-40 shrink-0"
-                >
-                  {uploadingAttachment ? "..." : "📎"}
-                </button>
-                <input
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder="Nachricht schreiben..."
-                  className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:border-white outline-none transition"
-                />
-                <button
-                  type="submit"
-                  disabled={(!draft.trim() && !pendingAttachment) || sending}
-                  className="border border-white bg-white text-black px-5 py-2.5 text-[10px] uppercase tracking-widest font-black hover:bg-black hover:text-white transition-all disabled:opacity-40 shrink-0"
-                >
-                  Senden
-                </button>
-              </form>
+              <div className="relative">
+                {mentionMatches.length > 0 && (
+                  <div className="absolute bottom-full left-3 mb-1 bg-black border border-zinc-700 w-56 max-h-48 overflow-y-auto z-20">
+                    {mentionMatches.map((m) => (
+                      <button
+                        key={m.key}
+                        type="button"
+                        onClick={() => insertMention(m.label)}
+                        className="w-full text-left px-3 py-2 text-xs hover:bg-zinc-900 transition flex items-center justify-between"
+                      >
+                        <span className="text-blue-400 font-bold">@{m.label}</span>
+                        {m.hint && <span className="text-[9px] text-zinc-600 uppercase tracking-widest">{m.hint}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <form onSubmit={handleSend} className="shrink-0 border-t border-zinc-800 p-3 flex gap-2">
+                  <input ref={fileInputRef} type="file" onChange={handleFileSelect} className="hidden" />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingAttachment}
+                    title="Datei anhängen"
+                    className="border border-zinc-700 text-zinc-400 px-3 py-2.5 text-sm hover:border-zinc-400 hover:text-white transition-all disabled:opacity-40 shrink-0"
+                  >
+                    {uploadingAttachment ? "..." : "📎"}
+                  </button>
+                  <input
+                    value={draft}
+                    onChange={(e) => handleDraftChange(e.target.value)}
+                    placeholder="Nachricht schreiben... (@ für Erwähnung)"
+                    className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:border-white outline-none transition"
+                  />
+                  <button
+                    type="submit"
+                    disabled={(!draft.trim() && !pendingAttachment) || sending}
+                    className="border border-white bg-white text-black px-5 py-2.5 text-[10px] uppercase tracking-widest font-black hover:bg-black hover:text-white transition-all disabled:opacity-40 shrink-0"
+                  >
+                    Senden
+                  </button>
+                </form>
+              </div>
             </>
           )}
         </main>

@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
-import { upload } from "@vercel/blob/client";
+import { uploadFileViaServer } from "@/app/utils/uploadImageFile";
 
 export type Attachment = { url: string; name: string };
 
@@ -46,11 +46,15 @@ export default function RichContentEditor({
     setUploadingImage(true);
     setError("");
     try {
-      const blob = await upload(file.name, file, { access: "public", handleUploadUrl: "/api/admin/upload" });
-      insertAtCursor(`\n<img src="${blob.url}" alt="" style="max-width:100%;display:block;margin:16px 0;" />\n`);
+      const result = await uploadFileViaServer(file, "/api/admin/upload");
+      if (result.error) {
+        setError(result.error);
+      } else if (result.url) {
+        insertAtCursor(`\n<img src="${result.url}" alt="" style="max-width:100%;display:block;margin:16px 0;" />\n`);
+      }
     } catch (err) {
       console.error("Bild-Upload fehlgeschlagen:", err);
-      setError("Bild-Upload fehlgeschlagen. Ist der Blob Read/Write Token gesetzt?");
+      setError("Bild-Upload fehlgeschlagen.");
     } finally {
       setUploadingImage(false);
     }
@@ -63,11 +67,15 @@ export default function RichContentEditor({
     setUploadingAttachment(true);
     setError("");
     try {
-      const blob = await upload(file.name, file, { access: "public", handleUploadUrl: "/api/admin/upload-attachment" });
-      onAttachmentsChange([...attachments, { url: blob.url, name: file.name }]);
+      const result = await uploadFileViaServer(file, "/api/admin/upload-attachment");
+      if (result.error) {
+        setError(result.error);
+      } else if (result.url) {
+        onAttachmentsChange([...attachments, { url: result.url, name: file.name }]);
+      }
     } catch (err) {
       console.error("Anhang-Upload fehlgeschlagen:", err);
-      setError("Anhang-Upload fehlgeschlagen. Ist der Blob Read/Write Token gesetzt?");
+      setError("Anhang-Upload fehlgeschlagen.");
     } finally {
       setUploadingAttachment(false);
     }

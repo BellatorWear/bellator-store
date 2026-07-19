@@ -1,14 +1,15 @@
 "use client";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { upload } from "@vercel/blob/client";
+import { uploadImageFile } from "@/app/utils/uploadImageFile";
 import { updateColorImages } from "./actions";
 
 export type ColorItem = { id?: number; name: string; hexColor: string; frontImage: string; backImage: string };
 
 async function uploadOne(file: File): Promise<string> {
-  const blob = await upload(file.name, file, { access: "public", handleUploadUrl: "/api/admin/upload" });
-  return blob.url;
+  const result = await uploadImageFile(file);
+  if (result.error) throw new Error(result.error);
+  return result.url!;
 }
 
 function ImageSlot({

@@ -205,9 +205,13 @@ function PostEditForm({ post, onSaved, onCancel }: { post: Post; onSaved: () => 
     setUploadingImage(true);
     setErr("");
     try {
-      const { upload } = await import("@vercel/blob/client");
-      const blob = await upload(file.name, file, { access: "public", handleUploadUrl: "/api/admin/upload" });
-      setImageUrl(blob.url);
+      const { uploadImageFile } = await import("@/app/utils/uploadImageFile");
+      const result = await uploadImageFile(file);
+      if (result.error) {
+        setErr(result.error);
+      } else if (result.url) {
+        setImageUrl(result.url);
+      }
     } catch (uploadErr) {
       console.error("Bild-Upload fehlgeschlagen:", uploadErr);
       setErr("Bild-Upload fehlgeschlagen.");

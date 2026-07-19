@@ -10,6 +10,7 @@ import { isTrustedOrigin } from "@/app/utils/origin";
 import { setSetting, COUNTDOWN_KEY, EXCLUSIVE_CODE_KEY, CHAT_ROLE_ACCESS_KEY } from "@/app/utils/settings";
 import { sendPushToAll } from "@/app/utils/push";
 import { sendNewsletterEmailToAll } from "@/app/utils/newsletterMail";
+import { syncTeamChannelMembership } from "@/app/chat/team";
 
 const MAX_IMAGES_PER_PRODUCT = 4;
 
@@ -558,6 +559,7 @@ export async function searchUserByUsername(formData: FormData) {
       isAdmin: user.isAdmin,
       role: user.role,
       chatAccess: user.chatAccess,
+      isTeam: user.isTeam,
       points: user.points,
       orderCount: user.orderCount,
       discountPercent: user.discountPercent,
@@ -894,5 +896,18 @@ export async function setUserChatAccess(formData: FormData) {
 
   const chatAccess = value === "true" ? true : value === "false" ? false : null;
   await db.update(users).set({ chatAccess }).where(eq(users.id, userId));
+  return { success: true };
+}
+
+export async function setUserTeamMembership(formData: FormData) {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
+
+  const userId = Number(formData.get("userId"));
+  const isTeam = formData.get("isTeam") === "true";
+  if (!userId) return { error: "Ungültig." };
+
+  await db.update(users).set({ isTeam }).where(eq(users.id, userId));
+  await syncTeamChannelMembership(userId, isTeam);
   return { success: true };
 }
