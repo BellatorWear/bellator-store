@@ -44,8 +44,7 @@ export default async function BelegePage() {
   }
 
   return (
-    <div className="min-h-screen bg-black font-mono"
-      style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
+    <div className="min-h-screen bg-black font-mono site-bg">
       <main className="relative min-h-screen t-text t-invert">
       <header className="relative z-10 t-header border-b px-4 sm:px-6 py-4 flex justify-between items-center">
         <a href="/shop" className="text-xl sm:text-2xl font-black tracking-tighter italic t-text hover:opacity-70 transition">BELLATOR.</a>

@@ -26,13 +26,7 @@ export default function MethodSelectClient() {
 
   return (
     <main
-      className="relative flex min-h-[100dvh] flex-col items-center justify-center p-4 text-white font-mono"
-      style={{
-        backgroundImage: 'url("/background.webp")',
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundAttachment: "fixed",
-      }}
+      className="relative flex min-h-[100dvh] flex-col items-center justify-center p-4 text-white font-mono site-bg"
     >
       <div className="relative z-10 w-full max-w-[320px] sm:max-w-sm border border-zinc-700 p-6 sm:p-8 bg-black/60 backdrop-blur-md">
         <h1 className="text-3xl font-black uppercase tracking-tighter mb-1 text-center italic">Bellator.</h1>

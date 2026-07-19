@@ -9,6 +9,7 @@ import { sanitizeText, isSuspiciousInput } from "@/app/utils/inputSafety";
 import { getSetting } from "@/app/utils/settings";
 import { CHAT_ROLE_ACCESS_KEY } from "@/app/utils/settings";
 import { hasChatAccess, CHAT_ROLE_ACCESS_DEFAULT } from "@/app/admin/permissions";
+import { getAllRoles } from "@/app/admin/roles";
 import { getPusherServer, channelEventName, userEventName } from "@/lib/pusher";
 import { sendPushToUser } from "@/app/utils/push";
 
@@ -124,6 +125,7 @@ export type ChatMessageDto = {
   channelId: number;
   userId: number;
   username: string | null;
+  role: string | null;
   body: string;
   attachmentUrl: string | null;
   attachmentName: string | null;
@@ -135,8 +137,16 @@ export type ChatMessageDto = {
   replyToBody: string | null;
   replyToUsername: string | null;
   replyToAttachmentName: string | null;
+  forwardedFromUsername: string | null;
   createdAt: Date | null;
 };
+
+// Für den Chat-Client: Rollenfarben laden, um Usernamen über Nachrichten
+// entsprechend einzufärben.
+export async function getRoleColorsForChat(): Promise<Record<string, string>> {
+  const roles = await getAllRoles();
+  return Object.fromEntries(roles.map((r) => [r.name, r.color]));
+}
 
 export async function getChannelMessages(channelId: number): Promise<{ error?: string; messages?: ChatMessageDto[] }> {
   const user = await requireChatUser();
@@ -152,9 +162,10 @@ export async function getChannelMessages(channelId: number): Promise<{ error?: s
 
   const authorIds = [...new Set(rows.map((r) => r.userId))];
   const authors = authorIds.length
-    ? await db.select({ id: users.id, username: users.username }).from(users).where(inArray(users.id, authorIds))
+    ? await db.select({ id: users.id, username: users.username, role: users.role, isAdmin: users.isAdmin }).from(users).where(inArray(users.id, authorIds))
     : [];
   const usernameById = new Map(authors.map((a) => [a.id, a.username]));
+  const roleById = new Map(authors.map((a) => [a.id, a.isAdmin ? "admin" : a.role]));
 
   // Reply-Vorschauen auflösen - eigener Lookup statt Join, weil manche
   // Original-Nachrichten außerhalb des 200er-Fensters liegen können.
@@ -177,6 +188,7 @@ export async function getChannelMessages(channelId: number): Promise<{ error?: s
         channelId: r.channelId,
         userId: r.userId,
         username: usernameById.get(r.userId) ?? null,
+        role: roleById.get(r.userId) ?? null,
         body: r.body,
         attachmentUrl: r.attachmentUrl,
         attachmentName: r.attachmentName,
@@ -185,6 +197,7 @@ export async function getChannelMessages(channelId: number): Promise<{ error?: s
         replyToBody: replyTo?.body ?? null,
         replyToUsername: replyTo ? (replyToUsernameById.get(replyTo.userId) ?? null) : null,
         replyToAttachmentName: replyTo?.attachmentName ?? null,
+        forwardedFromUsername: r.forwardedFromUsername,
         createdAt: r.createdAt,
       };
     }),
@@ -260,6 +273,7 @@ export async function sendMessage(formData: FormData): Promise<{ error?: string;
       channelId,
       userId: user.id,
       username: user.username,
+      role: user.isAdmin ? "admin" : user.role,
       body: message.body,
       attachmentUrl: message.attachmentUrl,
       attachmentName: message.attachmentName,
@@ -268,6 +282,7 @@ export async function sendMessage(formData: FormData): Promise<{ error?: string;
       replyToBody: replyPreview?.body ?? null,
       replyToUsername: replyPreview?.username ?? null,
       replyToAttachmentName: replyPreview?.attachmentName ?? null,
+      forwardedFromUsername: message.forwardedFromUsername,
       createdAt: message.createdAt,
     });
   } catch (e) {
@@ -315,6 +330,7 @@ export async function sendMessage(formData: FormData): Promise<{ error?: string;
       channelId,
       userId: user.id,
       username: user.username,
+      role: user.isAdmin ? "admin" : user.role,
       body: message.body,
       attachmentUrl: message.attachmentUrl,
       attachmentName: message.attachmentName,
@@ -323,6 +339,7 @@ export async function sendMessage(formData: FormData): Promise<{ error?: string;
       replyToBody: replyPreview?.body ?? null,
       replyToUsername: replyPreview?.username ?? null,
       replyToAttachmentName: replyPreview?.attachmentName ?? null,
+      forwardedFromUsername: message.forwardedFromUsername,
       createdAt: message.createdAt,
     },
   };
@@ -625,4 +642,75 @@ export async function hasUnreadChats(): Promise<boolean> {
     if (!m.lastReadAt || new Date(lastMsg.createdAt ?? 0) > new Date(m.lastReadAt)) return true;
   }
   return false;
+}
+
+// ===================================================================
+// Nachricht weiterleiten
+// ===================================================================
+export async function forwardMessage(formData: FormData): Promise<{ error?: string; success?: boolean }> {
+  const user = await requireChatUser();
+  if (!user) return { error: "Keine Berechtigung." };
+
+  const sourceMessageId = Number(formData.get("sourceMessageId"));
+  const targetChannelId = Number(formData.get("targetChannelId"));
+  if (!sourceMessageId || !targetChannelId) return { error: "Ungültig." };
+
+  const sourceRows = await db.select().from(chatMessages).where(eq(chatMessages.id, sourceMessageId));
+  const source = sourceRows[0];
+  if (!source) return { error: "Nachricht nicht gefunden." };
+  if (!(await isMember(source.channelId, user.id))) return { error: "Kein Zugriff auf die ursprüngliche Nachricht." };
+  if (!(await isMember(targetChannelId, user.id))) return { error: "Kein Zugriff auf den Zielchannel." };
+
+  const authorRows = await db.select({ username: users.username }).from(users).where(eq(users.id, source.userId));
+  const forwardedFromUsername = authorRows[0]?.username ?? "Unbekannt";
+
+  const [message] = await db
+    .insert(chatMessages)
+    .values({
+      channelId: targetChannelId,
+      userId: user.id,
+      body: source.body,
+      attachmentUrl: source.attachmentUrl,
+      attachmentName: source.attachmentName,
+      attachmentType: source.attachmentType,
+      forwardedFromUsername,
+    })
+    .returning();
+
+  await db
+    .update(chatChannelMembers)
+    .set({ lastReadAt: new Date() })
+    .where(and(eq(chatChannelMembers.channelId, targetChannelId), eq(chatChannelMembers.userId, user.id)));
+
+  try {
+    await getPusherServer().trigger(channelEventName(targetChannelId), "new-message", {
+      id: message.id,
+      channelId: targetChannelId,
+      userId: user.id,
+      username: user.username,
+      role: user.isAdmin ? "admin" : user.role,
+      body: message.body,
+      attachmentUrl: message.attachmentUrl,
+      attachmentName: message.attachmentName,
+      attachmentType: message.attachmentType,
+      replyToId: null,
+      replyToBody: null,
+      replyToUsername: null,
+      replyToAttachmentName: null,
+      forwardedFromUsername: message.forwardedFromUsername,
+      createdAt: message.createdAt,
+    });
+  } catch (e) {
+    console.error("Pusher-Trigger fehlgeschlagen:", e);
+  }
+
+  const otherMembers = await db.select().from(chatChannelMembers).where(eq(chatChannelMembers.channelId, targetChannelId));
+  const senderLabel = user.username ?? "Team-Chat";
+  await Promise.all(
+    otherMembers
+      .filter((m) => m.userId !== user.id)
+      .map((m) => sendPushToUser(m.userId, { title: senderLabel, body: message.body ? message.body.slice(0, 140) : "📎 Weitergeleiteter Anhang", url: "/chat" })),
+  );
+
+  return { success: true };
 }

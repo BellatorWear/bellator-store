@@ -8,8 +8,7 @@ export default function InfoPageLayout({ children, title, subtitle }: {
   subtitle?: string;
 }) {
   return (
-    <div className="min-h-screen flex flex-col font-mono bg-black text-white"
-      style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
+    <div className="min-h-screen flex flex-col font-mono bg-black text-white site-bg">
       <div className="relative z-10 flex flex-col min-h-screen t-invert">
         <GlobalHeader />
         <main className="flex-1 w-full max-w-[1400px] mx-auto px-4 sm:px-8 md:px-12 lg:px-16 py-8 md:py-12">

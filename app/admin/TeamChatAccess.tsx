@@ -1,13 +1,12 @@
 "use client";
 import { useState } from "react";
 import { saveChatRoleAccess, setUserChatAccess, setUserTeamMembership, searchUserByUsername } from "./actions";
-import { ROLE_LABELS, type ChatRoleAccess } from "./permissions";
-
-const ROLES = ["admin", "developer", "marketing"] as const;
+import type { ChatRoleAccess } from "./permissions";
+import type { RoleConfig } from "./roles";
 
 type UserResult = { id: number; email: string; username: string | null; role: string | null; chatAccess: boolean | null; isTeam: boolean | null };
 
-export default function TeamChatAccess({ initialRoleAccess }: { initialRoleAccess: ChatRoleAccess }) {
+export default function TeamChatAccess({ initialRoleAccess, roles }: { initialRoleAccess: ChatRoleAccess; roles: RoleConfig[] }) {
   const [roleAccess, setRoleAccess] = useState(initialRoleAccess);
   const [savingRole, setSavingRole] = useState(false);
   const [roleSaved, setRoleSaved] = useState(false);
@@ -19,15 +18,13 @@ export default function TeamChatAccess({ initialRoleAccess }: { initialRoleAcces
   const [msg, setMsg] = useState("");
   const [user, setUser] = useState<UserResult | null>(null);
 
-  async function toggleRole(role: typeof ROLES[number]) {
-    const next = { ...roleAccess, [role]: !roleAccess[role] };
+  async function toggleRole(roleName: string) {
+    const next = { ...roleAccess, [roleName]: !roleAccess[roleName] };
     setRoleAccess(next);
     setSavingRole(true);
     try {
       const fd = new FormData();
-      fd.append("admin", String(next.admin));
-      fd.append("developer", String(next.developer));
-      fd.append("marketing", String(next.marketing));
+      fd.append("roles", JSON.stringify(next));
       await saveChatRoleAccess(fd);
       setRoleSaved(true);
       setTimeout(() => setRoleSaved(false), 1500);
@@ -100,6 +97,10 @@ export default function TeamChatAccess({ initialRoleAccess }: { initialRoleAcces
     }
   }
 
+  function roleLabel(name: string | null): string {
+    return roles.find((r) => r.name === name)?.label ?? name ?? "";
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -107,24 +108,28 @@ export default function TeamChatAccess({ initialRoleAccess }: { initialRoleAcces
           Rollen-Standard: Wer diese Rolle hat, bekommt automatisch Team-Chat-Zugriff, außer bei einem User weiter unten
           explizit anders eingestellt. Volle Admins haben immer Zugriff.
         </p>
-        <div className="grid sm:grid-cols-3 gap-2">
-          {ROLES.map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => toggleRole(r)}
-              disabled={savingRole}
-              className={`border p-3 text-left transition-all disabled:opacity-50 ${
-                roleAccess[r] ? "border-green-700 bg-green-900/10" : "border-zinc-800"
-              }`}
-            >
-              <p className="text-[10px] font-bold text-white uppercase tracking-widest">{ROLE_LABELS[r]}</p>
-              <p className={`text-[9px] mt-1 uppercase tracking-widest ${roleAccess[r] ? "text-green-400" : "text-zinc-600"}`}>
-                {roleAccess[r] ? "Zugriff aktiv" : "Kein Zugriff"}
-              </p>
-            </button>
-          ))}
-        </div>
+        {roles.length === 0 ? (
+          <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Noch keine Rollen erstellt (siehe &quot;Rollen vergeben&quot;).</p>
+        ) : (
+          <div className="grid sm:grid-cols-3 gap-2">
+            {roles.map((r) => (
+              <button
+                key={r.name}
+                type="button"
+                onClick={() => toggleRole(r.name)}
+                disabled={savingRole}
+                className={`border p-3 text-left transition-all disabled:opacity-50 ${
+                  roleAccess[r.name] ? "border-green-700 bg-green-900/10" : "border-zinc-800"
+                }`}
+              >
+                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: r.color }}>{r.label}</p>
+                <p className={`text-[9px] mt-1 uppercase tracking-widest ${roleAccess[r.name] ? "text-green-400" : "text-zinc-600"}`}>
+                  {roleAccess[r.name] ? "Zugriff aktiv" : "Kein Zugriff"}
+                </p>
+              </button>
+            ))}
+          </div>
+        )}
         {roleSaved && <p className="text-[9px] text-green-500 uppercase tracking-widest mt-2">✓ Gespeichert</p>}
       </div>
 
@@ -153,7 +158,7 @@ export default function TeamChatAccess({ initialRoleAccess }: { initialRoleAcces
           <div className="border border-zinc-800 p-4 space-y-3 mt-3">
             <div>
               <p className="text-sm font-bold text-white">{user.username ?? <span className="text-zinc-500 italic">kein Username</span>}</p>
-              <p className="text-xs text-zinc-500">{user.email} {user.role && <span className="text-zinc-600">— {ROLE_LABELS[user.role as keyof typeof ROLE_LABELS] ?? user.role}</span>}</p>
+              <p className="text-xs text-zinc-500">{user.email} {user.role && <span className="text-zinc-600">— {roleLabel(user.role)}</span>}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={() => changeAccess("inherit")} disabled={saving}

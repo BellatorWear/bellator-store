@@ -47,8 +47,7 @@ export default async function HomePage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-black text-white font-mono"
-      style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
+    <div className="min-h-screen flex flex-col bg-black text-white font-mono site-bg">
       <div className="relative z-10 flex flex-col min-h-screen t-invert">
         <GlobalHeader />
         <LandingSound />

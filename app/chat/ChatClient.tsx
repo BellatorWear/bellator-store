@@ -9,11 +9,12 @@ import {
   listMyChannels, getChannelMessages, sendMessage, markChannelRead,
   searchChatUsers, getOrCreateDirectMessage, createChannel,
   deleteMessage, listChannelMembers, removeChannelMember, addChannelMember,
-  getReadReceipts,
+  getReadReceipts, forwardMessage, getRoleColorsForChat,
   type ChatChannelSummary, type ChatMessageDto, type ChatUserResult, type ChatChannelMemberDto, type ChatReadReceipt,
 } from "./actions";
+      
 
-type CurrentUser = { id: number; username: string | null; isAdmin: boolean };
+type CurrentUser = { id: number; username: string | null; isAdmin: boolean; role: string | null };
 type PendingAttachment = { url: string; name: string; type: string } | null;
 // Client-seitige Erweiterung für optimistisch angezeigte, noch nicht vom
 // Server bestätigte Nachrichten (negative id, damit sie nie mit einer
@@ -84,6 +85,10 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   const [deleting, setDeleting] = useState(false);
   const [readBreakdownFor, setReadBreakdownFor] = useState<LocalChatMessage | null>(null);
   const [replyingTo, setReplyingTo] = useState<LocalChatMessage | null>(null);
+  const [openMenuFor, setOpenMenuFor] = useState<number | null>(null);
+  const [forwardingMessage, setForwardingMessage] = useState<LocalChatMessage | null>(null);
+  const [roleColors, setRoleColors] = useState<Record<string, string> | null>(null);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
 
   const pusherRef = useRef<Pusher | null>(null);
   const activeBindingRef = useRef<PusherChannel | null>(null);
@@ -94,6 +99,10 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   const refreshChannels = useCallback(async () => {
     const fresh = await listMyChannels();
     setChannels(fresh);
+  }, []);
+
+  useEffect(() => {
+    getRoleColorsForChat().then(setRoleColors);
   }, []);
 
   // Pusher-Verbindung + persönlicher Kanal für "neuer Channel/DM erstellt"
@@ -234,6 +243,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
       channelId: activeId,
       userId: currentUser.id,
       username: currentUser.username,
+      role: currentUser.role,
       body,
       attachmentUrl: attachment?.url ?? null,
       attachmentName: attachment?.name ?? null,
@@ -242,6 +252,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
       replyToBody: replyTarget?.body ?? null,
       replyToUsername: replyTarget?.username ?? null,
       replyToAttachmentName: replyTarget?.attachmentName ?? null,
+      forwardedFromUsername: null,
       createdAt: new Date(),
       pending: true,
     };
@@ -387,6 +398,38 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
     }
   }
 
+  async function handleCopy(msg: LocalChatMessage) {
+    try {
+      await navigator.clipboard.writeText(msg.body || msg.attachmentUrl || "");
+      setCopiedId(msg.id);
+      setTimeout(() => setCopiedId((prev) => (prev === msg.id ? null : prev)), 1500);
+    } catch (err) {
+      console.error("Kopieren fehlgeschlagen:", err);
+      setNotice("Kopieren fehlgeschlagen - dein Browser hat das blockiert.");
+    }
+    setOpenMenuFor(null);
+  }
+
+  async function handleForwardTo(targetChannelId: number) {
+    if (!forwardingMessage) return;
+    const fd = new FormData();
+    fd.append("sourceMessageId", String(forwardingMessage.id));
+    fd.append("targetChannelId", String(targetChannelId));
+    const res = await forwardMessage(fd);
+    if (res?.error) {
+      setNotice(res.error);
+    } else {
+      setNotice("Weitergeleitet.");
+      if (targetChannelId === activeId) {
+        // Im selben Channel weitergeleitet - Verlauf neu laden, damit sie
+        // sofort auftaucht (Pusher liefert sie sonst erst mit Verzögerung).
+        const res2 = await getChannelMessages(activeId);
+        setMessages(res2.messages ?? []);
+      }
+    }
+    setForwardingMessage(null);
+  }
+
   // "Gelesen"-Haken für eigene Nachrichten: gilt als gelesen, wenn ALLE
   // übrigen Mitglieder des Channels (bei DMs: die eine andere Person) die
   // Nachricht nach ihrem letzten lastReadAt-Zeitstempel gesehen haben.
@@ -494,33 +537,87 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                 ) : (
                   messages.map((m) => {
                     const own = m.userId === currentUser.id;
-                    const mentioned = !own && isSelfMentioned(m.body, currentUser.username);
+                    const inverted = isSelfMentioned(m.body, currentUser.username);
+                    const roleColor = m.role && roleColors ? roleColors[m.role] : undefined;
+                    const menuOpen = openMenuFor === m.id;
+                    const canDelete = own || currentUser.isAdmin;
                     return (
-                      <div key={m.id} className={`flex ${own ? "justify-end" : "justify-start"} group`}>
+                      <div key={m.id} className={`flex ${own ? "justify-end" : "justify-start"} group relative`}>
                         <div className={`max-w-[80%] sm:max-w-[60%] ${own ? "items-end" : "items-start"} flex flex-col`}>
-                          {!own && <span className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1">{m.username ?? "?"}</span>}
-                          <div className="flex items-center gap-1.5">
-                            {!m.pending && (
+                          {!own && (
+                            <span className="text-[9px] uppercase tracking-widest mb-1" style={{ color: roleColor ?? "#71717a" }}>
+                              {m.username ?? "?"}
+                            </span>
+                          )}
+                          <div className={`flex items-center gap-1.5 ${own ? "flex-row-reverse" : "flex-row"}`}>
+                            {/* Hover-Erweiterung: bei eigenen (rechts stehenden) Nachrichten öffnet sie
+                                sich nach links, bei fremden (links stehenden) nach rechts - daher hier
+                                per flex-row-reverse gespiegelt statt zwei verschiedener Layouts. */}
+                            <div className="relative opacity-0 group-hover:opacity-100 transition shrink-0">
                               <button
-                                onClick={() => setReplyingTo(m)}
-                                className="opacity-0 group-hover:opacity-100 text-[10px] text-zinc-600 hover:text-white transition"
-                                title="Antworten"
+                                type="button"
+                                onClick={() => setOpenMenuFor(menuOpen ? null : m.id)}
+                                className="text-zinc-500 hover:text-white transition px-1.5 py-1 text-sm tracking-widest"
+                                title="Mehr"
                               >
-                                ↩
+                                •••
                               </button>
-                            )}
-                            {own && !m.pending && (
-                              <button
-                                onClick={() => handleDelete(m.id)}
-                                className="opacity-0 group-hover:opacity-100 text-[10px] text-zinc-600 hover:text-red-500 transition"
-                                title="Löschen"
-                              >
-                                ✕
-                              </button>
-                            )}
-                            <div className={`px-3 py-2 text-sm break-words space-y-2 ${own ? "bg-white text-black" : "bg-zinc-900 border border-zinc-800 text-zinc-200"} ${m.pending ? "opacity-60" : ""} ${mentioned ? "ring-2 ring-blue-500" : ""}`}>
+                              {menuOpen && (
+                                <>
+                                  <div className="fixed inset-0 z-40" onClick={() => setOpenMenuFor(null)} />
+                                  <div className={`absolute z-50 top-full mt-1 ${own ? "right-0" : "left-0"} bg-black border border-zinc-700 w-40 font-mono`}>
+                                    {!m.pending && (
+                                      <button
+                                        type="button"
+                                        onClick={() => { setForwardingMessage(m); setOpenMenuFor(null); }}
+                                        className="w-full text-left px-3 py-2 text-xs hover:bg-zinc-900 transition"
+                                      >
+                                        Weiterleiten
+                                      </button>
+                                    )}
+                                    {!m.pending && (
+                                      <button
+                                        type="button"
+                                        onClick={() => { setReplyingTo(m); setOpenMenuFor(null); }}
+                                        className="w-full text-left px-3 py-2 text-xs hover:bg-zinc-900 transition"
+                                      >
+                                        Antworten
+                                      </button>
+                                    )}
+                                    {m.body && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCopy(m)}
+                                        className="w-full text-left px-3 py-2 text-xs hover:bg-zinc-900 transition"
+                                      >
+                                        {copiedId === m.id ? "✓ Kopiert" : "Kopieren"}
+                                      </button>
+                                    )}
+                                    {canDelete && !m.pending && (
+                                      <button
+                                        type="button"
+                                        onClick={() => { handleDelete(m.id); setOpenMenuFor(null); }}
+                                        className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-red-900/20 transition"
+                                      >
+                                        Löschen
+                                      </button>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                            <div
+                              className={`px-3 py-2 text-sm break-words space-y-2 ${m.pending ? "opacity-60" : ""} ${
+                                inverted ? "bg-white text-black" : own ? "bg-white text-black" : "bg-zinc-900 border border-zinc-800 text-zinc-200"
+                              }`}
+                            >
+                              {m.forwardedFromUsername && (
+                                <p className={`text-[9px] uppercase tracking-widest italic ${own || inverted ? "text-zinc-600" : "text-zinc-500"}`}>
+                                  ↪ Weitergeleitet von {m.forwardedFromUsername}
+                                </p>
+                              )}
                               {m.replyToId && (
-                                <div className={`border-l-2 pl-2 text-xs opacity-70 ${own ? "border-black" : "border-zinc-500"}`}>
+                                <div className={`border-l-2 pl-2 text-xs opacity-70 ${own || inverted ? "border-black" : "border-zinc-500"}`}>
                                   <p className="font-bold">{m.replyToUsername ?? "?"}</p>
                                   <p className="truncate">
                                     {m.replyToBody || (m.replyToAttachmentName ? `📎 ${m.replyToAttachmentName}` : "…")}
@@ -538,12 +635,12 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                                   href={m.attachmentUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className={`flex items-center gap-2 text-xs underline break-all ${own ? "text-black" : "text-zinc-200"}`}
+                                  className={`flex items-center gap-2 text-xs underline break-all ${own || inverted ? "text-black" : "text-zinc-200"}`}
                                 >
                                   📎 {m.attachmentName ?? "Anhang"}
                                 </a>
                               )}
-                              {m.body && <span>{renderMessageBody(m.body, own)}</span>}
+                              {m.body && <span>{renderMessageBody(m.body, own || inverted)}</span>}
                             </div>
                           </div>
                           <span className="text-[9px] text-zinc-700 mt-1 flex items-center gap-1">
@@ -688,6 +785,14 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
           readReceipts={readReceipts}
           currentUserId={currentUser.id}
           onClose={() => setReadBreakdownFor(null)}
+        />
+      )}
+
+      {forwardingMessage && (
+        <ForwardModal
+          channels={channels}
+          onSelect={handleForwardTo}
+          onClose={() => setForwardingMessage(null)}
         />
       )}
     </div>
@@ -1133,6 +1238,46 @@ function ReadBreakdownDialog({
         <div className="border-t border-zinc-800 p-3">
           <button onClick={onClose} className="w-full text-[10px] uppercase tracking-widest text-zinc-500 hover:text-white transition py-1.5">
             Schließen
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ForwardModal({
+  channels,
+  onSelect,
+  onClose,
+}: {
+  channels: ChatChannelSummary[];
+  onSelect: (channelId: number) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-black border border-zinc-700 w-full max-w-sm max-h-[70vh] flex flex-col font-mono" onClick={(e) => e.stopPropagation()}>
+        <div className="border-b border-zinc-800 px-4 py-3">
+          <p className="text-[10px] uppercase tracking-widest font-bold text-white">Weiterleiten an...</p>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2">
+          {channels.length === 0 ? (
+            <p className="text-[10px] text-zinc-600 uppercase tracking-widest p-3">Keine Chats verfügbar.</p>
+          ) : (
+            channels.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => onSelect(c.id)}
+                className="w-full text-left px-3 py-2.5 hover:bg-zinc-900 transition text-sm"
+              >
+                {c.type === "dm" ? "@" : "#"}{channelDisplayName(c)}
+              </button>
+            ))
+          )}
+        </div>
+        <div className="border-t border-zinc-800 p-3">
+          <button onClick={onClose} className="w-full text-[10px] uppercase tracking-widest text-zinc-500 hover:text-white transition py-1.5">
+            Abbrechen
           </button>
         </div>
       </div>

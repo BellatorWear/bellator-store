@@ -10,8 +10,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <div className="min-h-screen flex flex-col font-mono"
-      style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
+    <div className="min-h-screen flex flex-col font-mono site-bg">
       {user && (
         <EngagementPopup
           initialNewsletterOptIn={user.newsletterOptIn ?? false}

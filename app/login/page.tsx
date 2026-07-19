@@ -47,13 +47,7 @@ function LoginForm() {
 
   return (
     <main
-      className="relative flex min-h-[100dvh] items-center justify-center p-4"
-      style={{
-        backgroundImage: 'url("/background.webp")',
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundAttachment: "fixed",
-      }}
+      className="relative flex min-h-[100dvh] items-center justify-center p-4 site-bg"
     >
 
       <div className="relative z-10 w-full max-w-[320px] sm:max-w-sm border border-white/20 p-5 sm:p-8 bg-black/75 backdrop-blur-md">

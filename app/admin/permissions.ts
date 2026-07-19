@@ -1,7 +1,8 @@
-// Zentrale Rollen-/Rechte-Definition fürs Adminpanel. Ein User hat entweder
-// keine Rolle (normaler Kunde), oder eine der folgenden - jede Rolle schaltet
-// eine feste Auswahl an Adminpanel-Abschnitten frei (Presets, kein freier
-// Rechte-Baukasten, wie angefragt).
+// Zentrale Adminpanel-Bereichs-Definition. Welche Rollen es gibt und welche
+// dieser Bereiche sie freischalten, ist NICHT mehr hier fest einprogrammiert
+// - das liegt jetzt in der DB (custom_roles-Tabelle, siehe app/admin/roles.ts),
+// damit Admins im Adminpanel eigene Rollen mit frei wählbaren Berechtigungen
+// erstellen können statt nur aus 3 festen Presets zu wählen.
 
 export const ADMIN_SECTION_IDS = [
   "home-posts",
@@ -20,62 +21,37 @@ export const ADMIN_SECTION_IDS = [
 
 export type AdminSectionId = typeof ADMIN_SECTION_IDS[number];
 
-export type Role = "admin" | "developer" | "marketing";
-
-export const ROLE_LABELS: Record<Role, string> = {
-  admin: "Admin",
-  developer: "Developer",
-  marketing: "Marketing",
+// Menschenlesbare Kurz-Labels für die Checkboxen beim Rollen-Erstellen -
+// müssen inhaltlich zu den Titeln in admin/page.tsx passen.
+export const ADMIN_SECTION_LABELS: Record<AdminSectionId, string> = {
+  "home-posts": "Startseiten-Posts",
+  "news-channel": "News-Channel",
+  "new-product": "Neues Produkt anlegen",
+  "blob-status": "Bilder-Upload testen",
+  "existing-products": "Bestehende Produkte verwalten",
+  "user-search": "User-Suche",
+  "email-log": "Email-Log",
+  "exclusive-codes": "Erstbesteller-Rabattcodes",
+  "prerelease-codes": "Pre-Release-Zugangscodes",
+  countdown: "Countdown",
+  roles: "Rollen vergeben",
+  "team-chat": "Team-Chat-Zugriff",
 };
-
-export const ROLE_DESCRIPTIONS: Record<Role, string> = {
-  admin: "Voller Zugriff auf alle Funktionen, inkl. Rollenvergabe.",
-  developer: "Produkte, Codes, Countdown, Blob-Status, Startseiten-Artikel & Newsletter - keine Rollenvergabe.",
-  marketing: "Kann Artikel & Newsletter-Posts anlegen und veröffentlichen, aber nicht bearbeiten/löschen. Kein Zugriff auf Produkte, Codes oder User-Daten.",
-};
-
-// Welche Adminpanel-Abschnitte pro Rolle sichtbar sind.
-export const ROLE_SECTIONS: Record<Role, AdminSectionId[]> = {
-  admin: [...ADMIN_SECTION_IDS],
-  developer: [
-    "new-product", "existing-products", "blob-status",
-    "exclusive-codes", "prerelease-codes", "countdown",
-    "home-posts", "news-channel",
-  ],
-  marketing: ["home-posts", "news-channel"],
-};
-
-// Innerhalb von home-posts/news-channel: dürfen Marketing-User bestehende
-// Posts bearbeiten/löschen, oder nur neue anlegen & veröffentlichen?
-export function canEditPosts(role: Role | null): boolean {
-  return role === "admin" || role === "developer";
-}
-
-export function hasSection(role: Role | null, section: AdminSectionId): boolean {
-  if (!role) return false;
-  return ROLE_SECTIONS[role]?.includes(section) ?? false;
-}
-
-export function isValidRole(value: string | null | undefined): value is Role {
-  return value === "admin" || value === "developer" || value === "marketing";
-}
 
 // ===================================================================
 // Team-Chat-Zugriff
 // ===================================================================
 // Zwei Ebenen, wie angefragt: ein Rollen-Standard (in siteSettings unter
-// dem Key CHAT_ROLE_ACCESS_KEY gespeichert, im Adminpanel einstellbar) und
-// ein optionaler Per-User-Override (users.chat_access), der den Standard
-// für genau diesen einen Account übersteuert - z.B. um einem einzelnen
-// Marketing-User Zugriff zu geben, ohne gleich die ganze Rolle umzustellen,
-// oder umgekehrt einem einzelnen Developer den Zugriff zu entziehen.
-export type ChatRoleAccess = Record<Role, boolean>;
+// dem Key CHAT_ROLE_ACCESS_KEY gespeichert, im Adminpanel einstellbar,
+// jetzt dynamisch pro erstellter Rolle statt nur 3 fester Keys) und ein
+// optionaler Per-User-Override (users.chat_access), der den Standard für
+// genau diesen einen Account übersteuert.
+export type ChatRoleAccess = Record<string, boolean>;
 
-export const CHAT_ROLE_ACCESS_DEFAULT: ChatRoleAccess = {
-  admin: true,
-  developer: true,
-  marketing: true,
-};
+// Kein Default mehr auf 3 feste Rollennamen - bei einer frisch erstellten
+// Rolle ist Chat-Zugriff standardmäßig aus, bis ein Admin ihn in
+// TeamChatAccess.tsx explizit einschaltet.
+export const CHAT_ROLE_ACCESS_DEFAULT: ChatRoleAccess = {};
 
 type ChatAccessUser = {
   role: string | null;
@@ -89,7 +65,6 @@ export function hasChatAccess(user: ChatAccessUser | null, roleDefaults: ChatRol
   if (user.chatAccess !== null && user.chatAccess !== undefined) return user.chatAccess;
   // Volle Admins haben immer Zugriff, unabhängig vom konfigurierten Standard.
   if (user.isAdmin) return true;
-  const role = isValidRole(user.role) ? user.role : null;
-  if (!role) return false; // normale Kunden ohne Team-Rolle nie, außer expliziter Override oben
-  return roleDefaults[role] ?? false;
+  if (!user.role) return false; // normale Kunden ohne Team-Rolle nie, außer expliziter Override oben
+  return roleDefaults[user.role] ?? false;
 }

@@ -1,11 +1,12 @@
 "use server";
 import { db } from "@/db";
-import { products, productVariants, productColors, discountCodes, newsPosts, users, usernameHistory, preReleaseCodes, preReleaseRedemptions, homePosts } from "@/db/schema";
+import { products, productVariants, productColors, discountCodes, newsPosts, users, usernameHistory, preReleaseCodes, preReleaseRedemptions, homePosts, customRoles } from "@/db/schema";
 import { eq, ilike, desc } from "drizzle-orm";
 import { del, list } from "@vercel/blob";
 import { getCurrentUser } from "@/app/actions";
 import { sanitizeText, isSuspiciousInput, sanitizeHtml } from "@/app/utils/inputSafety";
-import { hasSection, canEditPosts, isValidRole, type Role, type AdminSectionId, type ChatRoleAccess } from "./permissions";
+import { ADMIN_SECTION_IDS, type AdminSectionId, type ChatRoleAccess } from "./permissions";
+import { hasSectionAsync, canEditPostsAsync } from "./roles";
 import { isTrustedOrigin } from "@/app/utils/origin";
 import { setSetting, COUNTDOWN_KEY, EXCLUSIVE_CODE_KEY, CHAT_ROLE_ACCESS_KEY } from "@/app/utils/settings";
 import { sendPushToAll } from "@/app/utils/push";
@@ -38,15 +39,15 @@ async function requireAdmin() {
   return user;
 }
 
-// Für Team-Mitglieder mit eingeschränkter Rolle (Developer/Marketing) statt
-// vollem Admin-Zugriff. section wird gegen die Presets in permissions.ts
-// geprüft - volle Admins (isAdmin/role 'admin') dürfen immer.
+// Für Team-Mitglieder mit eingeschränkter Rolle statt vollem Admin-Zugriff.
+// section wird gegen die im Adminpanel erstellten Rollen in der DB geprüft
+// (siehe app/admin/roles.ts) - volle Admins (isAdmin) dürfen immer.
 async function requireRole(section: AdminSectionId) {
   if (!(await isTrustedOrigin())) return null;
   const user = await getCurrentUser();
   if (!user) return null;
-  const role: Role | null = isValidRole(user.role) ? user.role : (user.isAdmin ? "admin" : null);
-  if (!hasSection(role, section)) return null;
+  const role: string | null = user.isAdmin ? "admin" : user.role;
+  if (!(await hasSectionAsync(user.role, user.isAdmin, section))) return null;
   return { ...user, resolvedRole: role };
 }
 
@@ -491,7 +492,10 @@ export async function setUserRole(formData: FormData) {
   if (!userId) return { error: "Ungültig." };
 
   const role = roleRaw.trim() === "" ? null : roleRaw;
-  if (role !== null && !isValidRole(role)) return { error: "Ungültige Rolle." };
+  if (role !== null) {
+    const existingRoles = await db.select().from(customRoles).where(eq(customRoles.name, role));
+    if (existingRoles.length === 0) return { error: "Ungültige Rolle (existiert nicht mehr)." };
+  }
 
   // Sicherheitsnetz: der letzte verbleibende Admin darf sich nicht selbst
   // die Admin-Rolle entziehen, sonst kann sich niemand mehr um Rollen
@@ -710,7 +714,7 @@ export async function createNewsPost(formData: FormData) {
 
 export async function updateNewsPost(formData: FormData) {
   const admin = await requireRole("news-channel");
-  if (!admin || !canEditPosts(admin.resolvedRole)) return { error: "Keine Berechtigung." };
+  if (!admin || !(await canEditPostsAsync(admin.role, admin.isAdmin))) return { error: "Keine Berechtigung." };
 
   const id = Number(formData.get("id"));
   if (!id) return { error: "Ungültig." };
@@ -743,7 +747,7 @@ export async function updateNewsPost(formData: FormData) {
 
 export async function deleteNewsPost(formData: FormData) {
   const admin = await requireRole("news-channel");
-  if (!admin || !canEditPosts(admin.resolvedRole)) return { error: "Keine Berechtigung." };
+  if (!admin || !(await canEditPostsAsync(admin.role, admin.isAdmin))) return { error: "Keine Berechtigung." };
 
   const id = Number(formData.get("id"));
   if (!id) return { error: "Ungültig." };
@@ -800,7 +804,7 @@ export async function createHomePost(formData: FormData) {
 
 export async function updateHomePost(formData: FormData) {
   const admin = await requireRole("home-posts");
-  if (!admin || !canEditPosts(admin.resolvedRole)) return { error: "Keine Berechtigung." };
+  if (!admin || !(await canEditPostsAsync(admin.role, admin.isAdmin))) return { error: "Keine Berechtigung." };
 
   const id = Number(formData.get("id"));
   if (!id) return { error: "Ungültig." };
@@ -861,7 +865,7 @@ export async function toggleHomePostPublished(formData: FormData) {
 
 export async function deleteHomePost(formData: FormData) {
   const admin = await requireRole("home-posts");
-  if (!admin || !canEditPosts(admin.resolvedRole)) return { error: "Keine Berechtigung." };
+  if (!admin || !(await canEditPostsAsync(admin.role, admin.isAdmin))) return { error: "Keine Berechtigung." };
 
   const id = Number(formData.get("id"));
   if (!id) return { error: "Ungültig." };
@@ -877,11 +881,14 @@ export async function saveChatRoleAccess(formData: FormData) {
   const admin = await requireAdmin();
   if (!admin) return { error: "Keine Berechtigung." };
 
-  const next: ChatRoleAccess = {
-    admin: formData.get("admin") === "true",
-    developer: formData.get("developer") === "true",
-    marketing: formData.get("marketing") === "true",
-  };
+  const raw = (formData.get("roles") as string) ?? "{}";
+  let next: ChatRoleAccess;
+  try {
+    const parsed = JSON.parse(raw);
+    next = Object.fromEntries(Object.entries(parsed).map(([k, v]) => [k, v === true]));
+  } catch {
+    return { error: "Ungültige Daten." };
+  }
   await setSetting(CHAT_ROLE_ACCESS_KEY, next);
   return { success: true };
 }
@@ -909,5 +916,53 @@ export async function setUserTeamMembership(formData: FormData) {
 
   await db.update(users).set({ isTeam }).where(eq(users.id, userId));
   await syncTeamChannelMembership(userId, isTeam);
+  return { success: true };
+}
+
+// ===================================================================
+// Dynamische Rollen erstellen/bearbeiten/löschen
+// ===================================================================
+export async function createOrUpdateRole(formData: FormData) {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
+
+  const nameRaw = ((formData.get("name") as string) ?? "").trim().toLowerCase();
+  const labelRaw = ((formData.get("label") as string) ?? "").trim();
+  const color = ((formData.get("color") as string) ?? "#a855f7").trim();
+  const canEditPostsValue = formData.get("canEditPosts") === "true";
+  const sectionsRaw = formData.getAll("sections") as string[];
+
+  if (!nameRaw || !/^[a-z0-9_-]+$/.test(nameRaw)) {
+    return { error: "Ungültiger Name (nur Kleinbuchstaben, Zahlen, - und _)." };
+  }
+  if (!labelRaw) return { error: "Bitte einen Anzeigenamen angeben." };
+  if (isSuspiciousInput(labelRaw)) return { error: "Ungültiger Anzeigename." };
+
+  const label = sanitizeText(labelRaw, 40);
+  const sections = sectionsRaw.filter((s) => (ADMIN_SECTION_IDS as readonly string[]).includes(s));
+
+  const existing = await db.select().from(customRoles).where(eq(customRoles.name, nameRaw));
+  if (existing.length > 0) {
+    await db.update(customRoles).set({ label, color, sections, canEditPosts: canEditPostsValue }).where(eq(customRoles.name, nameRaw));
+  } else {
+    await db.insert(customRoles).values({ name: nameRaw, label, color, sections, canEditPosts: canEditPostsValue });
+  }
+  return { success: true };
+}
+
+export async function deleteRole(formData: FormData) {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
+
+  const name = ((formData.get("name") as string) ?? "").trim();
+  if (!name) return { error: "Ungültig." };
+  if (name === "admin") return { error: "Die Admin-Rolle kann nicht gelöscht werden." };
+
+  const usersWithRole = await db.select({ id: users.id }).from(users).where(eq(users.role, name));
+  if (usersWithRole.length > 0) {
+    return { error: `Diese Rolle ist noch ${usersWithRole.length} User(n) zugewiesen - erst umverteilen, dann löschen.` };
+  }
+
+  await db.delete(customRoles).where(eq(customRoles.name, name));
   return { success: true };
 }

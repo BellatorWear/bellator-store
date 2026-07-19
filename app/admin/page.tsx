@@ -20,15 +20,21 @@ import AdminDashboard, { type AdminFunctionGroup } from "./AdminDashboard";
 import { publishDueScheduledPosts } from "@/app/utils/publishScheduled";
 import RoleManager from "./RoleManager";
 import TeamChatAccess from "./TeamChatAccess";
-import { hasSection, canEditPosts, isValidRole, type Role, CHAT_ROLE_ACCESS_DEFAULT } from "./permissions";
+import { CHAT_ROLE_ACCESS_DEFAULT, type AdminSectionId } from "./permissions";
+import { getAllRoles, getRoleConfig } from "./roles";
 import { getSetting, COUNTDOWN_KEY, COUNTDOWN_DEFAULT, EXCLUSIVE_CODE_KEY, EXCLUSIVE_CODE_DEFAULT, CHAT_ROLE_ACCESS_KEY } from "@/app/utils/settings";
 
 export default async function AdminPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (!user.role && !user.isAdmin) redirect("/shop");
-  const role: Role | null = isValidRole(user.role) ? user.role : (user.isAdmin ? "admin" : null);
-  if (!role) redirect("/shop");
+  const roleName: string | null = user.isAdmin ? "admin" : user.role;
+  if (!roleName) redirect("/shop");
+  const [roleConfig, allRoles] = await Promise.all([getRoleConfig(user.role), getAllRoles()]);
+  // Volle Admins dürfen immer, auch falls die "admin"-Rollen-Konfiguration
+  // aus der DB fehlen sollte. Für alle anderen: die Rolle muss tatsächlich
+  // (noch) existieren, sonst raus - z.B. falls eine Rolle gelöscht wurde.
+  if (!user.isAdmin && !roleConfig) redirect("/shop");
 
   await publishDueScheduledPosts();
 
@@ -65,7 +71,7 @@ export default async function AdminPage() {
           title: "Startseiten-Posts",
           description: "Artikel, Videos, Leaks und Making-Ofs für die Startseite",
           keywords: ["startseite", "blog", "post", "artikel", "video", "leak", "makingof"],
-          content: <HomePostManager posts={homePostList} canEdit={canEditPosts(role)} />,
+          content: <HomePostManager posts={homePostList} canEdit={user.isAdmin || (roleConfig?.canEditPosts ?? false)} />,
           defaultOpen: true,
         },
         {
@@ -175,14 +181,14 @@ export default async function AdminPage() {
           title: "Rollen vergeben",
           description: "Bellator Team-Mitgliedern Admin/Developer/Marketing-Zugriff geben",
           keywords: ["rolle", "team", "berechtigung", "rechte", "marketing", "developer"],
-          content: <RoleManager />,
+          content: <RoleManager initialRoles={allRoles} />,
         },
         {
           id: "team-chat",
           title: "Team-Chat-Zugriff",
           description: "Wer darf den internen Team-Chat unter /chat nutzen",
           keywords: ["chat", "team-chat", "nachrichten", "zugriff", "berechtigung"],
-          content: <TeamChatAccess initialRoleAccess={chatRoleAccess} />,
+          content: <TeamChatAccess initialRoleAccess={chatRoleAccess} roles={allRoles} />,
         },
       ],
     },
@@ -190,12 +196,11 @@ export default async function AdminPage() {
 
   // Nur die Abschnitte zeigen, die die Rolle des eingeloggten Users freigibt.
   const visibleGroups = groups
-    .map((g) => ({ ...g, items: g.items.filter((item) => hasSection(role, item.id as any)) }))
+    .map((g) => ({ ...g, items: g.items.filter((item) => user.isAdmin || (roleConfig?.sections.includes(item.id as AdminSectionId) ?? false)) }))
     .filter((g) => g.items.length > 0);
 
   return (
-    <div className="min-h-screen flex flex-col bg-black text-white font-mono"
-      style={{ backgroundImage: 'url("/background.webp")', backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
+    <div className="min-h-screen flex flex-col bg-black text-white font-mono site-bg">
       <div className="relative z-10 flex flex-col min-h-screen t-invert">
       <GlobalHeader />
       <main className="flex-1 w-full max-w-[1400px] mx-auto px-3 sm:px-6 py-8 space-y-8">

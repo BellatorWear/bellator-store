@@ -242,3 +242,21 @@ button, a[class*="border"], a[class*="btn"] {
 input[type="file"].hidden {
   display: none;
 }
+
+/* Gemeinsamer Hintergrund für alle Seiten mit background.webp. Wichtig:
+   background-attachment: fixed NUR auf Desktop - auf Mobile (v.a. iOS
+   Safari) sorgt "fixed" beim Scrollen für ein ruckelndes/eingezoomt
+   wirkendes Hintergrundbild, weil der Browser die Viewport-Höhe wegen der
+   ein-/ausblendenden Adressleiste laufend neu berechnet. Auf Mobile bleibt
+   es daher beim Standard (scroll), das Bild bewegt sich normal mit. */
+.site-bg {
+  background-image: url("/background.webp");
+  background-size: cover;
+  background-position: center;
+  background-attachment: scroll;
+}
+@media (min-width: 640px) {
+  .site-bg {
+    background-attachment: fixed;
+  }
+}

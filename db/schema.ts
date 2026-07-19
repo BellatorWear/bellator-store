@@ -344,6 +344,25 @@ export const chatMessages = pgTable("chat_messages", {
   attachmentType: text("attachment_type"),
   // Antwort auf eine andere Nachricht im selben Channel (optional).
   replyToId: integer("reply_to_id"),
+  // Weitergeleitet von X - denormalisierter Username zum Zeitpunkt der
+  // Weiterleitung, kein FK, weil das Ziel ein anderer Channel ist, auf den
+  // der ursprüngliche Autor evtl. keinen Zugriff hat.
+  forwardedFromUsername: text("forwarded_from_username"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ===================================================================
+// Dynamische Rollen (v22) - Admin kann eigene Rollen mit frei wählbaren
+// Adminpanel-Bereichen anlegen, statt der 3 fest einprogrammierten
+// (admin/developer/marketing bleiben als Startbelegung erhalten).
+// ===================================================================
+export const customRoles = pgTable("custom_roles", {
+  id: serial("id").primaryKey(),
+  name: text("name").unique().notNull(), // interner Key, in users.role gespeichert
+  label: text("label").notNull(), // Anzeigename
+  color: text("color").notNull().default("#a855f7"),
+  sections: jsonb("sections").notNull().default([]), // AdminSectionId[]
+  canEditPosts: boolean("can_edit_posts").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
