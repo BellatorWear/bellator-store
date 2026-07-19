@@ -91,6 +91,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   const [copiedId, setCopiedId] = useState<number | null>(null);
 
   const pusherRef = useRef<Pusher | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeBindingRef = useRef<PusherChannel | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -607,7 +608,23 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                               )}
                             </div>
                             <div
-                              className={`px-3 py-2 text-sm break-words space-y-2 ${m.pending ? "opacity-60" : ""} ${
+                              onContextMenu={(e) => {
+                                if (m.pending) return;
+                                e.preventDefault();
+                                setOpenMenuFor(m.id);
+                              }}
+                              onTouchStart={() => {
+                                if (m.pending) return;
+                                longPressTimerRef.current = setTimeout(() => setOpenMenuFor(m.id), 500);
+                              }}
+                              onTouchEnd={() => {
+                                if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+                              }}
+                              onTouchMove={() => {
+                                // Beim Scrollen mit dem Finger soll kein Menü aufgehen.
+                                if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+                              }}
+                              className={`px-3 py-2 text-sm break-words space-y-2 select-none sm:select-auto ${m.pending ? "opacity-60" : ""} ${
                                 inverted ? "bg-white text-black" : own ? "bg-white text-black" : "bg-zinc-900 border border-zinc-800 text-zinc-200"
                               }`}
                             >
