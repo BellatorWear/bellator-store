@@ -8,7 +8,7 @@ const GUEST_COOKIE = "bellator-guest";
 // Edge-Runtime, volle Session-Verifikation gegen die DB passiert wie bisher
 // serverseitig in getCurrentUser()). Reicht für die Weiterleitungs-
 // Entscheidung völlig aus.
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const hasSession = request.cookies.has(SESSION_COOKIE);
   const hasGuest = request.cookies.has(GUEST_COOKIE);
   if (hasSession || hasGuest) return NextResponse.next();

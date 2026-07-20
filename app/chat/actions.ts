@@ -16,7 +16,7 @@ import { sendPushToUser } from "@/app/utils/push";
 const MAX_MESSAGE_LENGTH = 4000;
 
 // Zentrale Zugriffsprüfung - wird von jeder Chat-Action zuerst aufgerufen.
-// Nicht nur "eingeloggt" (das übernimmt schon middleware.ts), sondern
+// Nicht nur "eingeloggt" (das übernimmt schon proxy.ts), sondern
 // zusätzlich der eigentliche Team-Chat-Zugriff (Rollen-Standard + Override).
 async function requireChatUser() {
   if (!(await isTrustedOrigin())) return null;

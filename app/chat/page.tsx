@@ -18,7 +18,7 @@ export default async function ChatPage() {
 
   return (
     <ChatClient
-      currentUser={{ id: user.id, username: user.username, isAdmin: user.isAdmin }}
+      currentUser={{ id: user.id, username: user.username, isAdmin: user.isAdmin, role: user.role }}
       initialChannels={channels}
     />
   );

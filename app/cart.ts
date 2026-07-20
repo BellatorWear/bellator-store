@@ -184,9 +184,14 @@ export async function createCheckoutSession() {
           unit_amount: item.unitPriceCents,
           product_data: {
             name: lineItemName(item),
-            // Bilder sind jetzt echte https-URLs (Vercel Blob), nicht mehr
-            // Base64 - Stripe akzeptiert nur echte URLs, das geht jetzt.
-            images: item.image ? [item.image] : undefined,
+            // Stripe akzeptiert für product_data.images NUR echte https-URLs.
+            // Ältere Produkte/Farben können noch Base64 Data-URLs haben (siehe
+            // db/schema.ts Kommentar bei products.images) - so ein Wert würde
+            // stripe.checkout.sessions.create() mit einem Fehler abbrechen
+            // lassen und genau die "Checkout konnte nicht erstellt werden"-
+            // Meldung im catch unten auslösen. Deshalb hier hart auf https
+            // filtern statt blind durchzureichen.
+            images: item.image && item.image.startsWith("https://") ? [item.image] : undefined,
             metadata: { productId: String(item.productId), variantId: item.variantId ? String(item.variantId) : "" },
           },
         },
@@ -223,7 +228,11 @@ export async function createCheckoutSession() {
 
     return { success: true, url: session.url };
   } catch (e) {
-    console.error("Stripe Checkout Fehler:", e);
+    const detail =
+      e && typeof e === "object" && "message" in e
+        ? `${(e as { type?: string }).type ?? "Error"}: ${(e as { message?: string }).message}`
+        : String(e);
+    console.error("Stripe Checkout Fehler:", detail);
     return { error: "Checkout konnte nicht erstellt werden." };
   }
 }
