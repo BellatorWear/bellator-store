@@ -536,12 +536,16 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                 ) : messages.length === 0 ? (
                   <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Noch keine Nachrichten. Schreib die erste.</p>
                 ) : (
-                  messages.map((m) => {
+                  messages.map((m, idx) => {
                     const own = m.userId === currentUser.id;
                     const inverted = isSelfMentioned(m.body, currentUser.username);
                     const roleColor = m.role && roleColors ? roleColors[m.role] : undefined;
                     const menuOpen = openMenuFor === m.id;
                     const canDelete = own || currentUser.isAdmin;
+                    // Für die letzten Nachrichten im Thread ist unterhalb des Buttons kaum noch
+                    // Platz (Eingabeleiste direkt darunter) - Menü klappt dort stattdessen nach
+                    // oben auf, sonst wurde es abgeschnitten/unsichtbar.
+                    const openUpward = idx >= messages.length - 3;
                     return (
                       <div key={m.id} className={`flex ${own ? "justify-end" : "justify-start"} group relative`}>
                         <div className={`max-w-[80%] sm:max-w-[60%] ${own ? "items-end" : "items-start"} flex flex-col`}>
@@ -553,20 +557,38 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                           <div className={`flex items-center gap-1.5 ${own ? "flex-row-reverse" : "flex-row"}`}>
                             {/* Hover-Erweiterung: bei eigenen (rechts stehenden) Nachrichten öffnet sie
                                 sich nach links, bei fremden (links stehenden) nach rechts - daher hier
-                                per flex-row-reverse gespiegelt statt zwei verschiedener Layouts. */}
-                            <div className="relative opacity-0 group-hover:opacity-100 transition shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => setOpenMenuFor(menuOpen ? null : m.id)}
-                                className="text-zinc-500 hover:text-white transition px-1.5 py-1 text-sm tracking-widest"
-                                title="Mehr"
+                                per flex-row-reverse gespiegelt statt zwei verschiedener Layouts.
+                                Der Slot nimmt standardmäßig keinen Platz ein (max-w-0), damit nicht bei
+                                jeder Nachricht unnötig Leerraum steht. Bei Hover schiebt sich die
+                                Nachricht per max-width-Animation kurz zur Seite auf, die Punkte selbst
+                                faden erst mit kleiner Verzögerung ein, sobald der Platz da ist. Solange
+                                das Menü offen ist, bleibt der Slot erzwungen ausgeklappt (sonst würde er
+                                beim Verlassen des Hovers während eines Klicks zuklappen). */}
+                            <div className="relative shrink-0">
+                              <div
+                                className={`overflow-hidden transition-[max-width] duration-200 ease-out ${
+                                  menuOpen ? "max-w-[1.5rem]" : "max-w-0 group-hover:max-w-[1.5rem]"
+                                }`}
                               >
-                                •••
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenMenuFor(menuOpen ? null : m.id)}
+                                  className={`flex flex-col items-center justify-center gap-[3px] text-zinc-500 hover:text-white transition-opacity duration-150 px-1.5 py-1.5 ${
+                                    menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-hover:delay-100"
+                                  }`}
+                                  title="Mehr"
+                                >
+                                  <span className="w-[3px] h-[3px] rounded-full bg-current" />
+                                  <span className="w-[3px] h-[3px] rounded-full bg-current" />
+                                  <span className="w-[3px] h-[3px] rounded-full bg-current" />
+                                </button>
+                              </div>
                               {menuOpen && (
                                 <>
                                   <div className="fixed inset-0 z-40" onClick={() => setOpenMenuFor(null)} />
-                                  <div className={`absolute z-50 top-full mt-1 ${own ? "right-0" : "left-0"} bg-black border border-zinc-700 w-40 font-mono`}>
+                                  <div
+                                    className={`absolute z-50 ${openUpward ? "bottom-full mb-1" : "top-full mt-1"} ${own ? "right-0" : "left-0"} bg-black border border-zinc-700 w-40 font-mono`}
+                                  >
                                     {!m.pending && (
                                       <button
                                         type="button"
