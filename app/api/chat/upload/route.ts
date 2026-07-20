@@ -43,13 +43,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: `Datei zu groß (${(file.size / 1024 / 1024).toFixed(1)}MB, max. 4MB).` }, { status: 400 });
   }
 
-  if (!process.env.BLOB_READ_WRITE_TOKEN) {
-    console.error("BLOB_READ_WRITE_TOKEN fehlt in den Umgebungsvariablen.");
-    return NextResponse.json({ error: "Server-Konfigurationsfehler: BLOB_READ_WRITE_TOKEN ist nicht gesetzt." }, { status: 500 });
+  // Blob-Store "bellator-store-blob" wurde mit Custom-Prefix BLOB2 statt
+  // dem Default BLOB verbunden -> Token heißt entsprechend BLOB2_READ_WRITE_TOKEN.
+  if (!process.env.BLOB2_READ_WRITE_TOKEN) {
+    console.error("BLOB2_READ_WRITE_TOKEN fehlt in den Umgebungsvariablen.");
+    return NextResponse.json({ error: "Server-Konfigurationsfehler: BLOB2_READ_WRITE_TOKEN ist nicht gesetzt." }, { status: 500 });
   }
 
   try {
-    const blob = await put(file.name, file, { access: "public", addRandomSuffix: true });
+    const blob = await put(file.name, file, { access: "public", addRandomSuffix: true, token: process.env.BLOB2_READ_WRITE_TOKEN });
     return NextResponse.json({ url: blob.url });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unbekannter Fehler";

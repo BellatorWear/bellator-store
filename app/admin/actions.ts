@@ -268,7 +268,7 @@ export async function deleteProduct(formData: FormData) {
   const images = existing[0]?.images ?? [];
   for (const url of images) {
     try {
-      await del(url);
+      await del(url, { token: process.env.BLOB2_READ_WRITE_TOKEN });
     } catch (e) {
       console.error("Konnte Blob nicht löschen:", url, e);
     }
@@ -276,7 +276,7 @@ export async function deleteProduct(formData: FormData) {
   for (const c of colors) {
     for (const url of [c.frontImage, c.backImage]) {
       try {
-        await del(url);
+        await del(url, { token: process.env.BLOB2_READ_WRITE_TOKEN });
       } catch (e) {
         console.error("Konnte Farb-Blob nicht löschen:", url, e);
       }
@@ -350,7 +350,7 @@ export async function updateColorImages(formData: FormData) {
   ].filter(Boolean) as string[];
   for (const url of oldUrls) {
     try {
-      await del(url);
+      await del(url, { token: process.env.BLOB2_READ_WRITE_TOKEN });
     } catch (e) {
       console.error("Konnte altes Farb-Blob nicht löschen:", url, e);
     }
@@ -372,7 +372,7 @@ export async function deleteColor(formData: FormData) {
   for (const url of [existing[0]?.frontImage, existing[0]?.backImage]) {
     if (!url) continue;
     try {
-      await del(url);
+      await del(url, { token: process.env.BLOB2_READ_WRITE_TOKEN });
     } catch (e) {
       console.error("Konnte Farb-Blob nicht löschen:", url, e);
     }
@@ -460,10 +460,12 @@ export async function checkBlobConnection() {
   const admin = await requireAdmin();
   if (!admin) return { error: "Keine Berechtigung." };
 
-  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+  // Blob-Store "bellator-store-blob" wurde mit Custom-Prefix BLOB2 statt
+  // dem Default BLOB verbunden -> Token heißt entsprechend BLOB2_READ_WRITE_TOKEN.
+  if (!process.env.BLOB2_READ_WRITE_TOKEN) {
     return {
       success: false,
-      message: "BLOB_READ_WRITE_TOKEN ist nicht gesetzt. Im Vercel Dashboard unter Storage einen Blob-Store erstellen und mit diesem Projekt verbinden, dann neu deployen.",
+      message: "BLOB2_READ_WRITE_TOKEN ist nicht gesetzt. Im Vercel Dashboard unter Storage einen Blob-Store erstellen und mit diesem Projekt verbinden, dann neu deployen.",
     };
   }
 
@@ -471,7 +473,7 @@ export async function checkBlobConnection() {
     // Echter Verbindungstest statt nur die Existenz der Env-Variable zu
     // prüfen - falls der Token falsch/abgelaufen ist, würde list() das
     // genauso aufdecken.
-    await list({ limit: 1 });
+    await list({ limit: 1, token: process.env.BLOB2_READ_WRITE_TOKEN });
     return { success: true, message: "Verbindung zu Vercel Blob funktioniert." };
   } catch (e) {
     console.error("Blob-Verbindungstest fehlgeschlagen:", e);
