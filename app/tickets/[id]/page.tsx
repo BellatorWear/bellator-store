@@ -5,6 +5,7 @@ import { canAccessTicket, getTicketWithMessages } from "../lib";
 import { getCurrentUser } from "@/app/actions";
 import GlobalHeader from "@/app/components/GlobalHeader";
 import GlobalFooter from "@/app/components/GlobalFooter";
+import AttachmentPickerWithPreview from "@/app/components/AttachmentPickerWithPreview";
 
 type TicketAttachment = { url: string; name: string; type: string };
 
@@ -198,25 +199,10 @@ export default async function TicketDetailPage({
             className="w-full bg-black border border-zinc-800 px-3 py-2 text-sm"
             placeholder="Schreibe eine Antwort an das Team oder den User..."
           />
-          <div className="space-y-2">
-            <label className="text-[10px] uppercase tracking-widest text-zinc-500">
-              Bilder / Dateien (optional)
-            </label>
-            <label
-              htmlFor={`ticket-reply-attachments-${ticket.id}`}
-              className="inline-flex cursor-pointer items-center justify-center border border-zinc-700 bg-zinc-950 px-4 py-2 text-xs uppercase tracking-widest font-black text-white hover:bg-white hover:text-black transition-all"
-            >
-              Dateien auswählen
-            </label>
-            <input
-              id={`ticket-reply-attachments-${ticket.id}`}
-              type="file"
-              name="attachments"
-              multiple
-              accept="image/*,.pdf,.txt,.zip,.doc,.docx,.ppt,.pptx,.xlsx"
-              className="hidden"
-            />
-          </div>
+          <AttachmentPickerWithPreview
+            id={`ticket-reply-attachments-${ticket.id}`}
+            name="attachments"
+          />
           <button
             type="submit"
             className="bg-white text-black px-4 py-2 text-xs uppercase tracking-widest font-black"

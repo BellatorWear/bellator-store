@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createTicket } from "./actions";
 import GlobalHeader from "@/app/components/GlobalHeader";
 import GlobalFooter from "@/app/components/GlobalFooter";
+import AttachmentPickerWithPreview from "@/app/components/AttachmentPickerWithPreview";
 
 export default async function TicketsPage() {
   const user = await getCurrentUser();
@@ -90,25 +91,10 @@ export default async function TicketsPage() {
               placeholder="Beschreibe das Problem, den Fehler oder die Anfrage so konkret wie möglich."
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-[10px] uppercase tracking-widest text-zinc-500">
-              Bilder / Dateien (optional)
-            </label>
-            <label
-              htmlFor="ticket-attachments"
-              className="inline-flex cursor-pointer items-center justify-center border border-zinc-700 bg-zinc-950 px-4 py-2 text-xs uppercase tracking-widest font-black text-white hover:bg-white hover:text-black transition-all"
-            >
-              Dateien auswählen
-            </label>
-            <input
-              id="ticket-attachments"
-              type="file"
-              name="attachments"
-              multiple
-              accept="image/*,.pdf,.txt,.zip,.doc,.docx,.ppt,.pptx,.xlsx"
-              className="hidden"
-            />
-          </div>
+          <AttachmentPickerWithPreview
+            id="ticket-attachments"
+            name="attachments"
+          />
           <button
             type="submit"
             className="bg-white text-black px-4 py-2 text-xs uppercase tracking-widest font-black"
