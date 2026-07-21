@@ -6,20 +6,67 @@ import Pusher, { Channel as PusherChannel } from "pusher-js";
 import { uploadFileViaServer } from "@/app/utils/uploadImageFile";
 import { handleAction } from "@/app/actions";
 import {
-  listMyChannels, getChannelMessages, sendMessage, markChannelRead,
-  searchChatUsers, getOrCreateDirectMessage, createChannel,
-  deleteMessage, listChannelMembers, removeChannelMember, addChannelMember,
-  getReadReceipts, forwardMessage, getRoleColorsForChat, editMessage,
-  type ChatChannelSummary, type ChatMessageDto, type ChatUserResult, type ChatChannelMemberDto, type ChatReadReceipt,
+  listMyChannels,
+  getChannelMessages,
+  sendMessage,
+  markChannelRead,
+  searchChatUsers,
+  getOrCreateDirectMessage,
+  createChannel,
+  deleteMessage,
+  listChannelMembers,
+  removeChannelMember,
+  addChannelMember,
+  getReadReceipts,
+  forwardMessage,
+  getRoleColorsForChat,
+  editMessage,
+  type ChatChannelSummary,
+  type ChatMessageDto,
+  type ChatUserResult,
+  type ChatChannelMemberDto,
+  type ChatReadReceipt,
 } from "./actions";
-      
 
-type CurrentUser = { id: number; username: string | null; isAdmin: boolean; role: string | null };
-type PendingAttachment = { url: string; name: string; type: string } | null;
+type CurrentUser = {
+  id: number;
+  username: string | null;
+  isAdmin: boolean;
+  role: string | null;
+};
+type PendingAttachment = { url: string; name: string; type: string };
+type PendingAttachmentsState = PendingAttachment[];
 // Client-seitige Erweiterung für optimistisch angezeigte, noch nicht vom
 // Server bestätigte Nachrichten (negative id, damit sie nie mit einer
 // echten DB-id kollidiert).
 type LocalChatMessage = ChatMessageDto & { pending?: boolean };
+
+function parseAttachmentPayload(payload: string | null): PendingAttachment[] {
+  if (!payload) return [];
+  const trimmed = payload.trim();
+  if (!trimmed) return [];
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) {
+      return parsed.filter(
+        (item): item is PendingAttachment =>
+          !!item &&
+          typeof item === "object" &&
+          typeof item.url === "string" &&
+          typeof item.name === "string",
+      );
+    }
+  } catch {
+    // Fallback: Ein einzelner URL-String aus älteren Nachrichten.
+  }
+
+  if (trimmed.startsWith("https://")) {
+    return [{ url: trimmed, name: "Anhang", type: "application/octet-stream" }];
+  }
+
+  return [];
+}
 
 function isImageType(type: string | null): boolean {
   return !!type && type.startsWith("image/");
@@ -37,7 +84,10 @@ function renderMessageBody(text: string, own: boolean): React.ReactNode {
   const parts = text.split(MENTION_PATTERN);
   return parts.map((part, i) =>
     MENTION_PATTERN.test(part) ? (
-      <span key={i} className={`font-bold ${own ? "text-blue-700" : "text-blue-400"}`}>
+      <span
+        key={i}
+        className={`font-bold ${own ? "text-blue-700" : "text-blue-400"}`}
+      >
         {part}
       </span>
     ) : (
@@ -56,26 +106,40 @@ function isSelfMentioned(body: string, username: string | null): boolean {
 }
 
 function channelDisplayName(c: ChatChannelSummary): string {
-  if (c.type === "dm") return c.otherMember?.username ?? c.otherMember?.email ?? "Unbekannt";
+  if (c.type === "dm")
+    return c.otherMember?.username ?? c.otherMember?.email ?? "Unbekannt";
   return c.name ?? "Channel";
 }
 
 function formatTime(d: Date | string | null): string {
   if (!d) return "";
-  return new Date(d).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  return new Date(d).toLocaleTimeString("de-DE", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
-export default function ChatClient({ currentUser, initialChannels }: { currentUser: CurrentUser; initialChannels: ChatChannelSummary[] }) {
-  const [channels, setChannels] = useState<ChatChannelSummary[]>(initialChannels);
+export default function ChatClient({
+  currentUser,
+  initialChannels,
+}: {
+  currentUser: CurrentUser;
+  initialChannels: ChatChannelSummary[];
+}) {
+  const [channels, setChannels] =
+    useState<ChatChannelSummary[]>(initialChannels);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [messages, setMessages] = useState<LocalChatMessage[]>([]);
   const [readReceipts, setReadReceipts] = useState<ChatReadReceipt[]>([]);
-  const [channelMembersForMention, setChannelMembersForMention] = useState<ChatChannelMemberDto[]>([]);
+  const [channelMembersForMention, setChannelMembersForMention] = useState<
+    ChatChannelMemberDto[]
+  >([]);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
-  const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment>(null);
+  const [pendingAttachments, setPendingAttachments] =
+    useState<PendingAttachmentsState>([]);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
@@ -86,12 +150,18 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [readBreakdownFor, setReadBreakdownFor] = useState<LocalChatMessage | null>(null);
+  const [readBreakdownFor, setReadBreakdownFor] =
+    useState<LocalChatMessage | null>(null);
   const [replyingTo, setReplyingTo] = useState<LocalChatMessage | null>(null);
-  const [editingMessage, setEditingMessage] = useState<LocalChatMessage | null>(null);
+  const [editingMessage, setEditingMessage] = useState<LocalChatMessage | null>(
+    null,
+  );
   const [openMenuFor, setOpenMenuFor] = useState<number | null>(null);
-  const [forwardingMessage, setForwardingMessage] = useState<LocalChatMessage | null>(null);
-  const [roleColors, setRoleColors] = useState<Record<string, string> | null>(null);
+  const [forwardingMessage, setForwardingMessage] =
+    useState<LocalChatMessage | null>(null);
+  const [roleColors, setRoleColors] = useState<Record<string, string> | null>(
+    null,
+  );
   const [copiedId, setCopiedId] = useState<number | null>(null);
 
   const pusherRef = useRef<Pusher | null>(null);
@@ -116,18 +186,28 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
     const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
     const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
     if (!key || !cluster) {
-      console.error("Pusher ist nicht konfiguriert (NEXT_PUBLIC_PUSHER_KEY/CLUSTER fehlen).");
+      console.error(
+        "Pusher ist nicht konfiguriert (NEXT_PUBLIC_PUSHER_KEY/CLUSTER fehlen).",
+      );
       return;
     }
-    const pusher = new Pusher(key, { cluster, authEndpoint: "/api/pusher/auth" });
+    const pusher = new Pusher(key, {
+      cluster,
+      authEndpoint: "/api/pusher/auth",
+    });
     pusherRef.current = pusher;
 
     // Diagnose: ohne das hier sieht man im Browser nichts, wenn z.B. die
     // Auth am Server fehlschlägt oder der Key/Cluster nicht passt - der
     // Chat würde einfach "leise" ohne Live-Updates dastehen.
-    pusher.connection.bind("state_change", (states: { previous: string; current: string }) => {
-      console.log(`Pusher-Verbindung: ${states.previous} → ${states.current}`);
-    });
+    pusher.connection.bind(
+      "state_change",
+      (states: { previous: string; current: string }) => {
+        console.log(
+          `Pusher-Verbindung: ${states.previous} → ${states.current}`,
+        );
+      },
+    );
     pusher.connection.bind("error", (err: unknown) => {
       console.error("Pusher-Verbindungsfehler:", err);
     });
@@ -177,7 +257,9 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
       setChannelMembersForMention(res.members ?? []);
     });
     markChannelRead(activeId).then(() => {
-      setChannels((prev) => prev.map((c) => (c.id === activeId ? { ...c, unread: false } : c)));
+      setChannels((prev) =>
+        prev.map((c) => (c.id === activeId ? { ...c, unread: false } : c)),
+      );
     });
 
     // Live-Zustellung (neue Nachrichten, Löschungen, Lese-Status) braucht
@@ -196,7 +278,9 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
         // optimistischer Platzhalter (pending) angezeigt wird, den
         // Platzhalter entfernen statt die Nachricht doppelt anzuzeigen.
         const withoutOwnPending =
-          msg.userId === currentUser.id ? prev.filter((m) => !(m.pending && m.userId === currentUser.id)) : prev;
+          msg.userId === currentUser.id
+            ? prev.filter((m) => !(m.pending && m.userId === currentUser.id))
+            : prev;
         return [...withoutOwnPending, msg];
       });
       if (msg.userId !== currentUser.id) {
@@ -205,7 +289,17 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
       setChannels((prev) =>
         prev.map((c) =>
           c.id === activeId
-            ? { ...c, lastMessage: { body: msg.body || (msg.attachmentName ? `📎 ${msg.attachmentName}` : ""), createdAt: msg.createdAt, authorUsername: msg.username }, unread: false }
+            ? {
+                ...c,
+                lastMessage: {
+                  body:
+                    msg.body ||
+                    (msg.attachmentName ? `📎 ${msg.attachmentName}` : ""),
+                  createdAt: msg.createdAt,
+                  authorUsername: msg.username,
+                },
+                unread: false,
+              }
             : c,
         ),
       );
@@ -213,16 +307,43 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
     binding.bind("message-deleted", (data: { id: number }) => {
       setMessages((prev) => prev.filter((m) => m.id !== data.id));
     });
-    binding.bind("message-edited", (data: { id: number; body: string; editedAt: string | Date }) => {
-      setMessages((prev) => prev.map((m) => (m.id === data.id ? { ...m, body: data.body, editedAt: data.editedAt as unknown as Date } : m)));
-    });
-    binding.bind("read-receipt", (data: { userId: number; lastReadAt: string }) => {
-      setReadReceipts((prev) => {
-        const exists = prev.some((r) => r.userId === data.userId);
-        if (exists) return prev.map((r) => (r.userId === data.userId ? { ...r, lastReadAt: data.lastReadAt as unknown as Date } : r));
-        return [...prev, { userId: data.userId, lastReadAt: data.lastReadAt as unknown as Date }];
-      });
-    });
+    binding.bind(
+      "message-edited",
+      (data: { id: number; body: string; editedAt: string | Date }) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === data.id
+              ? {
+                  ...m,
+                  body: data.body,
+                  editedAt: data.editedAt as unknown as Date,
+                }
+              : m,
+          ),
+        );
+      },
+    );
+    binding.bind(
+      "read-receipt",
+      (data: { userId: number; lastReadAt: string }) => {
+        setReadReceipts((prev) => {
+          const exists = prev.some((r) => r.userId === data.userId);
+          if (exists)
+            return prev.map((r) =>
+              r.userId === data.userId
+                ? { ...r, lastReadAt: data.lastReadAt as unknown as Date }
+                : r,
+            );
+          return [
+            ...prev,
+            {
+              userId: data.userId,
+              lastReadAt: data.lastReadAt as unknown as Date,
+            },
+          ];
+        });
+      },
+    );
     activeBindingRef.current = binding;
   }, [activeId, currentUser.id]);
 
@@ -232,13 +353,18 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
-    if ((!draft.trim() && !pendingAttachment) || !activeId || sending) return;
+    if (
+      (!draft.trim() && pendingAttachments.length === 0) ||
+      !activeId ||
+      sending
+    )
+      return;
     setSending(true);
     const body = draft;
-    const attachment = pendingAttachment;
+    const attachments = pendingAttachments;
     const replyTarget = replyingTo;
     setDraft("");
-    setPendingAttachment(null);
+    setPendingAttachments([]);
     setReplyingTo(null);
 
     // Sofort anzeigen, statt auf die Server-Antwort zu warten - negative
@@ -253,9 +379,21 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
       username: currentUser.username,
       role: currentUser.role,
       body,
-      attachmentUrl: attachment?.url ?? null,
-      attachmentName: attachment?.name ?? null,
-      attachmentType: attachment?.type ?? null,
+      attachmentUrl:
+        attachments.length > 0
+          ? JSON.stringify(
+              attachments.map((item) => ({
+                url: item.url,
+                name: item.name,
+                type: item.type,
+              })),
+            )
+          : null,
+      attachmentName:
+        attachments.length > 0
+          ? attachments.map((item) => item.name).join(", ")
+          : null,
+      attachmentType: attachments.length > 0 ? attachments[0].type : null,
       replyToId: replyTarget?.id ?? null,
       replyToBody: replyTarget?.body ?? null,
       replyToUsername: replyTarget?.username ?? null,
@@ -272,7 +410,11 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
           ? {
               ...c,
               lastMessage: {
-                body: body || (attachment ? `📎 ${attachment.name}` : ""),
+                body:
+                  body ||
+                  (attachments.length > 0
+                    ? `📎 ${attachments.map((item) => item.name).join(", ")}`
+                    : ""),
                 createdAt: optimisticMsg.createdAt,
                 authorUsername: currentUser.username,
               },
@@ -286,10 +428,17 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
       const fd = new FormData();
       fd.append("channelId", String(activeId));
       fd.append("body", body);
-      if (attachment) {
-        fd.append("attachmentUrl", attachment.url);
-        fd.append("attachmentName", attachment.name);
-        fd.append("attachmentType", attachment.type);
+      if (attachments.length > 0) {
+        fd.append(
+          "attachmentsPayload",
+          JSON.stringify(
+            attachments.map((item) => ({
+              url: item.url,
+              name: item.name,
+              type: item.type,
+            })),
+          ),
+        );
       }
       if (replyTarget) {
         fd.append("replyToId", String(replyTarget.id));
@@ -299,7 +448,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
         // Fehlgeschlagen - Platzhalter wieder entfernen, Entwurf zurückgeben.
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         setDraft(body);
-        setPendingAttachment(attachment);
+        setPendingAttachments(attachments);
         setReplyingTo(replyTarget);
         setNotice(res.error);
       } else if (res?.message) {
@@ -323,7 +472,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   function startEdit(m: LocalChatMessage) {
     setEditingMessage(m);
     setReplyingTo(null);
-    setPendingAttachment(null);
+    setPendingAttachments([]);
     setDraft(m.body);
   }
 
@@ -348,7 +497,15 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
         return;
       }
       setMessages((prev) =>
-        prev.map((m) => (m.id === target.id ? { ...m, body: res.body ?? newBody, editedAt: res.editedAt ?? new Date() } : m)),
+        prev.map((m) =>
+          m.id === target.id
+            ? {
+                ...m,
+                body: res.body ?? newBody,
+                editedAt: res.editedAt ?? new Date(),
+              }
+            : m,
+        ),
       );
       setDraft("");
       setEditingMessage(null);
@@ -367,44 +524,72 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   }
 
   function insertMention(name: string) {
-    const withoutTrailingMention = draft.replace(/(?:^|\s)@\w*$/, (m) => (m.startsWith(" ") ? " " : ""));
+    const withoutTrailingMention = draft.replace(/(?:^|\s)@\w*$/, (m) =>
+      m.startsWith(" ") ? " " : "",
+    );
     setDraft(`${withoutTrailingMention}@${name} `);
     setMentionQuery(null);
   }
 
-  const mentionMatches = mentionQuery === null
-    ? []
-    : [
-        ...(activeChannel?.type === "channel"
-          ? [
-              { key: "everyone", label: "everyone", hint: "Alle im Channel" },
-              { key: "here", label: "here", hint: "Alle im Channel" },
-            ].filter((m) => m.label.startsWith(mentionQuery.toLowerCase()))
-          : []),
-        ...channelMembersForMention
-          .filter((m) => m.username && m.username.toLowerCase().startsWith(mentionQuery.toLowerCase()))
-          .map((m) => ({ key: `u${m.id}`, label: m.username!, hint: m.isCreator ? "Ersteller" : "" })),
-      ].slice(0, 6);
+  const mentionMatches =
+    mentionQuery === null
+      ? []
+      : [
+          ...(activeChannel?.type === "channel"
+            ? [
+                { key: "everyone", label: "everyone", hint: "Alle im Channel" },
+                { key: "here", label: "here", hint: "Alle im Channel" },
+              ].filter((m) => m.label.startsWith(mentionQuery.toLowerCase()))
+            : []),
+          ...channelMembersForMention
+            .filter(
+              (m) =>
+                m.username &&
+                m.username.toLowerCase().startsWith(mentionQuery.toLowerCase()),
+            )
+            .map((m) => ({
+              key: `u${m.id}`,
+              label: m.username!,
+              hint: m.isCreator ? "Ersteller" : "",
+            })),
+        ].slice(0, 6);
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // damit dieselbe Datei erneut ausgewählt werden kann
-    if (!file) return;
-    if (file.size > 4 * 1024 * 1024) {
-      setNotice("Datei ist zu groß (max. 4 MB).");
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (files.length === 0) return;
+
+    const oversized = files.find((file) => file.size > 4 * 1024 * 1024);
+    if (oversized) {
+      setNotice(`Datei ist zu groß (max. 4 MB): ${oversized.name}`);
       return;
     }
+
     setUploadingAttachment(true);
     try {
-      const result = await uploadFileViaServer(file, "/api/chat/upload");
-      if (result.error) {
-        setNotice(result.error);
-      } else if (result.url) {
-        setPendingAttachment({ url: result.url, name: file.name, type: file.type || "application/octet-stream" });
+      const uploaded: PendingAttachment[] = [];
+      for (const file of files) {
+        const result = await uploadFileViaServer(file, "/api/chat/upload");
+        if (result.error) {
+          setNotice(result.error);
+          continue;
+        }
+        if (result.url) {
+          uploaded.push({
+            url: result.url,
+            name: file.name,
+            type: file.type || "application/octet-stream",
+          });
+        }
+      }
+      if (uploaded.length > 0) {
+        setPendingAttachments((prev) => [...prev, ...uploaded]);
       }
     } catch (err) {
       console.error("Chat-Upload fehlgeschlagen:", err);
-      setNotice("Upload fehlgeschlagen. Dateityp erlaubt? (Bilder, PDF, ZIP, Office, Video, max. 4 MB)");
+      setNotice(
+        "Upload fehlgeschlagen. Dateityp erlaubt? (Bilder, PDF, ZIP, Office, Video, max. 4 MB)",
+      );
     } finally {
       setUploadingAttachment(false);
     }
@@ -450,7 +635,10 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
     try {
       await navigator.clipboard.writeText(msg.body || msg.attachmentUrl || "");
       setCopiedId(msg.id);
-      setTimeout(() => setCopiedId((prev) => (prev === msg.id ? null : prev)), 1500);
+      setTimeout(
+        () => setCopiedId((prev) => (prev === msg.id ? null : prev)),
+        1500,
+      );
     } catch (err) {
       console.error("Kopieren fehlgeschlagen:", err);
       setNotice("Kopieren fehlgeschlagen - dein Browser hat das blockiert.");
@@ -483,9 +671,13 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   // Nachricht nach ihrem letzten lastReadAt-Zeitstempel gesehen haben.
   function isMessageRead(msg: ChatMessageDto): boolean {
     if (!msg.createdAt) return false;
-    const otherReceipts = readReceipts.filter((r) => r.userId !== currentUser.id);
+    const otherReceipts = readReceipts.filter(
+      (r) => r.userId !== currentUser.id,
+    );
     if (otherReceipts.length === 0) return false;
-    return otherReceipts.every((r) => r.lastReadAt && new Date(r.lastReadAt) >= new Date(msg.createdAt!));
+    return otherReceipts.every(
+      (r) => r.lastReadAt && new Date(r.lastReadAt) >= new Date(msg.createdAt!),
+    );
   }
 
   return (
@@ -493,23 +685,36 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
       <header className="shrink-0 border-b border-zinc-800 bg-black/95 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {!mobileShowList && (
-            <button onClick={() => setMobileShowList(true)} className="sm:hidden text-zinc-400 hover:text-white">
+            <button
+              onClick={() => setMobileShowList(true)}
+              className="sm:hidden text-zinc-400 hover:text-white"
+            >
               ←
             </button>
           )}
-          <Link href="/" className="text-lg font-black uppercase tracking-tighter italic hover:opacity-70 transition">
+          <Link
+            href="/"
+            className="text-lg font-black uppercase tracking-tighter italic hover:opacity-70 transition"
+          >
             BELLATOR.
           </Link>
-          <span className="text-[10px] uppercase tracking-widest text-zinc-600 border-l border-zinc-800 pl-3">Team-Chat</span>
+          <span className="text-[10px] uppercase tracking-widest text-zinc-600 border-l border-zinc-800 pl-3">
+            Team-Chat
+          </span>
         </div>
-        <Link href="/" className="text-[10px] uppercase tracking-widest text-zinc-500 hover:text-white transition">
+        <Link
+          href="/"
+          className="text-[10px] uppercase tracking-widest text-zinc-500 hover:text-white transition"
+        >
           Zur Seite →
         </Link>
       </header>
 
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar: Channel-/DM-Liste */}
-        <aside className={`w-full sm:w-72 shrink-0 border-r border-zinc-800 flex-col ${mobileShowList ? "flex" : "hidden sm:flex"}`}>
+        <aside
+          className={`w-full sm:w-72 shrink-0 border-r border-zinc-800 flex-col ${mobileShowList ? "flex" : "hidden sm:flex"}`}
+        >
           <div className="p-3 border-b border-zinc-800 shrink-0">
             <button
               onClick={() => setShowNewModal(true)}
@@ -520,7 +725,9 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
           </div>
           <div className="flex-1 overflow-y-auto">
             {channels.length === 0 ? (
-              <p className="text-[10px] text-zinc-600 uppercase tracking-widest p-4">Noch keine Chats. Starte einen neuen.</p>
+              <p className="text-[10px] text-zinc-600 uppercase tracking-widest p-4">
+                Noch keine Chats. Starte einen neuen.
+              </p>
             ) : (
               channels.map((c) => (
                 <button
@@ -530,13 +737,19 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-bold text-white truncate">
-                      {c.type === "dm" ? "@" : "#"}{channelDisplayName(c)}
+                      {c.type === "dm" ? "@" : "#"}
+                      {channelDisplayName(c)}
                     </span>
-                    {c.unread && <span className="w-2 h-2 rounded-full bg-white shrink-0" />}
+                    {c.unread && (
+                      <span className="w-2 h-2 rounded-full bg-white shrink-0" />
+                    )}
                   </div>
                   {c.lastMessage && (
                     <p className="text-xs text-zinc-500 truncate mt-1">
-                      {c.lastMessage.authorUsername ? `${c.lastMessage.authorUsername}: ` : ""}{c.lastMessage.body}
+                      {c.lastMessage.authorUsername
+                        ? `${c.lastMessage.authorUsername}: `
+                        : ""}
+                      {c.lastMessage.body}
                     </p>
                   )}
                 </button>
@@ -544,7 +757,9 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
             )}
           </div>
           <div className="shrink-0 border-t border-zinc-800 p-3 flex items-center justify-between gap-2">
-            <span className="text-xs text-zinc-500 truncate">{currentUser.username ?? "Account"}</span>
+            <span className="text-xs text-zinc-500 truncate">
+              {currentUser.username ?? "Account"}
+            </span>
             <button
               onClick={handleLogout}
               disabled={loggingOut}
@@ -555,18 +770,22 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
           </div>
         </aside>
 
-
         {/* Thread */}
-        <main className={`flex-1 flex-col ${mobileShowList ? "hidden sm:flex" : "flex"}`}>
+        <main
+          className={`flex-1 flex-col ${mobileShowList ? "hidden sm:flex" : "flex"}`}
+        >
           {!activeChannel ? (
             <div className="flex-1 flex items-center justify-center">
-              <p className="text-xs text-zinc-600 uppercase tracking-widest">Wähle einen Chat aus</p>
+              <p className="text-xs text-zinc-600 uppercase tracking-widest">
+                Wähle einen Chat aus
+              </p>
             </div>
           ) : (
             <>
               <div className="shrink-0 border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
                 <p className="text-sm font-black uppercase tracking-tight text-white">
-                  {activeChannel.type === "dm" ? "@" : "#"}{channelDisplayName(activeChannel)}
+                  {activeChannel.type === "dm" ? "@" : "#"}
+                  {channelDisplayName(activeChannel)}
                 </p>
                 {activeChannel.type === "channel" && (
                   <button
@@ -579,33 +798,57 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
               </div>
               <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
                 {loadingMessages ? (
-                  <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Lädt...</p>
+                  <p className="text-[10px] text-zinc-600 uppercase tracking-widest">
+                    Lädt...
+                  </p>
                 ) : messages.length === 0 ? (
-                  <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Noch keine Nachrichten. Schreib die erste.</p>
+                  <p className="text-[10px] text-zinc-600 uppercase tracking-widest">
+                    Noch keine Nachrichten. Schreib die erste.
+                  </p>
                 ) : (
                   messages.map((m, idx) => {
                     const own = m.userId === currentUser.id;
-                    const inverted = isSelfMentioned(m.body, currentUser.username);
-                    const roleColor = m.role && roleColors ? roleColors[m.role] : undefined;
+                    const inverted = isSelfMentioned(
+                      m.body,
+                      currentUser.username,
+                    );
+                    const roleColor =
+                      m.role && roleColors ? roleColors[m.role] : undefined;
                     const menuOpen = openMenuFor === m.id;
                     const canDelete = own || currentUser.isAdmin;
                     // Eigene Nachricht innerhalb von 24h, oder Admin immer
                     // (auch fremde Nachrichten, auch älter als 24h).
                     const canEdit =
-                      currentUser.isAdmin || (own && Date.now() - new Date(m.createdAt ?? 0).getTime() < EDIT_WINDOW_MS);
+                      currentUser.isAdmin ||
+                      (own &&
+                        Date.now() - new Date(m.createdAt ?? 0).getTime() <
+                          EDIT_WINDOW_MS);
                     // Für die letzten Nachrichten im Thread ist unterhalb des Buttons kaum noch
                     // Platz (Eingabeleiste direkt darunter) - Menü klappt dort stattdessen nach
                     // oben auf, sonst wurde es abgeschnitten/unsichtbar.
                     const openUpward = idx >= messages.length - 3;
+                    const messageAttachments = parseAttachmentPayload(
+                      m.attachmentUrl,
+                    );
                     return (
-                      <div key={m.id} className={`flex ${own ? "justify-end" : "justify-start"} group relative`}>
-                        <div className={`max-w-[80%] sm:max-w-[60%] ${own ? "items-end" : "items-start"} flex flex-col`}>
+                      <div
+                        key={m.id}
+                        className={`flex ${own ? "justify-end" : "justify-start"} group relative`}
+                      >
+                        <div
+                          className={`max-w-[80%] sm:max-w-[60%] ${own ? "items-end" : "items-start"} flex flex-col`}
+                        >
                           {!own && (
-                            <span className="text-[9px] uppercase tracking-widest mb-1" style={{ color: roleColor ?? "#71717a" }}>
+                            <span
+                              className="text-[9px] uppercase tracking-widest mb-1"
+                              style={{ color: roleColor ?? "#71717a" }}
+                            >
                               {m.username ?? "?"}
                             </span>
                           )}
-                          <div className={`flex items-center gap-1.5 ${own ? "flex-row-reverse" : "flex-row"}`}>
+                          <div
+                            className={`flex items-center gap-1.5 ${own ? "flex-row-reverse" : "flex-row"}`}
+                          >
                             {/* Hover-Erweiterung: bei eigenen (rechts stehenden) Nachrichten öffnet sie
                                 sich nach links, bei fremden (links stehenden) nach rechts - daher hier
                                 per flex-row-reverse gespiegelt statt zwei verschiedener Layouts.
@@ -618,14 +861,20 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                             <div className="relative shrink-0">
                               <div
                                 className={`overflow-hidden transition-[max-width] duration-200 ease-out ${
-                                  menuOpen ? "max-w-[1.5rem]" : "max-w-0 group-hover:max-w-[1.5rem]"
+                                  menuOpen
+                                    ? "max-w-[1.5rem]"
+                                    : "max-w-0 group-hover:max-w-[1.5rem]"
                                 }`}
                               >
                                 <button
                                   type="button"
-                                  onClick={() => setOpenMenuFor(menuOpen ? null : m.id)}
+                                  onClick={() =>
+                                    setOpenMenuFor(menuOpen ? null : m.id)
+                                  }
                                   className={`flex flex-col items-center justify-center gap-[3px] text-zinc-500 hover:text-white transition-opacity duration-150 px-1.5 py-1.5 ${
-                                    menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-hover:delay-100"
+                                    menuOpen
+                                      ? "opacity-100"
+                                      : "opacity-0 group-hover:opacity-100 group-hover:delay-100"
                                   }`}
                                   title="Mehr"
                                 >
@@ -636,14 +885,20 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                               </div>
                               {menuOpen && (
                                 <>
-                                  <div className="fixed inset-0 z-40" onClick={() => setOpenMenuFor(null)} />
+                                  <div
+                                    className="fixed inset-0 z-40"
+                                    onClick={() => setOpenMenuFor(null)}
+                                  />
                                   <div
                                     className={`absolute z-50 ${openUpward ? "bottom-full mb-1" : "top-full mt-1"} ${own ? "right-0" : "left-0"} bg-black border border-zinc-700 w-40 font-mono`}
                                   >
                                     {!m.pending && (
                                       <button
                                         type="button"
-                                        onClick={() => { setForwardingMessage(m); setOpenMenuFor(null); }}
+                                        onClick={() => {
+                                          setForwardingMessage(m);
+                                          setOpenMenuFor(null);
+                                        }}
                                         className="w-full text-left px-3 py-2 text-xs hover:bg-zinc-900 transition"
                                       >
                                         Weiterleiten
@@ -652,7 +907,10 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                                     {!m.pending && (
                                       <button
                                         type="button"
-                                        onClick={() => { setReplyingTo(m); setOpenMenuFor(null); }}
+                                        onClick={() => {
+                                          setReplyingTo(m);
+                                          setOpenMenuFor(null);
+                                        }}
                                         className="w-full text-left px-3 py-2 text-xs hover:bg-zinc-900 transition"
                                       >
                                         Antworten
@@ -661,7 +919,10 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                                     {canEdit && !m.pending && (
                                       <button
                                         type="button"
-                                        onClick={() => { startEdit(m); setOpenMenuFor(null); }}
+                                        onClick={() => {
+                                          startEdit(m);
+                                          setOpenMenuFor(null);
+                                        }}
                                         className="w-full text-left px-3 py-2 text-xs hover:bg-zinc-900 transition"
                                       >
                                         Bearbeiten
@@ -673,13 +934,18 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                                         onClick={() => handleCopy(m)}
                                         className="w-full text-left px-3 py-2 text-xs hover:bg-zinc-900 transition"
                                       >
-                                        {copiedId === m.id ? "✓ Kopiert" : "Kopieren"}
+                                        {copiedId === m.id
+                                          ? "✓ Kopiert"
+                                          : "Kopieren"}
                                       </button>
                                     )}
                                     {canDelete && !m.pending && (
                                       <button
                                         type="button"
-                                        onClick={() => { handleDelete(m.id); setOpenMenuFor(null); }}
+                                        onClick={() => {
+                                          handleDelete(m.id);
+                                          setOpenMenuFor(null);
+                                        }}
                                         className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-red-900/20 transition"
                                       >
                                         Löschen
@@ -697,55 +963,101 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                               }}
                               onTouchStart={() => {
                                 if (m.pending) return;
-                                longPressTimerRef.current = setTimeout(() => setOpenMenuFor(m.id), 500);
+                                longPressTimerRef.current = setTimeout(
+                                  () => setOpenMenuFor(m.id),
+                                  500,
+                                );
                               }}
                               onTouchEnd={() => {
-                                if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+                                if (longPressTimerRef.current)
+                                  clearTimeout(longPressTimerRef.current);
                               }}
                               onTouchMove={() => {
                                 // Beim Scrollen mit dem Finger soll kein Menü aufgehen.
-                                if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+                                if (longPressTimerRef.current)
+                                  clearTimeout(longPressTimerRef.current);
                               }}
                               className={`px-3 py-2 text-sm break-words space-y-2 select-none sm:select-auto ${m.pending ? "opacity-60" : ""} ${
-                                inverted ? "bg-white text-black" : own ? "bg-white text-black" : "bg-zinc-900 border border-zinc-800 text-zinc-200"
+                                inverted
+                                  ? "bg-white text-black"
+                                  : own
+                                    ? "bg-white text-black"
+                                    : "bg-zinc-900 border border-zinc-800 text-zinc-200"
                               }`}
                             >
                               {m.forwardedFromUsername && (
-                                <p className={`text-[9px] uppercase tracking-widest italic ${own || inverted ? "text-zinc-600" : "text-zinc-500"}`}>
+                                <p
+                                  className={`text-[9px] uppercase tracking-widest italic ${own || inverted ? "text-zinc-600" : "text-zinc-500"}`}
+                                >
                                   ↪ Weitergeleitet von {m.forwardedFromUsername}
                                 </p>
                               )}
                               {m.replyToId && (
-                                <div className={`border-l-2 pl-2 text-xs opacity-70 ${own || inverted ? "border-black" : "border-zinc-500"}`}>
-                                  <p className="font-bold">{m.replyToUsername ?? "?"}</p>
+                                <div
+                                  className={`border-l-2 pl-2 text-xs opacity-70 ${own || inverted ? "border-black" : "border-zinc-500"}`}
+                                >
+                                  <p className="font-bold">
+                                    {m.replyToUsername ?? "?"}
+                                  </p>
                                   <p className="truncate">
-                                    {m.replyToBody || (m.replyToAttachmentName ? `📎 ${m.replyToAttachmentName}` : "…")}
+                                    {m.replyToBody ||
+                                      (m.replyToAttachmentName
+                                        ? `📎 ${m.replyToAttachmentName}`
+                                        : "…")}
                                   </p>
                                 </div>
                               )}
-                              {m.attachmentUrl && isImageType(m.attachmentType) && (
-                                <a href={m.attachmentUrl} target="_blank" rel="noopener noreferrer" className="block">
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={m.attachmentUrl} alt={m.attachmentName ?? "Anhang"} className="max-w-full max-h-64 rounded-sm" />
-                                </a>
+                              {messageAttachments.length > 0 && (
+                                <div className="space-y-2">
+                                  {messageAttachments.map((attachment) =>
+                                    isImageType(attachment.type) ? (
+                                      <a
+                                        key={attachment.url}
+                                        href={attachment.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="block"
+                                      >
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                          src={attachment.url}
+                                          alt={attachment.name || "Anhang"}
+                                          className="max-w-full max-h-64 rounded-sm"
+                                        />
+                                      </a>
+                                    ) : (
+                                      <a
+                                        key={attachment.url}
+                                        href={attachment.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className={`flex items-center gap-2 text-xs underline break-all ${own || inverted ? "text-black" : "text-zinc-200"}`}
+                                      >
+                                        📎 {attachment.name || "Anhang"}
+                                      </a>
+                                    ),
+                                  )}
+                                </div>
                               )}
-                              {m.attachmentUrl && !isImageType(m.attachmentType) && (
-                                <a
-                                  href={m.attachmentUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className={`flex items-center gap-2 text-xs underline break-all ${own || inverted ? "text-black" : "text-zinc-200"}`}
-                                >
-                                  📎 {m.attachmentName ?? "Anhang"}
-                                </a>
+                              {m.body && (
+                                <span>
+                                  {renderMessageBody(m.body, own || inverted)}
+                                </span>
                               )}
-                              {m.body && <span>{renderMessageBody(m.body, own || inverted)}</span>}
                             </div>
                           </div>
                           <span className="text-[9px] text-zinc-700 mt-1 flex items-center gap-1">
                             {formatTime(m.createdAt)}
-                            {m.editedAt && <span title={`Bearbeitet um ${formatTime(m.editedAt)}`}>(bearbeitet)</span>}
-                            {own && activeChannel.type === "channel" && !m.pending ? (
+                            {m.editedAt && (
+                              <span
+                                title={`Bearbeitet um ${formatTime(m.editedAt)}`}
+                              >
+                                (bearbeitet)
+                              </span>
+                            )}
+                            {own &&
+                            activeChannel.type === "channel" &&
+                            !m.pending ? (
                               <button
                                 type="button"
                                 onClick={() => setReadBreakdownFor(m)}
@@ -757,10 +1069,26 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                             ) : (
                               own && (
                                 <span
-                                  className={m.pending ? "text-zinc-700" : isMessageRead(m) ? "text-white" : "text-zinc-700"}
-                                  title={m.pending ? "Wird gesendet..." : isMessageRead(m) ? "Gelesen" : "Gesendet"}
+                                  className={
+                                    m.pending
+                                      ? "text-zinc-700"
+                                      : isMessageRead(m)
+                                        ? "text-white"
+                                        : "text-zinc-700"
+                                  }
+                                  title={
+                                    m.pending
+                                      ? "Wird gesendet..."
+                                      : isMessageRead(m)
+                                        ? "Gelesen"
+                                        : "Gesendet"
+                                  }
                                 >
-                                  {m.pending ? "🕓" : isMessageRead(m) ? "✓✓" : "✓"}
+                                  {m.pending
+                                    ? "🕓"
+                                    : isMessageRead(m)
+                                      ? "✓✓"
+                                      : "✓"}
                                 </span>
                               )
                             )}
@@ -775,8 +1103,13 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
               {editingMessage && (
                 <div className="shrink-0 border-t border-zinc-800 px-3 py-2 flex items-center justify-between bg-zinc-950">
                   <div className="text-xs text-zinc-400 truncate">
-                    <span className="text-zinc-600 uppercase tracking-widest text-[9px]">Bearbeite Nachricht: </span>
-                    {editingMessage.body || (editingMessage.attachmentName ? `📎 ${editingMessage.attachmentName}` : "…")}
+                    <span className="text-zinc-600 uppercase tracking-widest text-[9px]">
+                      Bearbeite Nachricht:{" "}
+                    </span>
+                    {editingMessage.body ||
+                      (editingMessage.attachmentName
+                        ? `📎 ${editingMessage.attachmentName}`
+                        : "…")}
                   </div>
                   <button
                     type="button"
@@ -790,8 +1123,13 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
               {replyingTo && (
                 <div className="shrink-0 border-t border-zinc-800 px-3 py-2 flex items-center justify-between bg-zinc-950">
                   <div className="text-xs text-zinc-400 truncate">
-                    <span className="text-zinc-600 uppercase tracking-widest text-[9px]">Antwort an {replyingTo.username ?? "?"}: </span>
-                    {replyingTo.body || (replyingTo.attachmentName ? `📎 ${replyingTo.attachmentName}` : "…")}
+                    <span className="text-zinc-600 uppercase tracking-widest text-[9px]">
+                      Antwort an {replyingTo.username ?? "?"}:{" "}
+                    </span>
+                    {replyingTo.body ||
+                      (replyingTo.attachmentName
+                        ? `📎 ${replyingTo.attachmentName}`
+                        : "…")}
                   </div>
                   <button
                     type="button"
@@ -802,18 +1140,44 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                   </button>
                 </div>
               )}
-              {pendingAttachment && (
-                <div className="shrink-0 border-t border-zinc-800 px-3 py-2 flex items-center justify-between bg-zinc-950">
-                  <span className="text-xs text-zinc-400 truncate flex items-center gap-1.5">
-                    {isImageType(pendingAttachment.type) ? "🖼️" : "📎"} {pendingAttachment.name}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setPendingAttachment(null)}
-                    className="text-[10px] text-zinc-600 hover:text-red-500 transition uppercase tracking-widest ml-3 shrink-0"
-                  >
-                    Entfernen
-                  </button>
+              {pendingAttachments.length > 0 && (
+                <div className="shrink-0 border-t border-zinc-800 px-3 py-2 bg-zinc-950">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+                      Anhänge
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPendingAttachments([])}
+                      className="text-[10px] text-zinc-600 hover:text-red-500 transition uppercase tracking-widest"
+                    >
+                      Alle entfernen
+                    </button>
+                  </div>
+                  <div className="mt-2 space-y-1.5">
+                    {pendingAttachments.map((attachment, index) => (
+                      <div
+                        key={`${attachment.name}-${index}`}
+                        className="flex items-center justify-between gap-2 text-xs text-zinc-400"
+                      >
+                        <span className="truncate flex items-center gap-1.5">
+                          {isImageType(attachment.type) ? "🖼️" : "📎"}{" "}
+                          {attachment.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPendingAttachments((prev) =>
+                              prev.filter((_, i) => i !== index),
+                            )
+                          }
+                          className="text-[10px] text-zinc-600 hover:text-red-500 transition uppercase tracking-widest"
+                        >
+                          Entfernen
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
               <div className="relative">
@@ -826,19 +1190,38 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                         onClick={() => insertMention(m.label)}
                         className="w-full text-left px-3 py-2 text-xs hover:bg-zinc-900 transition flex items-center justify-between"
                       >
-                        <span className="text-blue-400 font-bold">@{m.label}</span>
-                        {m.hint && <span className="text-[9px] text-zinc-600 uppercase tracking-widest">{m.hint}</span>}
+                        <span className="text-blue-400 font-bold">
+                          @{m.label}
+                        </span>
+                        {m.hint && (
+                          <span className="text-[9px] text-zinc-600 uppercase tracking-widest">
+                            {m.hint}
+                          </span>
+                        )}
                       </button>
                     ))}
                   </div>
                 )}
-                <form onSubmit={editingMessage ? handleEditSubmit : handleSend} className="shrink-0 border-t border-zinc-800 p-3 flex gap-2">
-                  <input ref={fileInputRef} type="file" onChange={handleFileSelect} className="hidden" />
+                <form
+                  onSubmit={editingMessage ? handleEditSubmit : handleSend}
+                  className="shrink-0 border-t border-zinc-800 p-3 flex gap-2"
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploadingAttachment || !!editingMessage}
-                    title={editingMessage ? "Beim Bearbeiten kein Anhang möglich" : "Datei anhängen"}
+                    title={
+                      editingMessage
+                        ? "Beim Bearbeiten kein Anhang möglich"
+                        : "Dateien anhängen"
+                    }
                     className="border border-zinc-700 text-zinc-400 px-3 py-2.5 text-sm hover:border-zinc-400 hover:text-white transition-all disabled:opacity-40 shrink-0"
                   >
                     {uploadingAttachment ? "..." : "📎"}
@@ -846,12 +1229,21 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                   <input
                     value={draft}
                     onChange={(e) => handleDraftChange(e.target.value)}
-                    placeholder={editingMessage ? "Nachricht bearbeiten..." : "Nachricht schreiben... (@ für Erwähnung)"}
+                    placeholder={
+                      editingMessage
+                        ? "Nachricht bearbeiten..."
+                        : "Nachricht schreiben... (@ für Erwähnung)"
+                    }
                     className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:border-white outline-none transition"
                   />
                   <button
                     type="submit"
-                    disabled={editingMessage ? !draft.trim() || sending : (!draft.trim() && !pendingAttachment) || sending}
+                    disabled={
+                      editingMessage
+                        ? !draft.trim() || sending
+                        : (!draft.trim() && pendingAttachments.length === 0) ||
+                          sending
+                    }
                     className="border border-white bg-white text-black px-5 py-2.5 text-[10px] uppercase tracking-widest font-black hover:bg-black hover:text-white transition-all disabled:opacity-40 shrink-0"
                   >
                     {editingMessage ? "Speichern" : "Senden"}
@@ -891,7 +1283,9 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
         />
       )}
 
-      {notice && <ChatNotice message={notice} onClose={() => setNotice(null)} />}
+      {notice && (
+        <ChatNotice message={notice} onClose={() => setNotice(null)} />
+      )}
 
       {readBreakdownFor && activeId && (
         <ReadBreakdownDialog
@@ -914,7 +1308,13 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   );
 }
 
-function NewChatModal({ onClose, onCreated }: { onClose: () => void; onCreated: (channelId: number) => void }) {
+function NewChatModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (channelId: number) => void;
+}) {
   const [tab, setTab] = useState<"dm" | "channel">("dm");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ChatUserResult[]>([]);
@@ -949,7 +1349,11 @@ function NewChatModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   }
 
   function toggleSelect(user: ChatUserResult) {
-    setSelected((prev) => (prev.some((u) => u.id === user.id) ? prev.filter((u) => u.id !== user.id) : [...prev, user]));
+    setSelected((prev) =>
+      prev.some((u) => u.id === user.id)
+        ? prev.filter((u) => u.id !== user.id)
+        : [...prev, user],
+    );
   }
 
   async function submitChannel(e: React.FormEvent) {
@@ -973,7 +1377,10 @@ function NewChatModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
       <div
         className="bg-black border border-zinc-700 w-full max-w-md max-h-[80vh] flex flex-col font-mono"
         onClick={(e) => e.stopPropagation()}
@@ -994,7 +1401,11 @@ function NewChatModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {err && <p className="text-[10px] text-red-500 uppercase tracking-widest">{err}</p>}
+          {err && (
+            <p className="text-[10px] text-red-500 uppercase tracking-widest">
+              {err}
+            </p>
+          )}
 
           {tab === "dm" ? (
             <>
@@ -1017,7 +1428,9 @@ function NewChatModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
                   </button>
                 ))}
                 {query && results.length === 0 && (
-                  <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Keine Treffer mit Chat-Zugriff.</p>
+                  <p className="text-[10px] text-zinc-600 uppercase tracking-widest">
+                    Keine Treffer mit Chat-Zugriff.
+                  </p>
                 )}
               </div>
             </>
@@ -1038,23 +1451,29 @@ function NewChatModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
               {selected.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {selected.map((u) => (
-                    <span key={u.id} onClick={() => toggleSelect(u)} className="text-[10px] border border-white px-2 py-1 uppercase tracking-widest cursor-pointer hover:bg-white hover:text-black transition">
+                    <span
+                      key={u.id}
+                      onClick={() => toggleSelect(u)}
+                      className="text-[10px] border border-white px-2 py-1 uppercase tracking-widest cursor-pointer hover:bg-white hover:text-black transition"
+                    >
                       {u.username ?? u.email} ✕
                     </span>
                   ))}
                 </div>
               )}
               <div className="space-y-1 max-h-40 overflow-y-auto">
-                {results.filter((u) => !selected.some((s) => s.id === u.id)).map((u) => (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => toggleSelect(u)}
-                    className="w-full text-left px-3 py-2 border border-zinc-800 hover:border-zinc-500 transition text-sm"
-                  >
-                    {u.username ?? u.email}
-                  </button>
-                ))}
+                {results
+                  .filter((u) => !selected.some((s) => s.id === u.id))
+                  .map((u) => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => toggleSelect(u)}
+                      className="w-full text-left px-3 py-2 border border-zinc-800 hover:border-zinc-500 transition text-sm"
+                    >
+                      {u.username ?? u.email}
+                    </button>
+                  ))}
               </div>
               <button
                 type="submit"
@@ -1068,7 +1487,10 @@ function NewChatModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
         </div>
 
         <div className="border-t border-zinc-800 p-3">
-          <button onClick={onClose} className="w-full text-[10px] uppercase tracking-widest text-zinc-500 hover:text-white transition py-1.5">
+          <button
+            onClick={onClose}
+            className="w-full text-[10px] uppercase tracking-widest text-zinc-500 hover:text-white transition py-1.5"
+          >
             Abbrechen
           </button>
         </div>
@@ -1077,7 +1499,15 @@ function NewChatModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   );
 }
 
-function MembersPanel({ channelId, currentUserId, onClose }: { channelId: number; currentUserId: number; onClose: () => void }) {
+function MembersPanel({
+  channelId,
+  currentUserId,
+  onClose,
+}: {
+  channelId: number;
+  currentUserId: number;
+  onClose: () => void;
+}) {
   const [members, setMembers] = useState<ChatChannelMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -1101,7 +1531,8 @@ function MembersPanel({ channelId, currentUserId, onClose }: { channelId: number
   useEffect(() => {
     let active = true;
     searchChatUsers(query).then((res) => {
-      if (active) setResults(res.filter((u) => !members.some((m) => m.id === u.id)));
+      if (active)
+        setResults(res.filter((u) => !members.some((m) => m.id === u.id)));
     });
     return () => {
       active = false;
@@ -1156,64 +1587,89 @@ function MembersPanel({ channelId, currentUserId, onClose }: { channelId: number
 
   return (
     <>
-    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-black border border-zinc-700 w-full max-w-md max-h-[80vh] flex flex-col font-mono" onClick={(e) => e.stopPropagation()}>
-        <div className="border-b border-zinc-800 px-4 py-3">
-          <p className="text-[10px] uppercase tracking-widest font-bold text-white">Mitglieder</p>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {err && <p className="text-[10px] text-red-500 uppercase tracking-widest">{err}</p>}
-          {loading ? (
-            <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Lädt...</p>
-          ) : (
-            <div className="space-y-1">
-              {members.map((m) => (
-                <div key={m.id} className="flex items-center justify-between px-3 py-2 border border-zinc-800 text-sm">
-                  <span>
-                    {m.username ?? m.email} {m.isCreator && <span className="text-[9px] text-zinc-500 uppercase tracking-widest ml-1">(Ersteller)</span>}
-                  </span>
-                  {!m.isCreator && amCreator && (
-                    <button
-                      onClick={() => handleRemove(m.id)}
-                      disabled={busy}
-                      className="text-[10px] text-zinc-600 hover:text-red-500 transition disabled:opacity-50"
-                    >
-                      Entfernen
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+      <div
+        className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+        onClick={onClose}
+      >
+        <div
+          className="bg-black border border-zinc-700 w-full max-w-md max-h-[80vh] flex flex-col font-mono"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="border-b border-zinc-800 px-4 py-3">
+            <p className="text-[10px] uppercase tracking-widest font-bold text-white">
+              Mitglieder
+            </p>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {err && (
+              <p className="text-[10px] text-red-500 uppercase tracking-widest">
+                {err}
+              </p>
+            )}
+            {loading ? (
+              <p className="text-[10px] text-zinc-600 uppercase tracking-widest">
+                Lädt...
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {members.map((m) => (
+                  <div
+                    key={m.id}
+                    className="flex items-center justify-between px-3 py-2 border border-zinc-800 text-sm"
+                  >
+                    <span>
+                      {m.username ?? m.email}{" "}
+                      {m.isCreator && (
+                        <span className="text-[9px] text-zinc-500 uppercase tracking-widest ml-1">
+                          (Ersteller)
+                        </span>
+                      )}
+                    </span>
+                    {!m.isCreator && amCreator && (
+                      <button
+                        onClick={() => handleRemove(m.id)}
+                        disabled={busy}
+                        className="text-[10px] text-zinc-600 hover:text-red-500 transition disabled:opacity-50"
+                      >
+                        Entfernen
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
 
-          <div className="border-t border-zinc-800 pt-3 space-y-2">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Mitglied hinzufügen..."
-              className="w-full bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-white outline-none transition"
-            />
-            <div className="space-y-1 max-h-32 overflow-y-auto">
-              {results.map((u) => (
-                <button
-                  key={u.id}
-                  disabled={busy}
-                  onClick={() => handleAdd(u.id)}
-                  className="w-full text-left px-3 py-2 border border-zinc-800 hover:border-zinc-500 transition text-sm disabled:opacity-50"
-                >
-                  + {u.username ?? u.email}
-                </button>
-              ))}
+            <div className="border-t border-zinc-800 pt-3 space-y-2">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Mitglied hinzufügen..."
+                className="w-full bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-white outline-none transition"
+              />
+              <div className="space-y-1 max-h-32 overflow-y-auto">
+                {results.map((u) => (
+                  <button
+                    key={u.id}
+                    disabled={busy}
+                    onClick={() => handleAdd(u.id)}
+                    className="w-full text-left px-3 py-2 border border-zinc-800 hover:border-zinc-500 transition text-sm disabled:opacity-50"
+                  >
+                    + {u.username ?? u.email}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-        <div className="border-t border-zinc-800 p-3">
-          <button onClick={onClose} className="w-full text-[10px] uppercase tracking-widest text-zinc-500 hover:text-white transition py-1.5">
-            Schließen
-          </button>
+          <div className="border-t border-zinc-800 p-3">
+            <button
+              onClick={onClose}
+              className="w-full text-[10px] uppercase tracking-widest text-zinc-500 hover:text-white transition py-1.5"
+            >
+              Schließen
+            </button>
+          </div>
         </div>
       </div>
-    </div>
 
       {confirmRemoveId !== null && (
         <ChatConfirmDialog
@@ -1244,9 +1700,17 @@ function ChatConfirmDialog({
   onCancel: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4" onClick={onCancel}>
-      <div className="bg-black border-[2px] border-red-800 w-full max-w-sm p-6 font-mono" onClick={(e) => e.stopPropagation()}>
-        <p className="text-xs text-zinc-300 uppercase tracking-widest leading-relaxed mb-6">{message}</p>
+    <div
+      className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4"
+      onClick={onCancel}
+    >
+      <div
+        className="bg-black border-[2px] border-red-800 w-full max-w-sm p-6 font-mono"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-xs text-zinc-300 uppercase tracking-widest leading-relaxed mb-6">
+          {message}
+        </p>
         <div className="flex gap-3">
           <button
             type="button"
@@ -1272,10 +1736,22 @@ function ChatConfirmDialog({
 
 // Kurzer Hinweis-Popup für Fehler (z.B. fehlgeschlagener Upload) statt
 // einem nativen alert().
-function ChatNotice({ message, onClose }: { message: string; onClose: () => void }) {
+function ChatNotice({
+  message,
+  onClose,
+}: {
+  message: string;
+  onClose: () => void;
+}) {
   return (
-    <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-black border-[2px] border-zinc-600 w-full max-w-sm p-6 font-mono" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-black border-[2px] border-zinc-600 w-full max-w-sm p-6 font-mono"
+        onClick={(e) => e.stopPropagation()}
+      >
         <p className="text-xs text-zinc-300 leading-relaxed mb-6">{message}</p>
         <button
           type="button"
@@ -1320,29 +1796,53 @@ function ReadBreakdownDialog({
     };
   }, [channelId, currentUserId]);
 
-  const receiptByUserId = new Map(readReceipts.map((r) => [r.userId, r.lastReadAt]));
+  const receiptByUserId = new Map(
+    readReceipts.map((r) => [r.userId, r.lastReadAt]),
+  );
   const msgTime = message.createdAt ? new Date(message.createdAt).getTime() : 0;
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-black border border-zinc-700 w-full max-w-sm max-h-[70vh] flex flex-col font-mono" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-black border border-zinc-700 w-full max-w-sm max-h-[70vh] flex flex-col font-mono"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="border-b border-zinc-800 px-4 py-3">
-          <p className="text-[10px] uppercase tracking-widest font-bold text-white">Gelesen von</p>
+          <p className="text-[10px] uppercase tracking-widest font-bold text-white">
+            Gelesen von
+          </p>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {err && <p className="text-[10px] text-red-500 uppercase tracking-widest">{err}</p>}
+          {err && (
+            <p className="text-[10px] text-red-500 uppercase tracking-widest">
+              {err}
+            </p>
+          )}
           {members === null ? (
-            <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Lädt...</p>
+            <p className="text-[10px] text-zinc-600 uppercase tracking-widest">
+              Lädt...
+            </p>
           ) : members.length === 0 ? (
-            <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Keine weiteren Mitglieder.</p>
+            <p className="text-[10px] text-zinc-600 uppercase tracking-widest">
+              Keine weiteren Mitglieder.
+            </p>
           ) : (
             members.map((m) => {
               const lastReadAt = receiptByUserId.get(m.id);
-              const hasRead = !!lastReadAt && new Date(lastReadAt).getTime() >= msgTime;
+              const hasRead =
+                !!lastReadAt && new Date(lastReadAt).getTime() >= msgTime;
               return (
-                <div key={m.id} className="flex items-center justify-between px-3 py-2 border border-zinc-800 text-sm">
+                <div
+                  key={m.id}
+                  className="flex items-center justify-between px-3 py-2 border border-zinc-800 text-sm"
+                >
                   <span className="truncate">{m.username ?? m.email}</span>
-                  <span className={`text-[10px] uppercase tracking-widest shrink-0 ml-3 ${hasRead ? "text-white" : "text-zinc-600"}`}>
+                  <span
+                    className={`text-[10px] uppercase tracking-widest shrink-0 ml-3 ${hasRead ? "text-white" : "text-zinc-600"}`}
+                  >
                     {hasRead ? "✓✓ Gelesen" : "✓ Gesendet"}
                   </span>
                 </div>
@@ -1351,7 +1851,10 @@ function ReadBreakdownDialog({
           )}
         </div>
         <div className="border-t border-zinc-800 p-3">
-          <button onClick={onClose} className="w-full text-[10px] uppercase tracking-widest text-zinc-500 hover:text-white transition py-1.5">
+          <button
+            onClick={onClose}
+            className="w-full text-[10px] uppercase tracking-widest text-zinc-500 hover:text-white transition py-1.5"
+          >
             Schließen
           </button>
         </div>
@@ -1370,14 +1873,24 @@ function ForwardModal({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-black border border-zinc-700 w-full max-w-sm max-h-[70vh] flex flex-col font-mono" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-black border border-zinc-700 w-full max-w-sm max-h-[70vh] flex flex-col font-mono"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="border-b border-zinc-800 px-4 py-3">
-          <p className="text-[10px] uppercase tracking-widest font-bold text-white">Weiterleiten an...</p>
+          <p className="text-[10px] uppercase tracking-widest font-bold text-white">
+            Weiterleiten an...
+          </p>
         </div>
         <div className="flex-1 overflow-y-auto p-2">
           {channels.length === 0 ? (
-            <p className="text-[10px] text-zinc-600 uppercase tracking-widest p-3">Keine Chats verfügbar.</p>
+            <p className="text-[10px] text-zinc-600 uppercase tracking-widest p-3">
+              Keine Chats verfügbar.
+            </p>
           ) : (
             channels.map((c) => (
               <button
@@ -1385,13 +1898,17 @@ function ForwardModal({
                 onClick={() => onSelect(c.id)}
                 className="w-full text-left px-3 py-2.5 hover:bg-zinc-900 transition text-sm"
               >
-                {c.type === "dm" ? "@" : "#"}{channelDisplayName(c)}
+                {c.type === "dm" ? "@" : "#"}
+                {channelDisplayName(c)}
               </button>
             ))
           )}
         </div>
         <div className="border-t border-zinc-800 p-3">
-          <button onClick={onClose} className="w-full text-[10px] uppercase tracking-widest text-zinc-500 hover:text-white transition py-1.5">
+          <button
+            onClick={onClose}
+            className="w-full text-[10px] uppercase tracking-widest text-zinc-500 hover:text-white transition py-1.5"
+          >
             Abbrechen
           </button>
         </div>

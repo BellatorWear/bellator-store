@@ -3,6 +3,8 @@ import { getCurrentUser } from "@/app/actions";
 import { getVisibleTicketsForUser, TICKET_CATEGORIES } from "./lib";
 import Link from "next/link";
 import { createTicket } from "./actions";
+import GlobalHeader from "@/app/components/GlobalHeader";
+import GlobalFooter from "@/app/components/GlobalFooter";
 
 export default async function TicketsPage() {
   const user = await getCurrentUser();
@@ -11,8 +13,9 @@ export default async function TicketsPage() {
   const tickets = await getVisibleTicketsForUser(user);
 
   return (
-    <div className="min-h-screen bg-black text-white font-mono">
-      <div className="max-w-6xl mx-auto px-4 py-10 space-y-8">
+    <div className="min-h-screen flex flex-col bg-black text-white font-mono">
+      <GlobalHeader />
+      <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-8 py-8 sm:py-10 space-y-8">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <p className="text-[10px] uppercase tracking-[0.35em] text-zinc-500">
@@ -26,17 +29,25 @@ export default async function TicketsPage() {
               den Ersteller sichtbar.
             </p>
           </div>
-          <Link
-            href="/shop"
-            className="border border-zinc-700 px-3 py-2 text-xs uppercase tracking-widest hover:bg-white hover:text-black transition-all"
-          >
-            ← Zum Shop
-          </Link>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs uppercase tracking-widest text-zinc-300">
+              <span className="block text-[10px] text-zinc-500">Profil</span>
+              <span className="font-black text-white">
+                {user.username || user.email}
+              </span>
+            </div>
+            <Link
+              href="/profil"
+              className="border border-zinc-700 px-3 py-2 text-xs uppercase tracking-widest hover:bg-white hover:text-black transition-all"
+            >
+              Zum Profil
+            </Link>
+          </div>
         </div>
 
         <form
           action={createTicket}
-          className="border border-zinc-800 rounded-xl p-5 space-y-4 bg-zinc-950/70"
+          className="border border-zinc-800 rounded-none p-5 space-y-4 bg-zinc-950/70"
         >
           <div className="grid md:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -81,13 +92,21 @@ export default async function TicketsPage() {
           </div>
           <div className="space-y-2">
             <label className="text-[10px] uppercase tracking-widest text-zinc-500">
-              Screenshot / Datei (optional)
+              Bilder / Dateien (optional)
+            </label>
+            <label
+              htmlFor="ticket-attachments"
+              className="inline-flex cursor-pointer items-center justify-center border border-zinc-700 bg-zinc-950 px-4 py-2 text-xs uppercase tracking-widest font-black text-white hover:bg-white hover:text-black transition-all"
+            >
+              Dateien auswählen
             </label>
             <input
+              id="ticket-attachments"
               type="file"
-              name="attachment"
-              accept="image/*,.pdf,.txt"
-              className="w-full text-sm"
+              name="attachments"
+              multiple
+              accept="image/*,.pdf,.txt,.zip,.doc,.docx,.ppt,.pptx,.xlsx"
+              className="hidden"
             />
           </div>
           <button
@@ -111,7 +130,7 @@ export default async function TicketsPage() {
               <Link
                 key={ticket.id}
                 href={`/tickets/${ticket.id}`}
-                className="block border border-zinc-800 rounded-xl p-4 bg-zinc-950/70 hover:border-zinc-600 transition-all"
+                className="block border border-zinc-800 rounded-none p-4 bg-zinc-950/70 hover:border-zinc-600 transition-all"
               >
                 <div className="flex justify-between gap-4 flex-wrap">
                   <div>
@@ -133,7 +152,8 @@ export default async function TicketsPage() {
             ))
           )}
         </div>
-      </div>
+      </main>
+      <GlobalFooter />
     </div>
   );
 }

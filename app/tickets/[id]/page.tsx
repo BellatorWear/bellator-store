@@ -3,6 +3,37 @@ import { redirect } from "next/navigation";
 import { addTicketReply, setTicketStatus } from "../actions";
 import { canAccessTicket, getTicketWithMessages } from "../lib";
 import { getCurrentUser } from "@/app/actions";
+import GlobalHeader from "@/app/components/GlobalHeader";
+import GlobalFooter from "@/app/components/GlobalFooter";
+
+type TicketAttachment = { url: string; name: string; type: string };
+
+function parseTicketAttachments(payload: string | null): TicketAttachment[] {
+  if (!payload) return [];
+  const trimmed = payload.trim();
+  if (!trimmed) return [];
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) {
+      return parsed.filter(
+        (item): item is TicketAttachment =>
+          !!item &&
+          typeof item === "object" &&
+          typeof item.url === "string" &&
+          typeof item.name === "string",
+      );
+    }
+  } catch {
+    // Fallback für ältere Single-URL-Werte.
+  }
+
+  if (trimmed.startsWith("https://")) {
+    return [{ url: trimmed, name: "Anhang", type: "application/octet-stream" }];
+  }
+
+  return [];
+}
 
 export default async function TicketDetailPage({
   params,
@@ -19,10 +50,12 @@ export default async function TicketDetailPage({
   if (!canAccessTicket(user, data.ticket)) redirect("/tickets");
 
   const { ticket, messages, author } = data;
+  const ticketAttachments = parseTicketAttachments(ticket.attachmentUrl);
 
   return (
-    <div className="min-h-screen bg-black text-white font-mono">
-      <div className="max-w-5xl mx-auto px-4 py-10 space-y-6">
+    <div className="min-h-screen flex flex-col bg-black text-white font-mono">
+      <GlobalHeader />
+      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-8 py-8 sm:py-10 space-y-6">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <p className="text-[10px] uppercase tracking-[0.35em] text-zinc-500">
@@ -43,26 +76,37 @@ export default async function TicketDetailPage({
           </Link>
         </div>
 
-        <div className="border border-zinc-800 rounded-xl p-4 bg-zinc-950/70 space-y-4">
+        <div className="border border-zinc-800 rounded-none p-4 bg-zinc-950/70 space-y-4">
           <p className="text-sm text-zinc-300 whitespace-pre-wrap">
             {ticket.description}
           </p>
-          {ticket.attachmentUrl && (
-            <a
-              href={ticket.attachmentUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-block text-sm text-blue-400 underline"
-            >
-              Anhang öffnen
-            </a>
+          {ticketAttachments.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">
+                Anhänge
+              </p>
+              <ul className="space-y-2">
+                {ticketAttachments.map((attachment) => (
+                  <li key={attachment.url}>
+                    <a
+                      href={attachment.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-block text-sm text-blue-400 underline"
+                    >
+                      {attachment.name || "Anhang öffnen"}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
 
         {user.isAdmin && (
           <form
             action={setTicketStatus}
-            className="flex gap-3 flex-wrap border border-zinc-800 p-4 rounded-xl bg-zinc-950/70"
+            className="flex gap-3 flex-wrap border border-zinc-800 p-4 rounded-none bg-zinc-950/70"
           >
             <input type="hidden" name="ticketId" value={ticket.id} />
             <select
@@ -90,7 +134,7 @@ export default async function TicketDetailPage({
             .map((message) => (
               <div
                 key={message.id}
-                className={`border rounded-xl p-4 ${message.isInternal ? "border-purple-800 bg-purple-950/20" : "border-zinc-800 bg-zinc-950/70"}`}
+                className={`border rounded-none p-4 ${message.isInternal ? "border-purple-800 bg-purple-950/20" : "border-zinc-800 bg-zinc-950/70"}`}
               >
                 <div className="flex items-center justify-between gap-3 flex-wrap text-xs uppercase tracking-widest text-zinc-500">
                   <span>
@@ -109,23 +153,39 @@ export default async function TicketDetailPage({
                 <p className="mt-3 text-sm whitespace-pre-wrap">
                   {message.body}
                 </p>
-                {message.attachmentUrl && (
-                  <a
-                    href={message.attachmentUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-3 inline-block text-sm text-blue-400 underline"
-                  >
-                    Anhang öffnen
-                  </a>
-                )}
+                {(() => {
+                  const messageAttachments = parseTicketAttachments(
+                    message.attachmentUrl,
+                  );
+                  return messageAttachments.length > 0 ? (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">
+                        Anhänge
+                      </p>
+                      <ul className="space-y-2">
+                        {messageAttachments.map((attachment) => (
+                          <li key={attachment.url}>
+                            <a
+                              href={attachment.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-block text-sm text-blue-400 underline"
+                            >
+                              {attachment.name || "Anhang öffnen"}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null;
+                })()}
               </div>
             ))}
         </div>
 
         <form
           action={addTicketReply}
-          className="border border-zinc-800 rounded-xl p-4 bg-zinc-950/70 space-y-3"
+          className="border border-zinc-800 rounded-none p-4 bg-zinc-950/70 space-y-3"
         >
           <input type="hidden" name="ticketId" value={ticket.id} />
           <label className="text-[10px] uppercase tracking-widest text-zinc-500">
@@ -140,13 +200,21 @@ export default async function TicketDetailPage({
           />
           <div className="space-y-2">
             <label className="text-[10px] uppercase tracking-widest text-zinc-500">
-              Screenshot / Datei (optional)
+              Bilder / Dateien (optional)
+            </label>
+            <label
+              htmlFor={`ticket-reply-attachments-${ticket.id}`}
+              className="inline-flex cursor-pointer items-center justify-center border border-zinc-700 bg-zinc-950 px-4 py-2 text-xs uppercase tracking-widest font-black text-white hover:bg-white hover:text-black transition-all"
+            >
+              Dateien auswählen
             </label>
             <input
+              id={`ticket-reply-attachments-${ticket.id}`}
               type="file"
-              name="attachment"
-              accept="image/*,.pdf,.txt"
-              className="w-full text-sm"
+              name="attachments"
+              multiple
+              accept="image/*,.pdf,.txt,.zip,.doc,.docx,.ppt,.pptx,.xlsx"
+              className="hidden"
             />
           </div>
           <button
@@ -156,7 +224,8 @@ export default async function TicketDetailPage({
             Antwort senden
           </button>
         </form>
-      </div>
+      </main>
+      <GlobalFooter />
     </div>
   );
 }

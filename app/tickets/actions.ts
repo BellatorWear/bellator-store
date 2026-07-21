@@ -8,8 +8,15 @@ import { eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { canAccessTicket, TICKET_CATEGORIES, type TicketCategory } from "./lib";
 
+type TicketAttachment = { url: string; name: string; type: string };
+
 function getUserOrThrow() {
   return getCurrentUser();
+}
+
+function serializeAttachments(attachments: TicketAttachment[]): string | null {
+  if (attachments.length === 0) return null;
+  return JSON.stringify(attachments);
 }
 
 export async function createTicket(formData: FormData): Promise<void> {
@@ -24,10 +31,9 @@ export async function createTicket(formData: FormData): Promise<void> {
   const title = String(formData.get("title") || "").trim();
   const category = String(formData.get("category") || "") as TicketCategory;
   const message = String(formData.get("message") || "").trim();
-  const file =
-    formData.get("attachment") instanceof File
-      ? (formData.get("attachment") as File)
-      : null;
+  const files = formData
+    .getAll("attachments")
+    .filter((entry): entry is File => entry instanceof File);
 
   if (!title || !message) {
     console.error(
@@ -40,11 +46,10 @@ export async function createTicket(formData: FormData): Promise<void> {
     return;
   }
 
-  let attachmentUrl: string | null = null;
-  let attachmentName: string | null = null;
-  let attachmentType: string | null = null;
+  let attachmentPayload: string | null = null;
+  const attachments: TicketAttachment[] = [];
 
-  if (file) {
+  for (const file of files) {
     if (file.size > 4 * 1024 * 1024) {
       console.error("Ticket-Erstellung fehlgeschlagen: Datei zu groß.");
       return;
@@ -60,10 +65,14 @@ export async function createTicket(formData: FormData): Promise<void> {
       addRandomSuffix: true,
       token: process.env.BLOB2_READ_WRITE_TOKEN,
     });
-    attachmentUrl = blob.url;
-    attachmentName = file.name;
-    attachmentType = file.type || "application/octet-stream";
+    attachments.push({
+      url: blob.url,
+      name: file.name,
+      type: file.type || "application/octet-stream",
+    });
   }
+
+  attachmentPayload = serializeAttachments(attachments);
 
   const [ticket] = await db
     .insert(supportTickets)
@@ -74,9 +83,9 @@ export async function createTicket(formData: FormData): Promise<void> {
       status: "open",
       priority: "normal",
       description: message,
-      attachmentUrl,
-      attachmentName,
-      attachmentType,
+      attachmentUrl: attachmentPayload,
+      attachmentName: null,
+      attachmentType: null,
     })
     .returning();
 
@@ -85,9 +94,9 @@ export async function createTicket(formData: FormData): Promise<void> {
       ticketId: ticket.id,
       userId: user.id,
       body: message,
-      attachmentUrl,
-      attachmentName,
-      attachmentType,
+      attachmentUrl: attachmentPayload,
+      attachmentName: null,
+      attachmentType: null,
       isInternal: false,
     });
   }
@@ -105,10 +114,9 @@ export async function addTicketReply(formData: FormData): Promise<void> {
 
   const ticketId = Number(formData.get("ticketId") || 0);
   const body = String(formData.get("body") || "").trim();
-  const file =
-    formData.get("attachment") instanceof File
-      ? (formData.get("attachment") as File)
-      : null;
+  const files = formData
+    .getAll("attachments")
+    .filter((entry): entry is File => entry instanceof File);
 
   if (!ticketId || !body) {
     console.error("Ticket-Antwort fehlgeschlagen: Nachricht fehlt.");
@@ -128,11 +136,10 @@ export async function addTicketReply(formData: FormData): Promise<void> {
     return;
   }
 
-  let attachmentUrl: string | null = null;
-  let attachmentName: string | null = null;
-  let attachmentType: string | null = null;
+  let attachmentPayload: string | null = null;
+  const attachments: TicketAttachment[] = [];
 
-  if (file) {
+  for (const file of files) {
     if (file.size > 4 * 1024 * 1024) {
       console.error("Ticket-Antwort fehlgeschlagen: Datei zu groß.");
       return;
@@ -148,18 +155,22 @@ export async function addTicketReply(formData: FormData): Promise<void> {
       addRandomSuffix: true,
       token: process.env.BLOB2_READ_WRITE_TOKEN,
     });
-    attachmentUrl = blob.url;
-    attachmentName = file.name;
-    attachmentType = file.type || "application/octet-stream";
+    attachments.push({
+      url: blob.url,
+      name: file.name,
+      type: file.type || "application/octet-stream",
+    });
   }
+
+  attachmentPayload = serializeAttachments(attachments);
 
   await db.insert(supportTicketMessages).values({
     ticketId,
     userId: user.id,
     body,
-    attachmentUrl,
-    attachmentName,
-    attachmentType,
+    attachmentUrl: attachmentPayload,
+    attachmentName: null,
+    attachmentType: null,
     isInternal: user.isAdmin || false,
   });
 
