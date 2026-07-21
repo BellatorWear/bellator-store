@@ -17,9 +17,10 @@ export const ADMIN_SECTION_IDS = [
   "countdown",
   "roles",
   "team-chat",
+  "tickets",
 ] as const;
 
-export type AdminSectionId = typeof ADMIN_SECTION_IDS[number];
+export type AdminSectionId = (typeof ADMIN_SECTION_IDS)[number];
 
 // Menschenlesbare Kurz-Labels für die Checkboxen beim Rollen-Erstellen -
 // müssen inhaltlich zu den Titeln in admin/page.tsx passen.
@@ -36,6 +37,7 @@ export const ADMIN_SECTION_LABELS: Record<AdminSectionId, string> = {
   countdown: "Countdown",
   roles: "Rollen vergeben",
   "team-chat": "Team-Chat-Zugriff",
+  tickets: "Support-Tickets",
 };
 
 // ===================================================================
@@ -59,10 +61,14 @@ type ChatAccessUser = {
   chatAccess?: boolean | null;
 };
 
-export function hasChatAccess(user: ChatAccessUser | null, roleDefaults: ChatRoleAccess): boolean {
+export function hasChatAccess(
+  user: ChatAccessUser | null,
+  roleDefaults: ChatRoleAccess,
+): boolean {
   if (!user) return false;
   // Expliziter Override gewinnt immer - egal ob er Zugriff gibt oder entzieht.
-  if (user.chatAccess !== null && user.chatAccess !== undefined) return user.chatAccess;
+  if (user.chatAccess !== null && user.chatAccess !== undefined)
+    return user.chatAccess;
   // Volle Admins haben immer Zugriff, unabhängig vom konfigurierten Standard.
   if (user.isAdmin) return true;
   if (!user.role) return false; // normale Kunden ohne Team-Rolle nie, außer expliziter Override oben

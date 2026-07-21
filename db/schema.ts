@@ -1,5 +1,11 @@
 import {
-  pgTable, serial, text, boolean, timestamp, integer, jsonb
+  pgTable,
+  serial,
+  text,
+  boolean,
+  timestamp,
+  integer,
+  jsonb,
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -158,7 +164,7 @@ export const products = pgTable("products", {
   active: boolean("active").default(true),
   // Kategorisierung für Shop-Filter
   category: text("category"), // "shirt"|"hoodie"|"ziphoodie"|"pants"|"set"
-  gender: text("gender"),     // "male"|"female"|"unisex"
+  gender: text("gender"), // "male"|"female"|"unisex"
   collection: text("collection"), // frei wählbarer Name, z.B. "Summer 2025"
   // Pre-Release: vor dropDate nur für User mit Pre-Release-Zugang sichtbar.
   isPreRelease: boolean("is_pre_release").default(false),
@@ -180,7 +186,9 @@ export const productVariants = pgTable("product_variants", {
 // der Farbe angezeigt werden.
 export const productColors = pgTable("product_colors", {
   id: serial("id").primaryKey(),
-  productId: integer("product_id").notNull().references(() => products.id),
+  productId: integer("product_id")
+    .notNull()
+    .references(() => products.id),
   name: text("name").notNull(), // z.B. "Schwarz"
   hexColor: text("hex_color").notNull(), // z.B. "#000000"
   frontImage: text("front_image").notNull(),
@@ -195,7 +203,9 @@ export const productColors = pgTable("product_colors", {
 // können und nachvollziehbar bleibt, wer sich wann wie umbenannt hat.
 export const usernameHistory = pgTable("username_history", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
   username: text("username").notNull(),
   changedAt: timestamp("changed_at").defaultNow(),
 });
@@ -223,8 +233,12 @@ export const preReleaseCodes = pgTable("pre_release_codes", {
 
 export const preReleaseRedemptions = pgTable("pre_release_redemptions", {
   id: serial("id").primaryKey(),
-  codeId: integer("code_id").notNull().references(() => preReleaseCodes.id),
-  userId: integer("user_id").notNull().references(() => users.id),
+  codeId: integer("code_id")
+    .notNull()
+    .references(() => preReleaseCodes.id),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
   redeemedAt: timestamp("redeemed_at").defaultNow(),
 });
 
@@ -271,7 +285,9 @@ export const newsPosts = pgTable("news_posts", {
   title: text("title").notNull(),
   body: text("body").notNull(),
   bodyHtml: text("body_html"),
-  attachments: jsonb("attachments").$type<{ url: string; name: string }[]>().default([]),
+  attachments: jsonb("attachments")
+    .$type<{ url: string; name: string }[]>()
+    .default([]),
   createdAt: timestamp("created_at").defaultNow(),
   pushSentAt: timestamp("push_sent_at"),
   emailSentAt: timestamp("email_sent_at"),
@@ -288,7 +304,9 @@ export const homePosts = pgTable("home_posts", {
   title: text("title").notNull(),
   body: text("body"),
   bodyHtml: text("body_html"),
-  attachments: jsonb("attachments").$type<{ url: string; name: string }[]>().default([]),
+  attachments: jsonb("attachments")
+    .$type<{ url: string; name: string }[]>()
+    .default([]),
   imageUrl: text("image_url"),
   videoUrl: text("video_url"),
   category: text("category").notNull().default("article"),
@@ -326,16 +344,24 @@ export const chatChannels = pgTable("chat_channels", {
 
 export const chatChannelMembers = pgTable("chat_channel_members", {
   id: serial("id").primaryKey(),
-  channelId: integer("channel_id").notNull().references(() => chatChannels.id),
-  userId: integer("user_id").notNull().references(() => users.id),
+  channelId: integer("channel_id")
+    .notNull()
+    .references(() => chatChannels.id),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
   lastReadAt: timestamp("last_read_at"),
   joinedAt: timestamp("joined_at").defaultNow(),
 });
 
 export const chatMessages = pgTable("chat_messages", {
   id: serial("id").primaryKey(),
-  channelId: integer("channel_id").notNull().references(() => chatChannels.id),
-  userId: integer("user_id").notNull().references(() => users.id),
+  channelId: integer("channel_id")
+    .notNull()
+    .references(() => chatChannels.id),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
   body: text("body").notNull(),
   // Optionaler Datei-/Bild-Anhang - body darf dann leer sein (siehe
   // sendMessage-Validierung: body ODER Anhang muss gesetzt sein).
@@ -366,17 +392,55 @@ export const customRoles = pgTable("custom_roles", {
   sections: jsonb("sections").notNull().default([]), // AdminSectionId[]
   canEditPosts: boolean("can_edit_posts").notNull().default(false),
   // Granulare Admin-Berechtigungen (v23), unabhängig von vollem isAdmin.
-  canManageDiscountCodes: boolean("can_manage_discount_codes").notNull().default(false),
+  canManageDiscountCodes: boolean("can_manage_discount_codes")
+    .notNull()
+    .default(false),
   canAssignRoles: boolean("can_assign_roles").notNull().default(false),
   // Reserviert, bis es eine tatsächliche User-Löschfunktion gibt.
   canDeleteUsers: boolean("can_delete_users").notNull().default(false),
   // Team-Chat-Rechte (v23).
-  chatCanCreateChannels: boolean("chat_can_create_channels").notNull().default(true),
-  chatCanDeleteOthersMessages: boolean("chat_can_delete_others_messages").notNull().default(false),
+  chatCanCreateChannels: boolean("chat_can_create_channels")
+    .notNull()
+    .default(true),
+  chatCanDeleteOthersMessages: boolean("chat_can_delete_others_messages")
+    .notNull()
+    .default(false),
   chatCanKickMembers: boolean("chat_can_kick_members").notNull().default(false),
   // Rang/Priorität (v23) - höher = mehr Gewicht. Steuert Anzeigereihenfolge
   // und wer wen bei can_assign_roles überschreiben/befördern darf.
   rank: integer("rank").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ===================================================================
+// Support-/Entwicklungs-Tickets (v25)
+// ===================================================================
+export const supportTickets = pgTable("support_tickets", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  category: text("category").notNull().default("support"),
+  status: text("status").notNull().default("open"),
+  priority: text("priority").notNull().default("normal"),
+  attachmentUrl: text("attachment_url"),
+  attachmentName: text("attachment_name"),
+  attachmentType: text("attachment_type"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const supportTicketMessages = pgTable("support_ticket_messages", {
+  id: serial("id").primaryKey(),
+  ticketId: integer("ticket_id")
+    .notNull()
+    .references(() => supportTickets.id),
+  userId: integer("user_id").references(() => users.id),
+  body: text("body").notNull(),
+  attachmentUrl: text("attachment_url"),
+  attachmentName: text("attachment_name"),
+  attachmentType: text("attachment_type"),
+  isInternal: boolean("is_internal").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
