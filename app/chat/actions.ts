@@ -7,6 +7,7 @@ import { getCurrentUser } from "@/app/actions";
 import { isTrustedOrigin } from "@/app/utils/origin";
 import { sanitizeText, isSuspiciousInput } from "@/app/utils/inputSafety";
 import { getSetting } from "@/app/utils/settings";
+import { checkChatMessageRateLimit } from "@/app/utils/ratelimit";
 import { CHAT_ROLE_ACCESS_KEY } from "@/app/utils/settings";
 import { hasChatAccess, CHAT_ROLE_ACCESS_DEFAULT } from "@/app/admin/permissions";
 import { getAllRoles, getRoleConfig } from "@/app/admin/roles";
@@ -14,6 +15,10 @@ import { getPusherServer, channelEventName, userEventName } from "@/lib/pusher";
 import { sendPushToUser } from "@/app/utils/push";
 
 const MAX_MESSAGE_LENGTH = 4000;
+// Nicht-Admins dürfen eigene Nachrichten bis zu 24h nach dem Senden noch
+// bearbeiten, danach nicht mehr. Admins sind davon ausgenommen (siehe
+// editMessage) und dürfen jederzeit bearbeiten.
+const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 // Zentrale Zugriffsprüfung - wird von jeder Chat-Action zuerst aufgerufen.
 // Nicht nur "eingeloggt" (das übernimmt schon proxy.ts), sondern
@@ -138,6 +143,7 @@ export type ChatMessageDto = {
   replyToUsername: string | null;
   replyToAttachmentName: string | null;
   forwardedFromUsername: string | null;
+  editedAt: Date | null;
   createdAt: Date | null;
 };
 
@@ -198,6 +204,7 @@ export async function getChannelMessages(channelId: number): Promise<{ error?: s
         replyToUsername: replyTo ? (replyToUsernameById.get(replyTo.userId) ?? null) : null,
         replyToAttachmentName: replyTo?.attachmentName ?? null,
         forwardedFromUsername: r.forwardedFromUsername,
+        editedAt: r.editedAt,
         createdAt: r.createdAt,
       };
     }),
@@ -207,6 +214,14 @@ export async function getChannelMessages(channelId: number): Promise<{ error?: s
 export async function sendMessage(formData: FormData): Promise<{ error?: string; success?: boolean; message?: ChatMessageDto }> {
   const user = await requireChatUser();
   if (!user) return { error: "Keine Berechtigung." };
+
+  // Spam-Schutz: 5 Nachrichten "Burst" sind frei, erst danach greift das
+  // Limit - schnelles Nachschieben/Korrigieren bleibt also ungebremst,
+  // nur tatsächliches Flooding wird gebremst.
+  const rateLimit = await checkChatMessageRateLimit(user.id);
+  if (!rateLimit.success) {
+    return { error: `Zu viele Nachrichten - kurz warten (${Math.ceil(rateLimit.resetAfter / 1000)}s).` };
+  }
 
   const channelId = Number(formData.get("channelId"));
   const bodyRaw = ((formData.get("body") as string) ?? "").trim();
@@ -283,6 +298,7 @@ export async function sendMessage(formData: FormData): Promise<{ error?: string;
       replyToUsername: replyPreview?.username ?? null,
       replyToAttachmentName: replyPreview?.attachmentName ?? null,
       forwardedFromUsername: message.forwardedFromUsername,
+      editedAt: message.editedAt,
       createdAt: message.createdAt,
     });
   } catch (e) {
@@ -340,9 +356,58 @@ export async function sendMessage(formData: FormData): Promise<{ error?: string;
       replyToUsername: replyPreview?.username ?? null,
       replyToAttachmentName: replyPreview?.attachmentName ?? null,
       forwardedFromUsername: message.forwardedFromUsername,
+      editedAt: message.editedAt,
       createdAt: message.createdAt,
     },
   };
+}
+
+// ===================================================================
+// Nachricht bearbeiten (v24)
+// ===================================================================
+export async function editMessage(formData: FormData): Promise<{ error?: string; success?: boolean; id?: number; body?: string; editedAt?: Date | null }> {
+  const user = await requireChatUser();
+  if (!user) return { error: "Keine Berechtigung." };
+
+  const messageId = Number(formData.get("messageId"));
+  const bodyRaw = ((formData.get("body") as string) ?? "").trim();
+  if (!messageId) return { error: "Ungültig." };
+  if (!bodyRaw) return { error: "Nachricht darf nicht leer sein." };
+  if (bodyRaw.length > MAX_MESSAGE_LENGTH) return { error: "Nachricht zu lang." };
+  if (isSuspiciousInput(bodyRaw.slice(0, 200))) return { error: "Ungültige Eingabe." };
+
+  const rows = await db.select().from(chatMessages).where(eq(chatMessages.id, messageId));
+  const existing = rows[0];
+  if (!existing) return { error: "Nachricht nicht gefunden." };
+
+  // Nur die eigene Nachricht, und für alle außer Admins nur innerhalb von
+  // 24h nach dem Senden. Admins dürfen jede Nachricht jederzeit bearbeiten.
+  if (!user.isAdmin) {
+    if (existing.userId !== user.id) return { error: "Keine Berechtigung." };
+    const ageMs = Date.now() - new Date(existing.createdAt ?? 0).getTime();
+    if (ageMs > EDIT_WINDOW_MS) return { error: "Nachrichten können nur bis 24 Stunden nach dem Senden bearbeitet werden." };
+  }
+
+  const body = sanitizeText(bodyRaw, MAX_MESSAGE_LENGTH);
+  const editedAt = new Date();
+  const [updated] = await db
+    .update(chatMessages)
+    .set({ body, editedAt })
+    .where(eq(chatMessages.id, messageId))
+    .returning();
+
+  try {
+    await getPusherServer().trigger(channelEventName(updated.channelId), "message-edited", {
+      id: updated.id,
+      channelId: updated.channelId,
+      body: updated.body,
+      editedAt: updated.editedAt,
+    });
+  } catch (e) {
+    console.error("Pusher-Trigger fehlgeschlagen:", e);
+  }
+
+  return { success: true, id: updated.id, body: updated.body, editedAt: updated.editedAt };
 }
 
 export async function markChannelRead(channelId: number): Promise<{ error?: string; success?: boolean }> {
@@ -670,6 +735,13 @@ export async function forwardMessage(formData: FormData): Promise<{ error?: stri
   const user = await requireChatUser();
   if (!user) return { error: "Keine Berechtigung." };
 
+  // Teilt sich den Burst-Zähler mit sendMessage - Weiterleiten erzeugt
+  // genauso eine neue Nachricht im Ziel-Channel.
+  const rateLimit = await checkChatMessageRateLimit(user.id);
+  if (!rateLimit.success) {
+    return { error: `Zu viele Nachrichten - kurz warten (${Math.ceil(rateLimit.resetAfter / 1000)}s).` };
+  }
+
   const sourceMessageId = Number(formData.get("sourceMessageId"));
   const targetChannelId = Number(formData.get("targetChannelId"));
   if (!sourceMessageId || !targetChannelId) return { error: "Ungültig." };
@@ -717,6 +789,7 @@ export async function forwardMessage(formData: FormData): Promise<{ error?: stri
       replyToUsername: null,
       replyToAttachmentName: null,
       forwardedFromUsername: message.forwardedFromUsername,
+      editedAt: message.editedAt,
       createdAt: message.createdAt,
     });
   } catch (e) {

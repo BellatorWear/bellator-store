@@ -9,7 +9,7 @@ import {
   listMyChannels, getChannelMessages, sendMessage, markChannelRead,
   searchChatUsers, getOrCreateDirectMessage, createChannel,
   deleteMessage, listChannelMembers, removeChannelMember, addChannelMember,
-  getReadReceipts, forwardMessage, getRoleColorsForChat,
+  getReadReceipts, forwardMessage, getRoleColorsForChat, editMessage,
   type ChatChannelSummary, type ChatMessageDto, type ChatUserResult, type ChatChannelMemberDto, type ChatReadReceipt,
 } from "./actions";
       
@@ -26,6 +26,9 @@ function isImageType(type: string | null): boolean {
 }
 
 const MENTION_PATTERN = /(@[A-Za-z0-9_]+)/g;
+// Nur fürs Ein-/Ausblenden des "Bearbeiten"-Menüpunkts - die eigentliche
+// Durchsetzung passiert serverseitig in editMessage().
+const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 // Hebt @mentions (inkl. @everyone/@here) im Nachrichtentext optisch hervor.
 // Prüft nicht streng gegen die echte Mitgliederliste - ein "@irgendwas"
@@ -85,6 +88,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   const [deleting, setDeleting] = useState(false);
   const [readBreakdownFor, setReadBreakdownFor] = useState<LocalChatMessage | null>(null);
   const [replyingTo, setReplyingTo] = useState<LocalChatMessage | null>(null);
+  const [editingMessage, setEditingMessage] = useState<LocalChatMessage | null>(null);
   const [openMenuFor, setOpenMenuFor] = useState<number | null>(null);
   const [forwardingMessage, setForwardingMessage] = useState<LocalChatMessage | null>(null);
   const [roleColors, setRoleColors] = useState<Record<string, string> | null>(null);
@@ -209,6 +213,9 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
     binding.bind("message-deleted", (data: { id: number }) => {
       setMessages((prev) => prev.filter((m) => m.id !== data.id));
     });
+    binding.bind("message-edited", (data: { id: number; body: string; editedAt: string | Date }) => {
+      setMessages((prev) => prev.map((m) => (m.id === data.id ? { ...m, body: data.body, editedAt: data.editedAt as unknown as Date } : m)));
+    });
     binding.bind("read-receipt", (data: { userId: number; lastReadAt: string }) => {
       setReadReceipts((prev) => {
         const exists = prev.some((r) => r.userId === data.userId);
@@ -254,6 +261,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
       replyToUsername: replyTarget?.username ?? null,
       replyToAttachmentName: replyTarget?.attachmentName ?? null,
       forwardedFromUsername: null,
+      editedAt: null,
       createdAt: new Date(),
       pending: true,
     };
@@ -307,6 +315,43 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
           return prev.map((m) => (m.id === tempId ? real : m));
         });
       }
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function startEdit(m: LocalChatMessage) {
+    setEditingMessage(m);
+    setReplyingTo(null);
+    setPendingAttachment(null);
+    setDraft(m.body);
+  }
+
+  function cancelEdit() {
+    setEditingMessage(null);
+    setDraft("");
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingMessage || !draft.trim() || sending) return;
+    setSending(true);
+    const newBody = draft;
+    const target = editingMessage;
+    try {
+      const fd = new FormData();
+      fd.append("messageId", String(target.id));
+      fd.append("body", newBody);
+      const res = await editMessage(fd);
+      if (res?.error) {
+        setNotice(res.error);
+        return;
+      }
+      setMessages((prev) =>
+        prev.map((m) => (m.id === target.id ? { ...m, body: res.body ?? newBody, editedAt: res.editedAt ?? new Date() } : m)),
+      );
+      setDraft("");
+      setEditingMessage(null);
     } finally {
       setSending(false);
     }
@@ -368,6 +413,8 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
   function selectChannel(id: number) {
     setActiveId(id);
     setMobileShowList(false);
+    setEditingMessage(null);
+    setDraft("");
   }
 
   async function handleLogout() {
@@ -542,6 +589,10 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                     const roleColor = m.role && roleColors ? roleColors[m.role] : undefined;
                     const menuOpen = openMenuFor === m.id;
                     const canDelete = own || currentUser.isAdmin;
+                    // Eigene Nachricht innerhalb von 24h, oder Admin immer
+                    // (auch fremde Nachrichten, auch älter als 24h).
+                    const canEdit =
+                      currentUser.isAdmin || (own && Date.now() - new Date(m.createdAt ?? 0).getTime() < EDIT_WINDOW_MS);
                     // Für die letzten Nachrichten im Thread ist unterhalb des Buttons kaum noch
                     // Platz (Eingabeleiste direkt darunter) - Menü klappt dort stattdessen nach
                     // oben auf, sonst wurde es abgeschnitten/unsichtbar.
@@ -605,6 +656,15 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                                         className="w-full text-left px-3 py-2 text-xs hover:bg-zinc-900 transition"
                                       >
                                         Antworten
+                                      </button>
+                                    )}
+                                    {canEdit && !m.pending && (
+                                      <button
+                                        type="button"
+                                        onClick={() => { startEdit(m); setOpenMenuFor(null); }}
+                                        className="w-full text-left px-3 py-2 text-xs hover:bg-zinc-900 transition"
+                                      >
+                                        Bearbeiten
                                       </button>
                                     )}
                                     {m.body && (
@@ -684,6 +744,7 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                           </div>
                           <span className="text-[9px] text-zinc-700 mt-1 flex items-center gap-1">
                             {formatTime(m.createdAt)}
+                            {m.editedAt && <span title={`Bearbeitet um ${formatTime(m.editedAt)}`}>(bearbeitet)</span>}
                             {own && activeChannel.type === "channel" && !m.pending ? (
                               <button
                                 type="button"
@@ -711,6 +772,21 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                 )}
                 <div ref={messagesEndRef} />
               </div>
+              {editingMessage && (
+                <div className="shrink-0 border-t border-zinc-800 px-3 py-2 flex items-center justify-between bg-zinc-950">
+                  <div className="text-xs text-zinc-400 truncate">
+                    <span className="text-zinc-600 uppercase tracking-widest text-[9px]">Bearbeite Nachricht: </span>
+                    {editingMessage.body || (editingMessage.attachmentName ? `📎 ${editingMessage.attachmentName}` : "…")}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    className="text-[10px] text-zinc-600 hover:text-red-500 transition uppercase tracking-widest ml-3 shrink-0"
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              )}
               {replyingTo && (
                 <div className="shrink-0 border-t border-zinc-800 px-3 py-2 flex items-center justify-between bg-zinc-950">
                   <div className="text-xs text-zinc-400 truncate">
@@ -756,13 +832,13 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                     ))}
                   </div>
                 )}
-                <form onSubmit={handleSend} className="shrink-0 border-t border-zinc-800 p-3 flex gap-2">
+                <form onSubmit={editingMessage ? handleEditSubmit : handleSend} className="shrink-0 border-t border-zinc-800 p-3 flex gap-2">
                   <input ref={fileInputRef} type="file" onChange={handleFileSelect} className="hidden" />
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingAttachment}
-                    title="Datei anhängen"
+                    disabled={uploadingAttachment || !!editingMessage}
+                    title={editingMessage ? "Beim Bearbeiten kein Anhang möglich" : "Datei anhängen"}
                     className="border border-zinc-700 text-zinc-400 px-3 py-2.5 text-sm hover:border-zinc-400 hover:text-white transition-all disabled:opacity-40 shrink-0"
                   >
                     {uploadingAttachment ? "..." : "📎"}
@@ -770,15 +846,15 @@ export default function ChatClient({ currentUser, initialChannels }: { currentUs
                   <input
                     value={draft}
                     onChange={(e) => handleDraftChange(e.target.value)}
-                    placeholder="Nachricht schreiben... (@ für Erwähnung)"
+                    placeholder={editingMessage ? "Nachricht bearbeiten..." : "Nachricht schreiben... (@ für Erwähnung)"}
                     className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:border-white outline-none transition"
                   />
                   <button
                     type="submit"
-                    disabled={(!draft.trim() && !pendingAttachment) || sending}
+                    disabled={editingMessage ? !draft.trim() || sending : (!draft.trim() && !pendingAttachment) || sending}
                     className="border border-white bg-white text-black px-5 py-2.5 text-[10px] uppercase tracking-widest font-black hover:bg-black hover:text-white transition-all disabled:opacity-40 shrink-0"
                   >
-                    Senden
+                    {editingMessage ? "Speichern" : "Senden"}
                   </button>
                 </form>
               </div>

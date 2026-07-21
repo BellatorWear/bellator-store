@@ -348,6 +348,8 @@ export const chatMessages = pgTable("chat_messages", {
   // Weiterleitung, kein FK, weil das Ziel ein anderer Channel ist, auf den
   // der ursprüngliche Autor evtl. keinen Zugriff hat.
   forwardedFromUsername: text("forwarded_from_username"),
+  // Zeitstempel der letzten Bearbeitung (v24) - null = nie bearbeitet.
+  editedAt: timestamp("edited_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

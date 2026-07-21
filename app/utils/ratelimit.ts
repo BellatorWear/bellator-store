@@ -35,6 +35,17 @@ export const generalRatelimit = new Ratelimit({
   prefix: "ratelimit:general",
 });
 
+// Rate Limiter für Chat-Nachrichten (gegen Spam/Flood). 5 Nachrichten
+// "Burst" sind frei erlaubt (schnell was ergänzen/korrigieren geht also
+// weiterhin ohne Wartezeit), erst danach greift das Limit innerhalb des
+// 10-Sekunden-Fensters.
+export const chatMessageRatelimit = new Ratelimit({
+  redis: redis,
+  limiter: Ratelimit.slidingWindow(5, "10 s"),
+  analytics: true,
+  prefix: "ratelimit:chatmessage",
+});
+
 /**
  * Extrahiert die Client IP-Adresse aus dem Request
  */
@@ -92,6 +103,32 @@ export async function checkEmailRateLimit(
   } catch (error) {
     console.error("Rate limit check failed:", error);
     return { success: false, remaining: 0, resetAfter: 3600000 }; // 1 Stunde
+  }
+}
+
+/**
+ * Prüfe Chat-Nachrichten Rate Limit (pro User, nicht pro IP - im Büro
+ * sitzen oft mehrere Team-Mitglieder hinter derselben IP)
+ */
+export async function checkChatMessageRateLimit(
+  userId: number,
+): Promise<{ success: boolean; remaining: number; resetAfter: number }> {
+  const identifier = `chatmessage:${userId}`;
+
+  try {
+    const { success, remaining, reset } =
+      await chatMessageRatelimit.limit(identifier);
+    return {
+      success,
+      remaining: Math.max(0, remaining),
+      resetAfter: reset ? Math.max(0, reset - Date.now()) : 0,
+    };
+  } catch (error) {
+    console.error("Rate limit check failed:", error);
+    // Im Fehlerfall (z.B. Upstash kurz nicht erreichbar): lieber
+    // durchlassen als den ganzen Chat lahmzulegen - anders als bei
+    // Login/Email ist hier kein Sicherheitsrisiko, nur Spam-Schutz.
+    return { success: true, remaining: 0, resetAfter: 0 };
   }
 }
 
