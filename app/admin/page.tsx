@@ -106,6 +106,7 @@ export default async function AdminPage() {
         title: supportTickets.title,
         category: supportTickets.category,
         status: supportTickets.status,
+        priority: supportTickets.priority,
         createdAt: supportTickets.createdAt,
         updatedAt: supportTickets.updatedAt,
         userId: supportTickets.userId,

@@ -31,6 +31,7 @@ export async function createTicket(formData: FormData): Promise<void> {
   const title = String(formData.get("title") || "").trim();
   const category = String(formData.get("category") || "") as TicketCategory;
   const message = String(formData.get("message") || "").trim();
+  const priority = formData.get("important") === "on" ? "urgent" : "normal";
   const files = formData
     .getAll("attachments")
     .filter((entry): entry is File => entry instanceof File);
@@ -81,7 +82,7 @@ export async function createTicket(formData: FormData): Promise<void> {
       title,
       category,
       status: "open",
-      priority: "normal",
+      priority,
       description: message,
       attachmentUrl: attachmentPayload,
       attachmentName: null,
@@ -183,6 +184,45 @@ export async function addTicketReply(formData: FormData): Promise<void> {
     .where(eq(supportTickets.id, ticketId));
 
   revalidatePath("/tickets");
+  revalidatePath("/admin");
+}
+
+export async function setTicketPriority(formData: FormData): Promise<void> {
+  const user = await getUserOrThrow();
+  if (!user) {
+    console.error("Prioritätsänderung fehlgeschlagen: Benutzer nicht eingeloggt.");
+    return;
+  }
+
+  const ticketId = Number(formData.get("ticketId") || 0);
+  const priority = String(formData.get("priority") || "normal");
+  if (!ticketId || (priority !== "normal" && priority !== "urgent")) {
+    console.error("Prioritätsänderung fehlgeschlagen: Ungültige Eingabe.");
+    return;
+  }
+
+  const [ticket] = await db
+    .select()
+    .from(supportTickets)
+    .where(eq(supportTickets.id, ticketId));
+  if (!ticket) {
+    console.error("Prioritätsänderung fehlgeschlagen: Ticket nicht gefunden.");
+    return;
+  }
+  // Nur der Ersteller markiert sein eigenes Ticket als wichtig - das ist
+  // eine Einschätzung des Users, kein Team-Werkzeug (das Team hat dafür
+  // den Status wie "In Bearbeitung").
+  if (ticket.userId !== user.id) {
+    console.error("Prioritätsänderung fehlgeschlagen: Keine Berechtigung.");
+    return;
+  }
+
+  await db
+    .update(supportTickets)
+    .set({ priority, updatedAt: new Date() })
+    .where(eq(supportTickets.id, ticketId));
+  revalidatePath("/tickets");
+  revalidatePath(`/tickets/${ticketId}`);
   revalidatePath("/admin");
 }
 
