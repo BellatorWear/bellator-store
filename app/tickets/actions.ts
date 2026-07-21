@@ -12,9 +12,14 @@ function getUserOrThrow() {
   return getCurrentUser();
 }
 
-export async function createTicket(formData: FormData) {
+export async function createTicket(formData: FormData): Promise<void> {
   const user = await getUserOrThrow();
-  if (!user) return { success: false, error: "Bitte zuerst einloggen." };
+  if (!user) {
+    console.error(
+      "Ticket-Erstellung fehlgeschlagen: Benutzer nicht eingeloggt.",
+    );
+    return;
+  }
 
   const title = String(formData.get("title") || "").trim();
   const category = String(formData.get("category") || "") as TicketCategory;
@@ -24,23 +29,32 @@ export async function createTicket(formData: FormData) {
       ? (formData.get("attachment") as File)
       : null;
 
-  if (!title || !message)
-    return { success: false, error: "Titel und Nachricht sind erforderlich." };
-  if (!TICKET_CATEGORIES.some((entry) => entry.value === category))
-    return { success: false, error: "Ungültige Kategorie." };
+  if (!title || !message) {
+    console.error(
+      "Ticket-Erstellung fehlgeschlagen: Titel oder Nachricht fehlt.",
+    );
+    return;
+  }
+  if (!TICKET_CATEGORIES.some((entry) => entry.value === category)) {
+    console.error("Ticket-Erstellung fehlgeschlagen: Ungültige Kategorie.");
+    return;
+  }
 
   let attachmentUrl: string | null = null;
   let attachmentName: string | null = null;
   let attachmentType: string | null = null;
 
   if (file) {
-    if (file.size > 4 * 1024 * 1024)
-      return { success: false, error: "Datei zu groß. Maximal 4 MB." };
-    if (!process.env.BLOB2_READ_WRITE_TOKEN)
-      return {
-        success: false,
-        error: "Blob-Upload ist derzeit nicht konfiguriert.",
-      };
+    if (file.size > 4 * 1024 * 1024) {
+      console.error("Ticket-Erstellung fehlgeschlagen: Datei zu groß.");
+      return;
+    }
+    if (!process.env.BLOB2_READ_WRITE_TOKEN) {
+      console.error(
+        "Ticket-Erstellung fehlgeschlagen: Blob-Upload nicht konfiguriert.",
+      );
+      return;
+    }
     const blob = await put(file.name, file, {
       access: "public",
       addRandomSuffix: true,
@@ -80,12 +94,14 @@ export async function createTicket(formData: FormData) {
 
   revalidatePath("/tickets");
   revalidatePath("/admin");
-  return { success: true, ticketId: ticket?.id ?? null };
 }
 
-export async function addTicketReply(formData: FormData) {
+export async function addTicketReply(formData: FormData): Promise<void> {
   const user = await getUserOrThrow();
-  if (!user) return { success: false, error: "Bitte zuerst einloggen." };
+  if (!user) {
+    console.error("Ticket-Antwort fehlgeschlagen: Benutzer nicht eingeloggt.");
+    return;
+  }
 
   const ticketId = Number(formData.get("ticketId") || 0);
   const body = String(formData.get("body") || "").trim();
@@ -94,29 +110,39 @@ export async function addTicketReply(formData: FormData) {
       ? (formData.get("attachment") as File)
       : null;
 
-  if (!ticketId || !body)
-    return { success: false, error: "Nachricht ist erforderlich." };
+  if (!ticketId || !body) {
+    console.error("Ticket-Antwort fehlgeschlagen: Nachricht fehlt.");
+    return;
+  }
 
   const [ticket] = await db
     .select()
     .from(supportTickets)
     .where(eq(supportTickets.id, ticketId));
-  if (!ticket) return { success: false, error: "Ticket nicht gefunden." };
-  if (!canAccessTicket(user, ticket))
-    return { success: false, error: "Keine Berechtigung." };
+  if (!ticket) {
+    console.error("Ticket-Antwort fehlgeschlagen: Ticket nicht gefunden.");
+    return;
+  }
+  if (!canAccessTicket(user, ticket)) {
+    console.error("Ticket-Antwort fehlgeschlagen: Keine Berechtigung.");
+    return;
+  }
 
   let attachmentUrl: string | null = null;
   let attachmentName: string | null = null;
   let attachmentType: string | null = null;
 
   if (file) {
-    if (file.size > 4 * 1024 * 1024)
-      return { success: false, error: "Datei zu groß. Maximal 4 MB." };
-    if (!process.env.BLOB2_READ_WRITE_TOKEN)
-      return {
-        success: false,
-        error: "Blob-Upload ist derzeit nicht konfiguriert.",
-      };
+    if (file.size > 4 * 1024 * 1024) {
+      console.error("Ticket-Antwort fehlgeschlagen: Datei zu groß.");
+      return;
+    }
+    if (!process.env.BLOB2_READ_WRITE_TOKEN) {
+      console.error(
+        "Ticket-Antwort fehlgeschlagen: Blob-Upload nicht konfiguriert.",
+      );
+      return;
+    }
     const blob = await put(file.name, file, {
       access: "public",
       addRandomSuffix: true,
@@ -147,17 +173,23 @@ export async function addTicketReply(formData: FormData) {
 
   revalidatePath("/tickets");
   revalidatePath("/admin");
-  return { success: true };
 }
 
-export async function setTicketStatus(formData: FormData) {
+export async function setTicketStatus(formData: FormData): Promise<void> {
   const user = await getUserOrThrow();
-  if (!user?.isAdmin)
-    return { success: false, error: "Nur Admins können den Status ändern." };
+  if (!user?.isAdmin) {
+    console.error(
+      "Ticket-Statusänderung fehlgeschlagen: Keine Admin-Berechtigung.",
+    );
+    return;
+  }
 
   const ticketId = Number(formData.get("ticketId") || 0);
   const status = String(formData.get("status") || "open");
-  if (!ticketId) return { success: false, error: "Ungültiges Ticket." };
+  if (!ticketId) {
+    console.error("Ticket-Statusänderung fehlgeschlagen: Ungültiges Ticket.");
+    return;
+  }
 
   await db
     .update(supportTickets)
@@ -165,7 +197,6 @@ export async function setTicketStatus(formData: FormData) {
     .where(eq(supportTickets.id, ticketId));
   revalidatePath("/tickets");
   revalidatePath("/admin");
-  return { success: true };
 }
 
 export async function getTicketMessagesServer(ticketId: number) {
