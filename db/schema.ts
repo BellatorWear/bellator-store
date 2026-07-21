@@ -363,6 +363,18 @@ export const customRoles = pgTable("custom_roles", {
   color: text("color").notNull().default("#a855f7"),
   sections: jsonb("sections").notNull().default([]), // AdminSectionId[]
   canEditPosts: boolean("can_edit_posts").notNull().default(false),
+  // Granulare Admin-Berechtigungen (v23), unabhängig von vollem isAdmin.
+  canManageDiscountCodes: boolean("can_manage_discount_codes").notNull().default(false),
+  canAssignRoles: boolean("can_assign_roles").notNull().default(false),
+  // Reserviert, bis es eine tatsächliche User-Löschfunktion gibt.
+  canDeleteUsers: boolean("can_delete_users").notNull().default(false),
+  // Team-Chat-Rechte (v23).
+  chatCanCreateChannels: boolean("chat_can_create_channels").notNull().default(true),
+  chatCanDeleteOthersMessages: boolean("chat_can_delete_others_messages").notNull().default(false),
+  chatCanKickMembers: boolean("chat_can_kick_members").notNull().default(false),
+  // Rang/Priorität (v23) - höher = mehr Gewicht. Steuert Anzeigereihenfolge
+  // und wer wen bei can_assign_roles überschreiben/befördern darf.
+  rank: integer("rank").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -6,15 +6,72 @@ import type { RoleConfig } from "./roles";
 
 type UserResult = { id: number; email: string; username: string | null; role: string | null };
 
+// Bewusst lokal statt geteilt - es gibt (noch) keine zentrale Modal-
+// Komponente im Projekt, jede Stelle baut ihren eigenen Bestätigungs-
+// Dialog im selben Look (schwarzer Overlay, roter Rahmen bei
+// destruktiven Aktionen), siehe z.B. app/chat/ChatClient.tsx.
+function ConfirmDeleteModal({
+  message,
+  loading,
+  onConfirm,
+  onCancel,
+}: {
+  message: string;
+  loading?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4" onClick={onCancel}>
+      <div className="bg-black border-[2px] border-red-800 w-full max-w-sm p-6 font-mono" onClick={(e) => e.stopPropagation()}>
+        <p className="text-xs text-zinc-300 uppercase tracking-widest leading-relaxed mb-6">{message}</p>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={loading}
+            className="flex-1 border border-zinc-700 text-zinc-300 py-2.5 text-[10px] uppercase tracking-widest font-bold hover:bg-white hover:text-black transition-all disabled:opacity-50"
+          >
+            Abbrechen
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={loading}
+            className="flex-1 border-[2px] border-red-700 text-red-500 py-2.5 text-[10px] uppercase tracking-widest font-bold hover:bg-red-700 hover:text-white transition-all disabled:opacity-50"
+          >
+            {loading ? "..." : "Löschen"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function sortByRank(list: RoleConfig[]): RoleConfig[] {
+  return [...list].sort((a, b) => b.rank - a.rank || a.name.localeCompare(b.name));
+}
+
 export default function RoleManager({ initialRoles }: { initialRoles: RoleConfig[] }) {
-  const [roles, setRoles] = useState<RoleConfig[]>(initialRoles);
+  const [roles, setRoles] = useState<RoleConfig[]>(sortByRank(initialRoles));
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
   const [user, setUser] = useState<UserResult | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
+  const [formMode, setFormMode] = useState<null | { mode: "create" } | { mode: "edit"; role: RoleConfig }>(null);
+  const [deletingRole, setDeletingRole] = useState<RoleConfig | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteErr, setDeleteErr] = useState("");
+
+  function upsertRole(role: RoleConfig) {
+    setRoles((prev) => {
+      const exists = prev.some((r) => r.name === role.name);
+      const next = exists ? prev.map((r) => (r.name === role.name ? role : r)) : [...prev, role];
+      return sortByRank(next);
+    });
+  }
 
   async function search(e: React.FormEvent) {
     e.preventDefault();
@@ -58,58 +115,102 @@ export default function RoleManager({ initialRoles }: { initialRoles: RoleConfig
     }
   }
 
-  async function handleDeleteRole(name: string) {
-    if (!confirm(`Rolle "${name}" wirklich löschen?`)) return;
-    setErr("");
-    setMsg("");
-    const fd = new FormData();
-    fd.append("name", name);
-    const res = await deleteRole(fd);
-    if (res?.error) { setErr(res.error); return; }
-    setRoles((prev) => prev.filter((r) => r.name !== name));
-    setMsg("✓ Rolle gelöscht.");
+  async function confirmDeleteRole() {
+    if (!deletingRole || deleteLoading) return;
+    setDeleteLoading(true);
+    setDeleteErr("");
+    try {
+      const fd = new FormData();
+      fd.append("name", deletingRole.name);
+      const res = await deleteRole(fd);
+      if (res?.error) { setDeleteErr(res.error); return; }
+      setRoles((prev) => prev.filter((r) => r.name !== deletingRole.name));
+      setDeletingRole(null);
+      setMsg("✓ Rolle gelöscht.");
+    } catch (e) {
+      console.error("Rolle löschen fehlgeschlagen:", e);
+      setDeleteErr("Fehler. Bitte nochmal versuchen.");
+    } finally {
+      setDeleteLoading(false);
+    }
   }
-
 
   return (
     <div className="space-y-4">
       <p className="text-[9px] text-zinc-600 leading-relaxed">
-        Rollen schalten feste Bereiche im Adminpanel frei. Nur volle Admins können Rollen vergeben oder erstellen.
+        Rollen schalten feste Bereiche im Adminpanel frei. Rang bestimmt die Reihenfolge und die Hierarchie
+        bei &quot;Rollen selbst vergeben&quot; - eine Rolle kann nur Rollen mit niedrigerem Rang zuweisen.
       </p>
 
       <div className="grid sm:grid-cols-2 gap-2">
-        {roles.map((r) => (
-          <div key={r.name} className="border border-zinc-800 p-2" style={{ borderLeftColor: r.color, borderLeftWidth: 3 }}>
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: r.color }}>{r.label}</p>
-              {r.name !== "admin" && (
-                <button type="button" onClick={() => handleDeleteRole(r.name)} className="text-[9px] text-zinc-600 hover:text-red-500 transition uppercase tracking-widest">
-                  Löschen
-                </button>
+        {roles.map((r) => {
+          const permTags = [
+            r.canEditPosts && "Posts bearbeiten",
+            r.canManageDiscountCodes && "Rabattcodes",
+            r.canAssignRoles && "Rollen vergeben",
+            r.canDeleteUsers && "User löschen (bald)",
+            !r.chatCanCreateChannels && "Keine Channels anlegen",
+            r.chatCanDeleteOthersMessages && "Chat-Moderation",
+            r.chatCanKickMembers && "Chat-Kick",
+          ].filter(Boolean) as string[];
+
+          return (
+            <div key={r.name} className="border border-zinc-800 p-2" style={{ borderLeftColor: r.color, borderLeftWidth: 3 }}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-widest truncate" style={{ color: r.color }}>{r.label}</p>
+                  <span className="text-[8px] text-zinc-600 border border-zinc-800 px-1 py-0.5 shrink-0" title="Rang">
+                    #{r.rank}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setFormMode({ mode: "edit", role: r })}
+                    className="text-[9px] text-zinc-600 hover:text-white transition uppercase tracking-widest"
+                  >
+                    Bearbeiten
+                  </button>
+                  {r.name !== "admin" && (
+                    <button
+                      type="button"
+                      onClick={() => { setDeleteErr(""); setDeletingRole(r); }}
+                      className="text-[9px] text-zinc-600 hover:text-red-500 transition uppercase tracking-widest"
+                    >
+                      Löschen
+                    </button>
+                  )}
+                </div>
+              </div>
+              <p className="text-[9px] text-zinc-500 mt-1 leading-relaxed">
+                {r.sections.length === 0 ? "Keine Bereiche" : r.sections.map((s) => ADMIN_SECTION_LABELS[s]).join(", ")}
+              </p>
+              {permTags.length > 0 && (
+                <p className="text-[9px] text-zinc-600 mt-1 leading-relaxed">
+                  {permTags.join(" · ")}
+                </p>
               )}
             </div>
-            <p className="text-[9px] text-zinc-500 mt-1 leading-relaxed">
-              {r.sections.length === 0 ? "Keine Bereiche" : r.sections.map((s) => ADMIN_SECTION_LABELS[s]).join(", ")}
-              {r.canEditPosts && " · darf Posts bearbeiten/löschen"}
-            </p>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      <button type="button" onClick={() => setShowCreate((v) => !v)}
-        className="text-[10px] uppercase tracking-widest border border-zinc-600 px-3 py-2 hover:bg-white hover:text-black transition-all font-bold">
-        {showCreate ? "Abbrechen" : "+ Neue Rolle erstellen"}
-      </button>
+      <div className="flex gap-2">
+        <button type="button" onClick={() => setFormMode((v) => (v?.mode === "create" ? null : { mode: "create" }))}
+          className="text-[10px] uppercase tracking-widest border border-zinc-600 px-3 py-2 hover:bg-white hover:text-black transition-all font-bold">
+          {formMode?.mode === "create" ? "Abbrechen" : "+ Neue Rolle erstellen"}
+        </button>
+      </div>
 
-      {showCreate && (
-        <RoleCreateForm
-          onCreated={(role) => {
-            setRoles((prev) => {
-              const exists = prev.some((r) => r.name === role.name);
-              return exists ? prev.map((r) => (r.name === role.name ? role : r)) : [...prev, role];
-            });
-            setShowCreate(false);
+      {formMode && (
+        <RoleForm
+          key={formMode.mode === "edit" ? formMode.role.name : "create"}
+          editing={formMode.mode === "edit" ? formMode.role : null}
+          onSaved={(role) => {
+            upsertRole(role);
+            setFormMode(null);
           }}
+          onCancel={() => setFormMode(null)}
         />
       )}
 
@@ -156,16 +257,47 @@ export default function RoleManager({ initialRoles }: { initialRoles: RoleConfig
           </div>
         </div>
       )}
+
+      {deletingRole && (
+        <ConfirmDeleteModal
+          message={`Rolle "${deletingRole.label}" wirklich löschen? Das kann nicht rückgängig gemacht werden.`}
+          loading={deleteLoading}
+          onConfirm={confirmDeleteRole}
+          onCancel={() => { if (!deleteLoading) setDeletingRole(null); }}
+        />
+      )}
+      {deleteErr && (
+        <ConfirmDeleteModal
+          message={deleteErr}
+          onConfirm={() => setDeleteErr("")}
+          onCancel={() => setDeleteErr("")}
+        />
+      )}
     </div>
   );
 }
 
-function RoleCreateForm({ onCreated }: { onCreated: (role: RoleConfig) => void }) {
-  const [name, setName] = useState("");
-  const [label, setLabel] = useState("");
-  const [color, setColor] = useState("#a855f7");
-  const [canEditPosts, setCanEditPosts] = useState(false);
-  const [sections, setSections] = useState<AdminSectionId[]>([]);
+function RoleForm({
+  editing,
+  onSaved,
+  onCancel,
+}: {
+  editing: RoleConfig | null;
+  onSaved: (role: RoleConfig) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(editing?.name ?? "");
+  const [label, setLabel] = useState(editing?.label ?? "");
+  const [color, setColor] = useState(editing?.color ?? "#a855f7");
+  const [rank, setRank] = useState(editing?.rank ?? 0);
+  const [canEditPosts, setCanEditPosts] = useState(editing?.canEditPosts ?? false);
+  const [canManageDiscountCodes, setCanManageDiscountCodes] = useState(editing?.canManageDiscountCodes ?? false);
+  const [canAssignRoles, setCanAssignRoles] = useState(editing?.canAssignRoles ?? false);
+  const [canDeleteUsers, setCanDeleteUsers] = useState(editing?.canDeleteUsers ?? false);
+  const [chatCanCreateChannels, setChatCanCreateChannels] = useState(editing?.chatCanCreateChannels ?? true);
+  const [chatCanDeleteOthersMessages, setChatCanDeleteOthersMessages] = useState(editing?.chatCanDeleteOthersMessages ?? false);
+  const [chatCanKickMembers, setChatCanKickMembers] = useState(editing?.chatCanKickMembers ?? false);
+  const [sections, setSections] = useState<AdminSectionId[]>(editing?.sections ?? []);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
@@ -183,13 +315,33 @@ function RoleCreateForm({ onCreated }: { onCreated: (role: RoleConfig) => void }
       fd.append("name", name.trim());
       fd.append("label", label.trim());
       fd.append("color", color);
+      fd.append("rank", String(rank));
       fd.append("canEditPosts", String(canEditPosts));
+      fd.append("canManageDiscountCodes", String(canManageDiscountCodes));
+      fd.append("canAssignRoles", String(canAssignRoles));
+      fd.append("canDeleteUsers", String(canDeleteUsers));
+      fd.append("chatCanCreateChannels", String(chatCanCreateChannels));
+      fd.append("chatCanDeleteOthersMessages", String(chatCanDeleteOthersMessages));
+      fd.append("chatCanKickMembers", String(chatCanKickMembers));
       sections.forEach((s) => fd.append("sections", s));
       const res = await createOrUpdateRole(fd);
       if (res?.error) { setErr(res.error); return; }
-      onCreated({ name: name.trim().toLowerCase(), label: label.trim(), color, sections, canEditPosts });
+      onSaved({
+        name: name.trim().toLowerCase(),
+        label: label.trim(),
+        color,
+        rank,
+        sections,
+        canEditPosts,
+        canManageDiscountCodes,
+        canAssignRoles,
+        canDeleteUsers,
+        chatCanCreateChannels,
+        chatCanDeleteOthersMessages,
+        chatCanKickMembers,
+      });
     } catch (e) {
-      console.error("Rolle erstellen fehlgeschlagen:", e);
+      console.error("Rolle speichern fehlgeschlagen:", e);
       setErr("Fehler. Bitte nochmal versuchen.");
     } finally {
       setSaving(false);
@@ -197,14 +349,21 @@ function RoleCreateForm({ onCreated }: { onCreated: (role: RoleConfig) => void }
   }
 
   return (
-    <form onSubmit={submit} className="border border-zinc-700 p-4 space-y-3">
+    <form onSubmit={submit} className="border border-zinc-700 p-4 space-y-4">
       {err && <p className="text-[10px] text-red-500 uppercase tracking-widest">{err}</p>}
+
       <div className="grid sm:grid-cols-2 gap-3">
         <div>
           <label className="text-[9px] text-zinc-500 uppercase tracking-widest block mb-1">Interner Name (a-z, 0-9, -, _)</label>
-          <input value={name} onChange={(e) => setName(e.target.value.toLowerCase())}
-            placeholder="z.B. support"
-            className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white placeholder:text-zinc-600" />
+          {editing ? (
+            <p className="text-sm text-zinc-400 p-2 border border-zinc-800 bg-zinc-950">
+              {name} <span className="text-[9px] text-zinc-600">(nicht änderbar)</span>
+            </p>
+          ) : (
+            <input value={name} onChange={(e) => setName(e.target.value.toLowerCase())}
+              placeholder="z.B. support"
+              className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white placeholder:text-zinc-600" />
+          )}
         </div>
         <div>
           <label className="text-[9px] text-zinc-500 uppercase tracking-widest block mb-1">Anzeigename</label>
@@ -214,10 +373,20 @@ function RoleCreateForm({ onCreated }: { onCreated: (role: RoleConfig) => void }
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <label className="text-[9px] text-zinc-500 uppercase tracking-widest">Farbe</label>
-        <input type="color" value={color} onChange={(e) => setColor(e.target.value)}
-          className="w-8 h-8 bg-transparent border border-zinc-700 cursor-pointer" />
+      <div className="grid sm:grid-cols-2 gap-3">
+        <div className="flex items-center gap-3">
+          <label className="text-[9px] text-zinc-500 uppercase tracking-widest">Farbe</label>
+          <input type="color" value={color} onChange={(e) => setColor(e.target.value)}
+            className="w-8 h-8 bg-transparent border border-zinc-700 cursor-pointer" />
+        </div>
+        <div>
+          <label className="text-[9px] text-zinc-500 uppercase tracking-widest block mb-1">
+            Rang <span className="text-zinc-700">(höher = mehr Gewicht, steuert Reihenfolge & Hierarchie)</span>
+          </label>
+          <input type="number" min={0} max={1000} value={rank}
+            onChange={(e) => setRank(Math.max(0, Math.min(1000, Number(e.target.value) || 0)))}
+            className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white" />
+        </div>
       </div>
 
       <div>
@@ -232,15 +401,56 @@ function RoleCreateForm({ onCreated }: { onCreated: (role: RoleConfig) => void }
         </div>
       </div>
 
-      <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
-        <input type="checkbox" checked={canEditPosts} onChange={(e) => setCanEditPosts(e.target.checked)} className="accent-white" />
-        Darf bestehende Posts (Startseite/Newsletter) bearbeiten & löschen, nicht nur neu anlegen
-      </label>
+      <div>
+        <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Admin-Berechtigungen</p>
+        <div className="space-y-1.5">
+          <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+            <input type="checkbox" checked={canEditPosts} onChange={(e) => setCanEditPosts(e.target.checked)} className="accent-white" />
+            Darf bestehende Posts (Startseite/Newsletter) bearbeiten & löschen, nicht nur neu anlegen
+          </label>
+          <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+            <input type="checkbox" checked={canManageDiscountCodes} onChange={(e) => setCanManageDiscountCodes(e.target.checked)} className="accent-white" />
+            Darf Rabattcodes verwalten (Erstbesteller- & Pre-Release-Codes)
+          </label>
+          <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+            <input type="checkbox" checked={canAssignRoles} onChange={(e) => setCanAssignRoles(e.target.checked)} className="accent-white" />
+            Darf Rollen an User vergeben (nur Rollen mit niedrigerem Rang, nie die Admin-Rolle)
+          </label>
+          <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer opacity-60">
+            <input type="checkbox" checked={canDeleteUsers} onChange={(e) => setCanDeleteUsers(e.target.checked)} className="accent-white" />
+            Darf User löschen <span className="text-zinc-600">(Schalter vorhanden, Funktion folgt noch)</span>
+          </label>
+        </div>
+      </div>
 
-      <button type="submit" disabled={!name.trim() || !label.trim() || saving}
-        className="w-full border border-white bg-white text-black py-2.5 text-[10px] uppercase tracking-widest font-black hover:bg-black hover:text-white transition-all disabled:opacity-40">
-        {saving ? "..." : "Rolle speichern"}
-      </button>
+      <div>
+        <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Team-Chat-Rechte</p>
+        <div className="space-y-1.5">
+          <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+            <input type="checkbox" checked={chatCanCreateChannels} onChange={(e) => setChatCanCreateChannels(e.target.checked)} className="accent-white" />
+            Darf neue Channels anlegen
+          </label>
+          <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+            <input type="checkbox" checked={chatCanDeleteOthersMessages} onChange={(e) => setChatCanDeleteOthersMessages(e.target.checked)} className="accent-white" />
+            Darf Nachrichten anderer löschen (Chat-Moderation)
+          </label>
+          <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+            <input type="checkbox" checked={chatCanKickMembers} onChange={(e) => setChatCanKickMembers(e.target.checked)} className="accent-white" />
+            Darf Mitglieder aus Channels entfernen
+          </label>
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <button type="button" onClick={onCancel} disabled={saving}
+          className="flex-1 border border-zinc-700 text-zinc-300 py-2.5 text-[10px] uppercase tracking-widest font-bold hover:bg-white hover:text-black transition-all disabled:opacity-50">
+          Abbrechen
+        </button>
+        <button type="submit" disabled={!name.trim() || !label.trim() || saving}
+          className="flex-1 border border-white bg-white text-black py-2.5 text-[10px] uppercase tracking-widest font-black hover:bg-black hover:text-white transition-all disabled:opacity-40">
+          {saving ? "..." : editing ? "Rolle aktualisieren" : "Rolle speichern"}
+        </button>
+      </div>
     </form>
   );
 }

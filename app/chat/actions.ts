@@ -9,7 +9,7 @@ import { sanitizeText, isSuspiciousInput } from "@/app/utils/inputSafety";
 import { getSetting } from "@/app/utils/settings";
 import { CHAT_ROLE_ACCESS_KEY } from "@/app/utils/settings";
 import { hasChatAccess, CHAT_ROLE_ACCESS_DEFAULT } from "@/app/admin/permissions";
-import { getAllRoles } from "@/app/admin/roles";
+import { getAllRoles, getRoleConfig } from "@/app/admin/roles";
 import { getPusherServer, channelEventName, userEventName } from "@/lib/pusher";
 import { sendPushToUser } from "@/app/utils/push";
 
@@ -460,6 +460,17 @@ export async function createChannel(formData: FormData): Promise<{ error?: strin
   const user = await requireChatUser();
   if (!user) return { error: "Keine Berechtigung." };
 
+  if (!user.isAdmin) {
+    const roleConfig = await getRoleConfig(user.role);
+    // Default true, falls die Rolle (noch) keine Konfiguration für dieses
+    // Flag hat - am bisherigen Verhalten (jeder mit Chat-Zugriff durfte
+    // Channels anlegen) ändert sich dadurch nichts, bis eine Rolle es
+    // explizit einschränkt.
+    if (roleConfig && !roleConfig.chatCanCreateChannels) {
+      return { error: "Deine Rolle darf keine Channels anlegen." };
+    }
+  }
+
   const nameRaw = ((formData.get("name") as string) ?? "").trim();
   if (!nameRaw) return { error: "Bitte einen Namen angeben." };
   if (isSuspiciousInput(nameRaw)) return { error: "Ungültiger Name." };
@@ -547,8 +558,12 @@ export async function deleteMessage(formData: FormData): Promise<{ error?: strin
   const rows = await db.select().from(chatMessages).where(eq(chatMessages.id, messageId));
   const message = rows[0];
   if (!message) return { error: "Nachricht nicht gefunden." };
-  // Nur die eigene Nachricht oder ein voller Admin darf löschen.
-  if (message.userId !== user.id && !user.isAdmin) return { error: "Keine Berechtigung." };
+  // Eigene Nachricht immer, sonst ein voller Admin oder eine Rolle mit
+  // explizitem Moderationsrecht (chat_can_delete_others_messages).
+  if (message.userId !== user.id && !user.isAdmin) {
+    const roleConfig = await getRoleConfig(user.role);
+    if (!roleConfig?.chatCanDeleteOthersMessages) return { error: "Keine Berechtigung." };
+  }
 
   await db.delete(chatMessages).where(eq(chatMessages.id, messageId));
 
@@ -601,10 +616,14 @@ export async function removeChannelMember(formData: FormData): Promise<{ error?:
   const channel = channelRows[0];
   if (!channel || channel.type !== "channel") return { error: "Ungültiger Channel." };
 
-  // Nur der Ersteller des Channels oder ein voller Admin darf Mitglieder
+  // Nur der Ersteller des Channels, ein voller Admin oder eine Rolle mit
+  // explizitem Kick-Recht (chat_can_kick_members) darf Mitglieder
   // entfernen - sonst könnte jedes Mitglied jedes andere rauswerfen.
   const isCreator = channel.createdBy === user.id;
-  if (!isCreator && !user.isAdmin) return { error: "Nur der Channel-Ersteller kann Mitglieder entfernen." };
+  if (!isCreator && !user.isAdmin) {
+    const roleConfig = await getRoleConfig(user.role);
+    if (!roleConfig?.chatCanKickMembers) return { error: "Nur der Channel-Ersteller kann Mitglieder entfernen." };
+  }
   if (targetUserId === channel.createdBy) return { error: "Der Ersteller kann nicht entfernt werden - Channel stattdessen verlassen lassen." };
 
   await db

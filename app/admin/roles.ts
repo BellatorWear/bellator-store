@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { customRoles } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import type { AdminSectionId } from "./permissions";
 
 export type RoleConfig = {
@@ -9,6 +9,16 @@ export type RoleConfig = {
   color: string;
   sections: AdminSectionId[];
   canEditPosts: boolean;
+  // Granulare Admin-Berechtigungen (v23).
+  canManageDiscountCodes: boolean;
+  canAssignRoles: boolean;
+  canDeleteUsers: boolean; // reserviert, greift noch nirgends
+  // Team-Chat-Rechte (v23).
+  chatCanCreateChannels: boolean;
+  chatCanDeleteOthersMessages: boolean;
+  chatCanKickMembers: boolean;
+  // Rang/Priorität (v23) - höher = mehr Gewicht.
+  rank: number;
 };
 
 function toRoleConfig(row: typeof customRoles.$inferSelect): RoleConfig {
@@ -18,13 +28,20 @@ function toRoleConfig(row: typeof customRoles.$inferSelect): RoleConfig {
     color: row.color,
     sections: Array.isArray(row.sections) ? (row.sections as AdminSectionId[]) : [],
     canEditPosts: row.canEditPosts,
+    canManageDiscountCodes: row.canManageDiscountCodes,
+    canAssignRoles: row.canAssignRoles,
+    canDeleteUsers: row.canDeleteUsers,
+    chatCanCreateChannels: row.chatCanCreateChannels,
+    chatCanDeleteOthersMessages: row.chatCanDeleteOthersMessages,
+    chatCanKickMembers: row.chatCanKickMembers,
+    rank: row.rank,
   };
 }
 
 // Alle im Adminpanel erstellten Rollen (inkl. der 3 Start-Rollen aus der
 // Migration) - für die Rollen-Zuteilung und die Rollen-Verwaltungsseite.
 export async function getAllRoles(): Promise<RoleConfig[]> {
-  const rows = await db.select().from(customRoles).orderBy(customRoles.id);
+  const rows = await db.select().from(customRoles).orderBy(desc(customRoles.rank), customRoles.id);
   return rows.map(toRoleConfig);
 }
 

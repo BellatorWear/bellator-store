@@ -6,7 +6,7 @@ import { del, list } from "@vercel/blob";
 import { getCurrentUser } from "@/app/actions";
 import { sanitizeText, isSuspiciousInput, sanitizeHtml } from "@/app/utils/inputSafety";
 import { ADMIN_SECTION_IDS, type AdminSectionId, type ChatRoleAccess } from "./permissions";
-import { hasSectionAsync, canEditPostsAsync } from "./roles";
+import { hasSectionAsync, canEditPostsAsync, getRoleConfig } from "./roles";
 import { isTrustedOrigin } from "@/app/utils/origin";
 import { setSetting, COUNTDOWN_KEY, EXCLUSIVE_CODE_KEY, CHAT_ROLE_ACCESS_KEY } from "@/app/utils/settings";
 import { sendPushToAll } from "@/app/utils/push";
@@ -37,6 +37,22 @@ async function requireAdmin() {
   const user = await getCurrentUser();
   if (!user || !user.isAdmin) return null;
   return user;
+}
+
+// Wie requireAdmin(), lässt aber zusätzlich Nicht-Admins mit einer Rolle
+// durch, die das übergebene Berechtigungs-Flag gesetzt hat (v23 granulare
+// Rollenattribute). Gibt bei can_assign_roles zusätzlich den Rang der Rolle
+// zurück, damit die aufrufende Funktion eine Hierarchie durchsetzen kann.
+type GrantablePermission = "canManageDiscountCodes" | "canAssignRoles";
+
+async function requireAdminOrPermission(flag: GrantablePermission) {
+  if (!(await isTrustedOrigin())) return null;
+  const user = await getCurrentUser();
+  if (!user) return null;
+  if (user.isAdmin) return { user, isFullAdmin: true as const, rank: Number.POSITIVE_INFINITY };
+  const roleConfig = await getRoleConfig(user.role);
+  if (!roleConfig?.[flag]) return null;
+  return { user, isFullAdmin: false as const, rank: roleConfig.rank };
 }
 
 // Für Team-Mitglieder mit eingeschränkter Rolle statt vollem Admin-Zugriff.
@@ -421,8 +437,8 @@ export async function deleteVariant(formData: FormData) {
 // Pre-Release-Zugangscodes
 // ===================================================================
 export async function createPreReleaseCode(formData: FormData) {
-  const admin = await requireAdmin();
-  if (!admin) return { error: "Keine Berechtigung." };
+  const actor = await requireAdminOrPermission("canManageDiscountCodes");
+  if (!actor) return { error: "Keine Berechtigung." };
 
   const codeRaw = ((formData.get("code") as string) ?? "").trim().toUpperCase();
   const maxUsesRaw = (formData.get("maxUsesPerAccount") as string) ?? "1";
@@ -446,8 +462,8 @@ export async function createPreReleaseCode(formData: FormData) {
 }
 
 export async function deletePreReleaseCode(formData: FormData) {
-  const admin = await requireAdmin();
-  if (!admin) return { error: "Keine Berechtigung." };
+  const actor = await requireAdminOrPermission("canManageDiscountCodes");
+  if (!actor) return { error: "Keine Berechtigung." };
 
   const id = Number(formData.get("id"));
   if (!id) return { error: "Ungültig." };
@@ -486,17 +502,40 @@ export async function checkBlobConnection() {
 // Admin-Suche: User per aktuellem ODER früherem Benutzernamen finden
 // ===================================================================
 export async function setUserRole(formData: FormData) {
-  const admin = await requireAdmin();
-  if (!admin) return { error: "Keine Berechtigung." };
+  const actor = await requireAdminOrPermission("canAssignRoles");
+  if (!actor) return { error: "Keine Berechtigung." };
 
   const userId = Number(formData.get("userId"));
   const roleRaw = (formData.get("role") as string) ?? "";
   if (!userId) return { error: "Ungültig." };
 
   const role = roleRaw.trim() === "" ? null : roleRaw;
+  let targetRoleRank = 0;
   if (role !== null) {
     const existingRoles = await db.select().from(customRoles).where(eq(customRoles.name, role));
     if (existingRoles.length === 0) return { error: "Ungültige Rolle (existiert nicht mehr)." };
+    targetRoleRank = existingRoles[0].rank;
+  }
+
+  // Rang-Hierarchie für Nicht-Admins mit can_assign_roles: nie die
+  // Admin-Rolle vergeben (das würde isAdmin unten mit hochsetzen - volle
+  // Privilege Escalation), nie eine Rolle auf oder über dem eigenen Rang
+  // vergeben, und nie einen User anfassen, der bereits vollen Admin-Status
+  // hat oder selbst auf/über dem eigenen Rang steht.
+  if (!actor.isFullAdmin) {
+    if (role === "admin") return { error: "Nur volle Admins können die Admin-Rolle vergeben." };
+    if (targetRoleRank >= actor.rank) {
+      return { error: "Du kannst keine Rolle vergeben, die auf deinem Rang liegt oder höher ist." };
+    }
+    const targetRows = await db.select().from(users).where(eq(users.id, userId));
+    const target = targetRows[0];
+    if (target?.isAdmin) return { error: "Du kannst einem vollen Admin die Rolle nicht ändern." };
+    if (target?.role) {
+      const targetCurrentRoleRows = await db.select().from(customRoles).where(eq(customRoles.name, target.role));
+      if (targetCurrentRoleRows[0] && targetCurrentRoleRows[0].rank >= actor.rank) {
+        return { error: "Dieser User steht auf oder über deinem eigenen Rang - du kannst seine Rolle nicht ändern." };
+      }
+    }
   }
 
   // Sicherheitsnetz: der letzte verbleibende Admin darf sich nicht selbst
@@ -514,8 +553,10 @@ export async function setUserRole(formData: FormData) {
 }
 
 export async function searchUserByUsername(formData: FormData) {
-  const admin = await requireAdmin();
-  if (!admin) return { error: "Keine Berechtigung." };
+  // Auch für Nicht-Admins mit can_assign_roles offen, sonst könnten sie in
+  // der Rollen-Vergabe nie einen User finden, dem sie eine Rolle geben wollen.
+  const actor = await requireAdminOrPermission("canAssignRoles");
+  if (!actor) return { error: "Keine Berechtigung." };
 
   const raw = ((formData.get("username") as string) ?? "").trim();
   if (!raw) return { error: "Bitte Email oder Benutzernamen eingeben." };
@@ -603,8 +644,8 @@ export async function saveCountdownSetting(formData: FormData) {
 // Exklusive Rabattcodes für die ersten N Bestellungen
 // ===================================================================
 export async function saveExclusiveCodeSetting(formData: FormData) {
-  const admin = await requireAdmin();
-  if (!admin) return { error: "Keine Berechtigung." };
+  const actor = await requireAdminOrPermission("canManageDiscountCodes");
+  if (!actor) return { error: "Keine Berechtigung." };
 
   const enabled = formData.get("enabled") === "true";
   const firstNOrders = parseInt((formData.get("firstNOrders") as string) ?? "0", 10) || 0;
@@ -925,6 +966,10 @@ export async function setUserTeamMembership(formData: FormData) {
 // Dynamische Rollen erstellen/bearbeiten/löschen
 // ===================================================================
 export async function createOrUpdateRole(formData: FormData) {
+  // Rollen-Definitionen selbst (anlegen/bearbeiten) bleiben bewusst
+  // vollen Admins vorbehalten - can_assign_roles erlaubt nur, eine
+  // bestehende Rolle einem User zuzuweisen, nicht die Rollen selbst zu
+  // gestalten.
   const admin = await requireAdmin();
   if (!admin) return { error: "Keine Berechtigung." };
 
@@ -932,6 +977,14 @@ export async function createOrUpdateRole(formData: FormData) {
   const labelRaw = ((formData.get("label") as string) ?? "").trim();
   const color = ((formData.get("color") as string) ?? "#a855f7").trim();
   const canEditPostsValue = formData.get("canEditPosts") === "true";
+  const canManageDiscountCodesValue = formData.get("canManageDiscountCodes") === "true";
+  const canAssignRolesValue = formData.get("canAssignRoles") === "true";
+  const canDeleteUsersValue = formData.get("canDeleteUsers") === "true";
+  const chatCanCreateChannelsValue = formData.get("chatCanCreateChannels") === "true";
+  const chatCanDeleteOthersMessagesValue = formData.get("chatCanDeleteOthersMessages") === "true";
+  const chatCanKickMembersValue = formData.get("chatCanKickMembers") === "true";
+  const rankRaw = Number(formData.get("rank"));
+  const rank = Number.isInteger(rankRaw) ? Math.max(0, Math.min(1000, rankRaw)) : 0;
   const sectionsRaw = formData.getAll("sections") as string[];
 
   if (!nameRaw || !/^[a-z0-9_-]+$/.test(nameRaw)) {
@@ -943,11 +996,25 @@ export async function createOrUpdateRole(formData: FormData) {
   const label = sanitizeText(labelRaw, 40);
   const sections = sectionsRaw.filter((s) => (ADMIN_SECTION_IDS as readonly string[]).includes(s));
 
+  const values = {
+    label,
+    color,
+    sections,
+    canEditPosts: canEditPostsValue,
+    canManageDiscountCodes: canManageDiscountCodesValue,
+    canAssignRoles: canAssignRolesValue,
+    canDeleteUsers: canDeleteUsersValue,
+    chatCanCreateChannels: chatCanCreateChannelsValue,
+    chatCanDeleteOthersMessages: chatCanDeleteOthersMessagesValue,
+    chatCanKickMembers: chatCanKickMembersValue,
+    rank,
+  };
+
   const existing = await db.select().from(customRoles).where(eq(customRoles.name, nameRaw));
   if (existing.length > 0) {
-    await db.update(customRoles).set({ label, color, sections, canEditPosts: canEditPostsValue }).where(eq(customRoles.name, nameRaw));
+    await db.update(customRoles).set(values).where(eq(customRoles.name, nameRaw));
   } else {
-    await db.insert(customRoles).values({ name: nameRaw, label, color, sections, canEditPosts: canEditPostsValue });
+    await db.insert(customRoles).values({ name: nameRaw, ...values });
   }
   return { success: true };
 }
