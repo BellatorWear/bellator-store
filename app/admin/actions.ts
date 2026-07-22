@@ -12,6 +12,7 @@ import { setSetting, COUNTDOWN_KEY, EXCLUSIVE_CODE_KEY, CHAT_ROLE_ACCESS_KEY } f
 import { sendPushToAll } from "@/app/utils/push";
 import { sendNewsletterEmailToAll } from "@/app/utils/newsletterMail";
 import { syncTeamChannelMembership } from "@/app/chat/team";
+import { notifyRestockSubscribers } from "@/app/shop/restock";
 
 const MAX_IMAGES_PER_PRODUCT = 4;
 
@@ -416,6 +417,41 @@ export async function addVariant(formData: FormData) {
     label,
     stock: stock !== null && stock >= 0 ? stock : null,
   });
+
+  return { success: true };
+}
+
+// War bisher komplett unmöglich: eine bestehende Variante bekam nach dem
+// Anlegen nie wieder einen neuen Stock-Wert (nur addVariant beim Anlegen,
+// sonst nur runter über den Stripe-Webhook bei Verkäufen). Ohne diese
+// Funktion könnte "Restock" nie tatsächlich passieren und die
+// Notify-Me-Emails würden nie auslösen.
+export async function updateVariantStock(formData: FormData) {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
+
+  const variantId = Number(formData.get("variantId"));
+  const stockRaw = formData.get("stock") as string;
+  if (!variantId) return { error: "Ungültige Variante." };
+
+  const [existing] = await db.select().from(productVariants).where(eq(productVariants.id, variantId));
+  if (!existing) return { error: "Variante nicht gefunden." };
+
+  const wasSoldOut = existing.stock !== null && existing.stock <= 0;
+  const newStock = stockRaw && stockRaw !== "" ? parseInt(stockRaw, 10) : null;
+  if (newStock !== null && Number.isNaN(newStock)) return { error: "Ungültiger Wert." };
+  const stock = newStock !== null && newStock >= 0 ? newStock : null;
+  const isNowAvailable = stock === null || stock > 0;
+
+  await db.update(productVariants).set({ stock }).where(eq(productVariants.id, variantId));
+
+  if (wasSoldOut && isNowAvailable && existing.productId) {
+    try {
+      await notifyRestockSubscribers(existing.productId, variantId);
+    } catch (e) {
+      console.error("Restock-Benachrichtigung fehlgeschlagen:", e);
+    }
+  }
 
   return { success: true };
 }

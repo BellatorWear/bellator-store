@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { updateProduct, deleteProduct, addVariant, deleteVariant, addColor, deleteColor } from "./actions";
+import { updateProduct, deleteProduct, addVariant, deleteVariant, addColor, deleteColor, updateVariantStock } from "./actions";
 import ConfirmDialog from "./ConfirmDialog";
 import PriceDisplay from "../shop/components/PriceDisplay";
 import SizeButtons, { type SizeItem } from "./SizeButtons";
@@ -261,6 +261,7 @@ export default function ProductRow({ product, variants, colors }: { product: Pro
           onAdd={handleAddSize}
           onRemove={handleRemoveSize}
         />
+        {variants.length > 0 && <VariantStockEditor variants={variants} />}
         <ColorButtons
           colors={colors}
           loading={variantBusy}
@@ -280,3 +281,61 @@ export default function ProductRow({ product, variants, colors }: { product: Pro
     </div>
   );
 }
+
+// Bisher gab's im gesamten Adminpanel keine Möglichkeit, den Stock einer
+// bestehenden Größe zu erhöhen (nur beim Anlegen setzen, danach sinkt er
+// nur noch durch Verkäufe). Kompakter Inline-Editor statt eigenem Modal,
+// da es nur ein Zahlenfeld pro Größe ist.
+function VariantStockEditor({ variants }: { variants: { id: number; label: string; stock: number | null }[] }) {
+  const router = useRouter();
+  const [values, setValues] = useState<Record<number, string>>(() =>
+    Object.fromEntries(variants.map((v) => [v.id, v.stock === null ? "" : String(v.stock)])),
+  );
+  const [savingId, setSavingId] = useState<number | null>(null);
+
+  async function save(variantId: number) {
+    setSavingId(variantId);
+    try {
+      const fd = new FormData();
+      fd.append("variantId", String(variantId));
+      fd.append("stock", values[variantId] ?? "");
+      const res = await updateVariantStock(fd);
+      if (res?.error) {
+        alert(res.error);
+        return;
+      }
+      router.refresh();
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[9px] text-zinc-600 uppercase tracking-widest">Lagerbestand (leer = unlimitiert)</p>
+      <div className="flex flex-wrap gap-2">
+        {variants.map((v) => (
+          <div key={v.id} className="flex items-center gap-1.5 border border-zinc-800 px-2 py-1.5">
+            <span className="text-[10px] text-zinc-500 uppercase">{v.label}</span>
+            <input
+              type="number"
+              min={0}
+              value={values[v.id] ?? ""}
+              onChange={(e) => setValues((prev) => ({ ...prev, [v.id]: e.target.value }))}
+              className="w-16 bg-zinc-950 border border-zinc-700 px-1.5 py-0.5 text-xs text-white"
+            />
+            <button
+              type="button"
+              onClick={() => save(v.id)}
+              disabled={savingId === v.id}
+              className="text-[9px] uppercase tracking-widest text-zinc-400 hover:text-white transition disabled:opacity-50"
+            >
+              {savingId === v.id ? "..." : "Speichern"}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+

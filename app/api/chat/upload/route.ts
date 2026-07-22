@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/app/actions";
 import { getSetting, CHAT_ROLE_ACCESS_KEY } from "@/app/utils/settings";
 import { hasChatAccess, CHAT_ROLE_ACCESS_DEFAULT } from "@/app/admin/permissions";
+import { fileContentMatchesDeclaredType } from "@/app/utils/fileSignature";
 
 const ALLOWED_TYPES = [
   "image/jpeg", "image/png", "image/webp", "image/avif", "image/gif",
@@ -41,6 +42,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
   if (file.size > MAX_SIZE) {
     return NextResponse.json({ error: `Datei zu groß (${(file.size / 1024 / 1024).toFixed(1)}MB, max. 4MB).` }, { status: 400 });
+  }
+  if (!(await fileContentMatchesDeclaredType(file))) {
+    return NextResponse.json({ error: "Dateiinhalt passt nicht zum angegebenen Dateityp." }, { status: 400 });
   }
 
   // Blob-Store "bellator-store-blob" wurde mit Custom-Prefix BLOB2 statt

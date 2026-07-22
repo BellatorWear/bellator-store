@@ -415,6 +415,18 @@ export const customRoles = pgTable("custom_roles", {
 // ===================================================================
 // Support-/Entwicklungs-Tickets (v25)
 // ===================================================================
+// "Notify Me" bei Ausverkauf - wer benachrichtigt werden will, wenn ein
+// Produkt/eine Variante wieder verfügbar ist.
+export const restockNotifications = pgTable("restock_notifications", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  variantId: integer("variant_id").references(() => productVariants.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  userId: integer("user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  notifiedAt: timestamp("notified_at"),
+});
+
 export const supportTickets = pgTable("support_tickets", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id),

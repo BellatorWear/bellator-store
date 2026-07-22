@@ -5,6 +5,7 @@ import Link from "next/link";
 import { addToCart } from "@/app/cart";
 import { updateProduct } from "@/app/admin/actions";
 import PriceDisplay from "@/app/shop/components/PriceDisplay";
+import { subscribeRestock } from "@/app/shop/restock";
 
 type Variant = { id: number; label: string; stock: number | null };
 type Color = { id: number; name: string; hexColor: string; frontImage: string; backImage: string };
@@ -267,11 +268,73 @@ export default function ProductDetailClient({
                   className="w-full py-3 t-btn-primary font-black uppercase tracking-widest transition text-sm disabled:opacity-50">
                   {soldOut || variantSoldOut ? "Ausverkauft" : added ? "✓ Hinzugefügt" : loading ? "..." : "Zum Warenkorb hinzufügen"}
                 </button>
+                {(soldOut || variantSoldOut) && (
+                  <NotifyMeForm productId={product.id} variantId={variantSoldOut ? variantId : null} />
+                )}
               </>
             )}
           </div>
         </div>
       </div>
     </main>
+  );
+}
+
+function NotifyMeForm({ productId, variantId }: { productId: number; variantId: number | null }) {
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [err, setErr] = useState("");
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (state === "loading") return;
+    setState("loading");
+    setErr("");
+    try {
+      const fd = new FormData();
+      fd.append("productId", String(productId));
+      if (variantId) fd.append("variantId", String(variantId));
+      fd.append("email", email.trim());
+      const res = await subscribeRestock(fd);
+      if (res?.error) {
+        setErr(res.error);
+        setState("error");
+        return;
+      }
+      setState("done");
+    } catch {
+      setErr("Fehler. Bitte nochmal versuchen.");
+      setState("error");
+    }
+  }
+
+  if (state === "done") {
+    return (
+      <p className="text-xs text-green-500 uppercase tracking-widest text-center">
+        ✓ Wir sagen Bescheid, sobald es wieder da ist.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <form onSubmit={submit} className="flex gap-2">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Deine Email (weglassen wenn eingeloggt)"
+          className="flex-1 min-w-0 t-input border px-3 py-2.5 text-sm outline-none transition"
+        />
+        <button
+          type="submit"
+          disabled={state === "loading"}
+          className="border t-border px-4 py-2.5 text-xs uppercase tracking-widest font-bold hover:bg-white hover:text-black transition-all duration-200 active:scale-[0.97] disabled:opacity-50 shrink-0"
+        >
+          {state === "loading" ? "..." : "Benachrichtigen"}
+        </button>
+      </form>
+      {err && <p className="text-[10px] text-red-500 uppercase tracking-widest">{err}</p>}
+    </div>
   );
 }

@@ -9,6 +9,7 @@ import NewsletterToggle from "./NewsletterToggle";
 import UsernameEditor from "./UsernameEditor";
 import Link from "next/link";
 import ChangePasswordForm from "@/app/profil/ChangePasswordForm";
+import GdprExportButton from "./GdprExportButton";
 
 export default async function EinstellungenPage() {
   const user = await getCurrentUser();
@@ -71,6 +72,18 @@ export default async function EinstellungenPage() {
                 </div>
                 <NewsletterToggle initialEnabled={user.newsletterOptIn ?? false} />
               </div>
+            </section>
+
+            {/* Datenschutz */}
+            <section className="t-card border p-4 mb-6 space-y-3 break-inside-avoid-column">
+              <div>
+                <h2 className="text-xs font-bold uppercase tracking-widest t-muted">Datenschutz</h2>
+                <p className="text-xs t-faint mt-1">
+                  Lade eine Kopie aller Daten herunter, die wir über dich gespeichert haben (Account, Bestellungen,
+                  Punkte, Tickets u.a.) - Art. 15/20 DSGVO.
+                </p>
+              </div>
+              <GdprExportButton />
             </section>
 
             {/* Info */}

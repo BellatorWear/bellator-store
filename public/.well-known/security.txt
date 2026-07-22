@@ -1,0 +1,10 @@
+Contact: mailto:kontakt@mz-dev.de
+Contact: https://mz-dev.de/tickets
+Preferred-Languages: de, en
+Canonical: https://mz-dev.de/.well-known/security.txt
+Expires: 2027-01-01T00:00:00.000Z
+
+# Hast du eine Sicherheitslücke gefunden? Bitte melde sie uns direkt
+# statt sie öffentlich zu posten oder auszunutzen - wir kümmern uns
+# schnellstmöglich darum. Per Mail oder als Ticket (Kategorie
+# "Development"), beides geht an unser Team.
