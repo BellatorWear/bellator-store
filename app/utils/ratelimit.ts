@@ -132,6 +132,41 @@ export async function checkChatMessageRateLimit(
   }
 }
 
+// Rate Limiter gegen Code-Guessing (Rabatt-/Pre-Release-Codes im Checkout).
+// redeemCode() hatte bisher gar kein Limit - jemand hätte einfach
+// automatisiert tausende Codes durchprobieren können. 10 Versuche pro 5
+// Minuten sind für echte Tippfehler mehr als genug, bremsen aber Skripte
+// zuverlässig aus.
+export const redeemCodeRatelimit = new Ratelimit({
+  redis: redis,
+  limiter: Ratelimit.slidingWindow(10, "5 m"),
+  analytics: true,
+  prefix: "ratelimit:redeemcode",
+});
+
+export async function checkRedeemCodeRateLimit(): Promise<{
+  success: boolean;
+  remaining: number;
+  resetAfter: number;
+}> {
+  const ip = await getClientIP();
+  const identifier = `redeemcode:${ip}`;
+
+  try {
+    const { success, remaining, reset } = await redeemCodeRatelimit.limit(identifier);
+    return {
+      success,
+      remaining: Math.max(0, remaining),
+      resetAfter: reset ? Math.max(0, reset - Date.now()) : 0,
+    };
+  } catch (error) {
+    console.error("Rate limit check failed:", error);
+    // Anders als Chat-Spam ist das hier ein echter Missbrauchsvektor
+    // (Code-Guessing) - im Zweifel lieber blockieren als durchlassen.
+    return { success: false, remaining: 0, resetAfter: 60000 };
+  }
+}
+
 /**
  * Prüfe allgemeinen Rate Limit
  */

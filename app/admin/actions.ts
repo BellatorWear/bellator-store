@@ -13,6 +13,7 @@ import { sendPushToAll } from "@/app/utils/push";
 import { sendNewsletterEmailToAll } from "@/app/utils/newsletterMail";
 import { syncTeamChannelMembership } from "@/app/chat/team";
 import { notifyRestockSubscribers } from "@/app/shop/restock";
+import { sendEmail } from "@/app/utils/email";
 
 const MAX_IMAGES_PER_PRODUCT = 4;
 
@@ -44,7 +45,7 @@ async function requireAdmin() {
 // durch, die das übergebene Berechtigungs-Flag gesetzt hat (v23 granulare
 // Rollenattribute). Gibt bei can_assign_roles zusätzlich den Rang der Rolle
 // zurück, damit die aufrufende Funktion eine Hierarchie durchsetzen kann.
-type GrantablePermission = "canManageDiscountCodes" | "canAssignRoles";
+type GrantablePermission = "canManageDiscountCodes" | "canAssignRoles" | "canDeleteUsers";
 
 async function requireAdminOrPermission(flag: GrantablePermission) {
   if (!(await isTrustedOrigin())) return null;
@@ -537,6 +538,72 @@ export async function checkBlobConnection() {
 // ===================================================================
 // Admin-Suche: User per aktuellem ODER früherem Benutzernamen finden
 // ===================================================================
+const DELETION_GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
+
+// War bisher nur ein Schalter im Rollen-Editor ohne jede Funktion
+// dahinter. Löscht nicht sofort, sondern:
+// 1) Account wird 7 Tage gesperrt (Login blockiert, alle laufenden
+//    Sessions sofort ungültig über den Versions-Zähler)
+// 2) User bekommt eine Email mit Einwandsfrist
+// 3) Bei Einwand (kommt derzeit als normale Antwort an
+//    kontakt@mz-dev.de rein) kann ein Admin die Löschung über
+//    cancelUserDeletion() wieder abbrechen
+// 4) Ohne Einwand räumt der tägliche Cron-Sweep (siehe
+//    app/api/account-deletion-sweep/route.ts) den Account nach Ablauf der
+//    Frist auf
+export async function requestUserDeletion(formData: FormData) {
+  const actor = await requireAdminOrPermission("canDeleteUsers");
+  if (!actor) return { error: "Keine Berechtigung." };
+
+  const userId = Number(formData.get("userId"));
+  if (!userId) return { error: "Ungültig." };
+
+  const [target] = await db.select().from(users).where(eq(users.id, userId));
+  if (!target) return { error: "User nicht gefunden." };
+  if (target.isAdmin) return { error: "Admin-Accounts können hier nicht gelöscht werden." };
+  if (target.pendingDeletionAt) return { error: "Für diesen Account läuft bereits eine Löschanfrage." };
+
+  const deletionDate = new Date(Date.now() + DELETION_GRACE_PERIOD_MS);
+
+  await db
+    .update(users)
+    .set({
+      pendingDeletionAt: deletionDate,
+      // Sperrt sofort alle laufenden Sessions dieses Accounts, nicht erst
+      // beim nächsten Ablauf des Tokens.
+      sessionVersion: (target.sessionVersion ?? 0) + 1,
+    })
+    .where(eq(users.id, userId));
+
+  const formattedDate = deletionDate.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+  await sendEmail({
+    to: target.email,
+    subject: "Löschanfrage für deinen Bellator-Account",
+    source: "account_deletion_notice",
+    html: `
+      <p>Hallo${target.username ? " " + target.username : ""},</p>
+      <p>für deinen Account wurde eine Löschung beantragt. Dein Account ist ab sofort gesperrt und wird am
+      <strong>${formattedDate}</strong> endgültig gelöscht, sofern wir bis dahin nichts von dir hören.</p>
+      <p>Falls das ein Irrtum ist oder du widersprechen möchtest, melde dich bitte bis zu diesem Datum bei
+      <strong>kontakt@mz-dev.de</strong> - wir brechen die Löschung dann ab.</p>
+    `,
+  }).catch((e) => console.error("Löschungs-Benachrichtigung fehlgeschlagen:", e));
+
+  return { success: true, deletionDate: deletionDate.toISOString() };
+}
+
+// Admin bricht eine laufende Löschanfrage ab (z.B. nach Einwand per Mail).
+export async function cancelUserDeletion(formData: FormData) {
+  const actor = await requireAdminOrPermission("canDeleteUsers");
+  if (!actor) return { error: "Keine Berechtigung." };
+
+  const userId = Number(formData.get("userId"));
+  if (!userId) return { error: "Ungültig." };
+
+  await db.update(users).set({ pendingDeletionAt: null }).where(eq(users.id, userId));
+  return { success: true };
+}
+
 export async function setUserRole(formData: FormData) {
   const actor = await requireAdminOrPermission("canAssignRoles");
   if (!actor) return { error: "Keine Berechtigung." };
@@ -589,9 +656,11 @@ export async function setUserRole(formData: FormData) {
 }
 
 export async function searchUserByUsername(formData: FormData) {
-  // Auch für Nicht-Admins mit can_assign_roles offen, sonst könnten sie in
-  // der Rollen-Vergabe nie einen User finden, dem sie eine Rolle geben wollen.
-  const actor = await requireAdminOrPermission("canAssignRoles");
+  // Auch für Nicht-Admins mit can_assign_roles ODER can_delete_users offen,
+  // sonst könnten sie nie einen User finden, dem sie eine Rolle geben bzw.
+  // dessen Löschung sie einleiten wollen.
+  const actor =
+    (await requireAdminOrPermission("canAssignRoles")) ?? (await requireAdminOrPermission("canDeleteUsers"));
   if (!actor) return { error: "Keine Berechtigung." };
 
   const raw = ((formData.get("username") as string) ?? "").trim();
@@ -649,6 +718,7 @@ export async function searchUserByUsername(formData: FormData) {
       emailVerified: user.emailVerified,
       createdAt: user.createdAt,
       mustSetPassword: user.mustSetPassword,
+      pendingDeletionAt: user.pendingDeletionAt,
     },
     history: history.map((h) => ({ username: h.username, changedAt: h.changedAt })),
   };

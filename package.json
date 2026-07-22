@@ -2,6 +2,10 @@
   "name": "bellator-store",
   "version": "0.1.0",
   "private": true,
+  "overrides": {
+    "postcss": "^8.5.10",
+    "sharp": "^0.35.0"
+  },
   "engines": {
     "node": "22.x"
   },

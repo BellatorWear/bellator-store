@@ -55,9 +55,9 @@ async function getCurrentSession() {
   return verifySessionToken(token);
 }
 
-async function setSessionCookie(userId: number, email: string) {
+async function setSessionCookie(userId: number, email: string, sessionVersion: number) {
   const cookieStore = await cookies();
-  const token = createSessionToken(userId, email);
+  const token = createSessionToken(userId, email, sessionVersion);
   cookieStore.set(SESSION_COOKIE_NAME, token, sessionCookieOptions());
 }
 
@@ -73,6 +73,13 @@ export async function getCurrentUser() {
     .where(eq(users.id, session.userId));
   if (result.length === 0) return null;
   const user = result[0];
+
+  // Session-Invalidierung: Token trägt einen alten Versionsstand (z.B.
+  // nach Passwortänderung auf einem anderen Gerät, oder weil der Account
+  // zwischenzeitlich gesperrt wurde) -> nicht mehr gültig, obwohl die
+  // Signatur technisch noch stimmt und das Ablaufdatum noch nicht erreicht ist.
+  if (session.sessionVersion !== (user.sessionVersion ?? 0)) return null;
+
   // Passwort-Hash niemals an den Client geben
   return {
     id: user.id,
@@ -204,7 +211,14 @@ export async function handleAction(
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return { error: "Ungültige Anmeldedaten." };
 
-    await setSessionCookie(user.id, user.email);
+    if (user.pendingDeletionAt && new Date(user.pendingDeletionAt) > new Date()) {
+      return {
+        error:
+          "Dieser Account ist derzeit gesperrt (ausstehende Löschanfrage). Bei Einwand bitte an kontakt@mz-dev.de wenden.",
+      };
+    }
+
+    await setSessionCookie(user.id, user.email, user.sessionVersion ?? 0);
 
     // Merken ob User noch Passwort setzen muss (sollte hier nicht der Fall sein, aber sicher ist sicher)
     if (user.mustSetPassword) {
@@ -258,6 +272,13 @@ export async function handleAction(
     if (userResult.length === 0) return { error: "Account nicht gefunden." };
     const user = userResult[0];
 
+    if (user.pendingDeletionAt && new Date(user.pendingDeletionAt) > new Date()) {
+      return {
+        error:
+          "Dieser Account ist derzeit gesperrt (ausstehende Löschanfrage). Bei Einwand bitte an kontakt@mz-dev.de wenden.",
+      };
+    }
+
     // Key als benutzt markieren (nicht löschen, für Audit Trail)
     await db
       .update(accessKeys)
@@ -273,7 +294,7 @@ export async function handleAction(
         .where(eq(users.id, user.id));
     }
 
-    await setSessionCookie(user.id, user.email);
+    await setSessionCookie(user.id, user.email, user.sessionVersion ?? 0);
 
     return {
       success: true,
@@ -506,7 +527,13 @@ export async function handleAction(
     if (!valid) return { error: "Aktuelles Passwort ist falsch." };
 
     const passwordHash = await bcrypt.hash(newPassword, 12);
-    await db.update(users).set({ passwordHash }).where(eq(users.id, user.id));
+    const newSessionVersion = (user.sessionVersion ?? 0) + 1;
+    await db.update(users).set({ passwordHash, sessionVersion: newSessionVersion }).where(eq(users.id, user.id));
+
+    // Alte Sessions (andere Geräte/Browser) werden durch den erhöhten
+    // Versionszähler sofort ungültig. Dieses Gerät bekommt direkt ein
+    // frisches Token mit dem neuen Stand, bleibt also eingeloggt.
+    await setSessionCookie(user.id, user.email, newSessionVersion);
 
     return { success: "Passwort wurde geändert." };
   }

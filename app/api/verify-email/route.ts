@@ -55,10 +55,17 @@ export async function GET(req: NextRequest) {
   }
   const user = userResult[0];
 
+  if (user.pendingDeletionAt && new Date(user.pendingDeletionAt) > new Date()) {
+    return NextResponse.json(
+      { error: "Dieser Account ist derzeit gesperrt (ausstehende Löschanfrage). Bei Einwand bitte an kontakt@mz-dev.de wenden." },
+      { status: 403 },
+    );
+  }
+
   // Signierte Session setzen (statt eines unsignierten "authorized"-Strings,
   // der von jedem Browser selbst gesetzt werden konnte)
   const cookieStore = await cookies();
-  const sessionToken = createSessionToken(user.id, user.email);
+  const sessionToken = createSessionToken(user.id, user.email, user.sessionVersion ?? 0);
   cookieStore.set(SESSION_COOKIE_NAME, sessionToken, sessionCookieOptions());
 
   return NextResponse.json({

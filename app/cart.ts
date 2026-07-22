@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { getCartOwnerKey, initCartCookie } from "./utils/cartOwner";
 import { getCurrentUser } from "./actions";
 import { isTrustedOrigin } from "./utils/origin";
+import { checkRedeemCodeRateLimit } from "./utils/ratelimit";
 
 const CART_MAX_AGE_HOURS = 24;
 
@@ -244,6 +245,12 @@ export async function createCheckoutSession() {
  */
 export async function redeemCode(formData: FormData) {
   if (!(await isTrustedOrigin())) return { error: "Anfrage abgelehnt." };
+
+  const rateLimit = await checkRedeemCodeRateLimit();
+  if (!rateLimit.success) {
+    return { error: `Zu viele Versuche - kurz warten (${Math.ceil(rateLimit.resetAfter / 1000)}s).` };
+  }
+
   const code = ((formData.get("code") as string) ?? "").trim();
   if (!code) return { error: "Bitte einen Code eingeben." };
 

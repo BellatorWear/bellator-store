@@ -1,10 +1,10 @@
 "use client";
 import { useState } from "react";
-import { searchUserByUsername, setUserRole, createOrUpdateRole, deleteRole } from "./actions";
+import { searchUserByUsername, setUserRole, createOrUpdateRole, deleteRole, requestUserDeletion, cancelUserDeletion } from "./actions";
 import { ADMIN_SECTION_IDS, ADMIN_SECTION_LABELS, type AdminSectionId } from "./permissions";
 import type { RoleConfig } from "./roles";
 
-type UserResult = { id: number; email: string; username: string | null; role: string | null };
+type UserResult = { id: number; email: string; username: string | null; role: string | null; pendingDeletionAt: string | Date | null };
 
 // Bewusst lokal statt geteilt - es gibt (noch) keine zentrale Modal-
 // Komponente im Projekt, jede Stelle baut ihren eigenen Bestätigungs-
@@ -64,6 +64,9 @@ export default function RoleManager({ initialRoles }: { initialRoles: RoleConfig
   const [deletingRole, setDeletingRole] = useState<RoleConfig | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteErr, setDeleteErr] = useState("");
+  const [confirmingUserDeletion, setConfirmingUserDeletion] = useState(false);
+  const [userActionLoading, setUserActionLoading] = useState(false);
+  const [userActionErr, setUserActionErr] = useState("");
 
   function upsertRole(role: RoleConfig) {
     setRoles((prev) => {
@@ -85,7 +88,7 @@ export default function RoleManager({ initialRoles }: { initialRoles: RoleConfig
       fd.append("username", query.trim());
       const res = await searchUserByUsername(fd);
       if (res?.error) { setErr(res.error); return; }
-      if (res?.success) setUser({ id: res.user.id, email: res.user.email, username: res.user.username, role: res.user.role ?? null });
+      if (res?.success) setUser({ id: res.user.id, email: res.user.email, username: res.user.username, role: res.user.role ?? null, pendingDeletionAt: res.user.pendingDeletionAt ?? null });
     } catch (e) {
       console.error("User-Suche fehlgeschlagen:", e);
       setErr("Fehler. Bitte nochmal versuchen.");
@@ -114,6 +117,46 @@ export default function RoleManager({ initialRoles }: { initialRoles: RoleConfig
       setSaving(false);
     }
   }
+
+  async function confirmUserDeletion() {
+    if (!user || userActionLoading) return;
+    setUserActionLoading(true);
+    setUserActionErr("");
+    try {
+      const fd = new FormData();
+      fd.append("userId", String(user.id));
+      const res = await requestUserDeletion(fd);
+      if (res?.error) { setUserActionErr(res.error); return; }
+      setUser({ ...user, pendingDeletionAt: res.deletionDate ?? new Date().toISOString() });
+      setConfirmingUserDeletion(false);
+      setMsg("✓ Löschanfrage gestartet - Account gesperrt, Email mit Einwandsfrist verschickt.");
+    } catch (e) {
+      console.error("Löschanfrage fehlgeschlagen:", e);
+      setUserActionErr("Fehler. Bitte nochmal versuchen.");
+    } finally {
+      setUserActionLoading(false);
+    }
+  }
+
+  async function handleCancelUserDeletion() {
+    if (!user || userActionLoading) return;
+    setUserActionLoading(true);
+    setUserActionErr("");
+    try {
+      const fd = new FormData();
+      fd.append("userId", String(user.id));
+      const res = await cancelUserDeletion(fd);
+      if (res?.error) { setUserActionErr(res.error); return; }
+      setUser({ ...user, pendingDeletionAt: null });
+      setMsg("✓ Löschanfrage abgebrochen, Account wieder freigeschaltet.");
+    } catch (e) {
+      console.error("Abbrechen fehlgeschlagen:", e);
+      setUserActionErr("Fehler. Bitte nochmal versuchen.");
+    } finally {
+      setUserActionLoading(false);
+    }
+  }
+
 
   async function confirmDeleteRole() {
     if (!deletingRole || deleteLoading) return;
@@ -255,7 +298,37 @@ export default function RoleManager({ initialRoles }: { initialRoles: RoleConfig
               </button>
             ))}
           </div>
+
+          <div className="pt-3 border-t border-zinc-800">
+            {user.pendingDeletionAt ? (
+              <div className="space-y-2">
+                <p className="text-[10px] text-red-500 uppercase tracking-widest">
+                  ⚠ Gesperrt - Löschung geplant für{" "}
+                  {new Date(user.pendingDeletionAt).toLocaleDateString("de-DE")}
+                </p>
+                <button type="button" onClick={handleCancelUserDeletion} disabled={userActionLoading}
+                  className="text-[10px] border border-zinc-600 text-zinc-300 px-3 py-1.5 uppercase tracking-widest hover:bg-white hover:text-black transition disabled:opacity-50">
+                  {userActionLoading ? "..." : "Löschung abbrechen"}
+                </button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => { setUserActionErr(""); setConfirmingUserDeletion(true); }}
+                className="text-[10px] border border-red-900 text-red-500 px-3 py-1.5 uppercase tracking-widest hover:bg-red-700 hover:text-white transition">
+                Account löschen (7-Tage-Frist)
+              </button>
+            )}
+            {userActionErr && <p className="text-[10px] text-red-500 uppercase tracking-widest mt-2">{userActionErr}</p>}
+          </div>
         </div>
+      )}
+
+      {confirmingUserDeletion && (
+        <ConfirmDeleteModal
+          message={`Löschung für "${user?.username ?? user?.email}" einleiten? Der Account wird sofort gesperrt (7 Tage Frist), eine Email mit Einwandsmöglichkeit geht an ${user?.email}.`}
+          loading={userActionLoading}
+          onConfirm={confirmUserDeletion}
+          onCancel={() => { if (!userActionLoading) setConfirmingUserDeletion(false); }}
+        />
       )}
 
       {deletingRole && (

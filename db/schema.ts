@@ -39,6 +39,18 @@ export const users = pgTable("users", {
   // Team-Attribut: bei Rollenzuteilung anklickbar, sorgt für automatische
   // Mitgliedschaft im globalen Team-Channel (siehe app/chat/team.ts).
   isTeam: boolean("is_team").default(false),
+  // Session-Invalidierung (v27): wird bei Passwortänderung und beim
+  // Sperren/Löschen hochgezählt. Ein Session-Token mit altem Wert wird
+  // sofort ungültig, egal wie lange sein Ablaufdatum noch läuft.
+  sessionVersion: integer("session_version").notNull().default(0),
+  // Löschanfrage (v27): 7-Tage-Frist bis zur tatsächlichen Löschung/
+  // Anonymisierung. Solange gesetzt und in der Zukunft, ist der Account
+  // gesperrt (kein Login möglich). Admin kann bei Einwand abbrechen.
+  pendingDeletionAt: timestamp("pending_deletion_at"),
+  // Zeitpunkt der tatsächlichen Anonymisierung (durch den Cron-Sweep
+  // gesetzt), damit ein bereits anonymisierter Account nicht nochmal
+  // angefasst wird.
+  anonymizedAt: timestamp("anonymized_at"),
 });
 
 export const emailVerifications = pgTable("email_verifications", {

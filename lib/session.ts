@@ -13,6 +13,13 @@ import crypto from "crypto";
  * Jetzt wird der Cookie-Inhalt kryptographisch signiert (HMAC-SHA256) und
  * enthält die User-ID + Email. Ohne den Server-Secret kann niemand einen
  * gültigen Cookie selbst bauen.
+ *
+ * sessionVersion (v27): da die Session stateless signiert ist (kein DB-
+ * Eintrag), lässt sie sich sonst nicht vor Ablauf invalidieren - z.B. bei
+ * Passwortänderung oder Account-Sperrung bliebe ein bereits ausgestelltes
+ * Token bis zu 7 Tage gültig. Der Zähler in users.session_version wird bei
+ * so einem Ereignis hochgezählt; ein Token mit altem Wert wird in
+ * getCurrentUser() beim DB-Abgleich sofort verworfen.
  */
 
 const COOKIE_NAME = "bellator-session";
@@ -34,6 +41,7 @@ export type SessionPayload = {
   userId: number;
   email: string;
   iat: number; // issued at, ms since epoch
+  sessionVersion: number;
 };
 
 function sign(payloadB64: string): string {
@@ -43,8 +51,8 @@ function sign(payloadB64: string): string {
     .digest("base64url");
 }
 
-export function createSessionToken(userId: number, email: string): string {
-  const payload: SessionPayload = { userId, email, iat: Date.now() };
+export function createSessionToken(userId: number, email: string, sessionVersion: number): string {
+  const payload: SessionPayload = { userId, email, iat: Date.now(), sessionVersion };
   const payloadB64 = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const signature = sign(payloadB64);
   return `${payloadB64}.${signature}`;
@@ -78,7 +86,8 @@ export function verifySessionToken(
     if (
       typeof payload.userId !== "number" ||
       typeof payload.email !== "string" ||
-      typeof payload.iat !== "number"
+      typeof payload.iat !== "number" ||
+      typeof payload.sessionVersion !== "number"
     ) {
       return null;
     }
