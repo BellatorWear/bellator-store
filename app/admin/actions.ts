@@ -14,6 +14,7 @@ import { sendNewsletterEmailToAll } from "@/app/utils/newsletterMail";
 import { syncTeamChannelMembership } from "@/app/chat/team";
 import { notifyRestockSubscribers } from "@/app/shop/restock";
 import { sendEmail } from "@/app/utils/email";
+import { logAuditEvent } from "@/app/utils/auditLog";
 
 const MAX_IMAGES_PER_PRODUCT = 4;
 
@@ -280,6 +281,7 @@ export async function deleteProduct(formData: FormData) {
   await db.delete(productVariants).where(eq(productVariants.productId, id));
   await db.delete(productColors).where(eq(productColors.productId, id));
   await db.delete(products).where(eq(products.id, id));
+  await logAuditEvent("product.delete", { targetType: "product", targetId: id, details: { name: existing[0]?.name } });
 
   // Zugehörige Bilder im Blob-Store auch löschen, sonst sammeln sich dort
   // verwaiste Dateien an (kostet Speicherplatz).
@@ -495,6 +497,7 @@ export async function createPreReleaseCode(formData: FormData) {
     return { error: "Dieser Code existiert schon." };
   }
 
+  await logAuditEvent("prerelease_code.create", { targetType: "prerelease_code", targetId: codeRaw, details: { maxUsesPerAccount } });
   return { success: true };
 }
 
@@ -506,6 +509,7 @@ export async function deletePreReleaseCode(formData: FormData) {
   if (!id) return { error: "Ungültig." };
   await db.delete(preReleaseRedemptions).where(eq(preReleaseRedemptions.codeId, id));
   await db.delete(preReleaseCodes).where(eq(preReleaseCodes.id, id));
+  await logAuditEvent("prerelease_code.delete", { targetType: "prerelease_code", targetId: id });
   return { success: true };
 }
 
@@ -589,6 +593,8 @@ export async function requestUserDeletion(formData: FormData) {
     `,
   }).catch((e) => console.error("Löschungs-Benachrichtigung fehlgeschlagen:", e));
 
+  await logAuditEvent("user.delete_requested", { targetType: "user", targetId: userId, details: { email: target.email, deletionDate: deletionDate.toISOString() } });
+
   return { success: true, deletionDate: deletionDate.toISOString() };
 }
 
@@ -601,6 +607,7 @@ export async function cancelUserDeletion(formData: FormData) {
   if (!userId) return { error: "Ungültig." };
 
   await db.update(users).set({ pendingDeletionAt: null }).where(eq(users.id, userId));
+  await logAuditEvent("user.delete_cancelled", { targetType: "user", targetId: userId });
   return { success: true };
 }
 
@@ -652,6 +659,7 @@ export async function setUserRole(formData: FormData) {
   }
 
   await db.update(users).set({ role, isAdmin: role === "admin" }).where(eq(users.id, userId));
+  await logAuditEvent("role.assign", { targetType: "user", targetId: userId, details: { role } });
   return { success: true };
 }
 
@@ -1119,8 +1127,10 @@ export async function createOrUpdateRole(formData: FormData) {
   const existing = await db.select().from(customRoles).where(eq(customRoles.name, nameRaw));
   if (existing.length > 0) {
     await db.update(customRoles).set(values).where(eq(customRoles.name, nameRaw));
+    await logAuditEvent("role.update", { targetType: "role", targetId: nameRaw, details: values });
   } else {
     await db.insert(customRoles).values({ name: nameRaw, ...values });
+    await logAuditEvent("role.create", { targetType: "role", targetId: nameRaw, details: values });
   }
   return { success: true };
 }
@@ -1139,5 +1149,6 @@ export async function deleteRole(formData: FormData) {
   }
 
   await db.delete(customRoles).where(eq(customRoles.name, name));
+  await logAuditEvent("role.delete", { targetType: "role", targetId: name });
   return { success: true };
 }

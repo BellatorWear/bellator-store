@@ -17,6 +17,7 @@ import {
   usernameHistory,
   preReleaseCodes,
   preReleaseRedemptions,
+  passwordResetTokens,
 } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { sanitizeText, isSuspiciousInput } from "./utils/inputSafety";
@@ -44,6 +45,7 @@ type ActionResponse = {
   guestName?: string;
   code?: string | null;
   message?: string;
+  alreadyRegistered?: boolean;
 };
 
 // Liest die aktuell eingeloggte, verifizierte Session aus dem Cookie.
@@ -324,6 +326,16 @@ export async function handleAction(
 
     if (!resend) return { error: "E-Mail Dienst nicht konfiguriert." };
 
+    // "Registrieren" ist im UI ein eigener, expliziter Einstiegspunkt
+    // (getrennt von Login/Access-Key) - wer sich mit einer bereits voll
+    // eingerichteten Email "registriert", soll das klar erfahren statt
+    // stillschweigend einen neuen Zugangs-Link zu bekommen, der wie eine
+    // Neuanmeldung aussieht.
+    const alreadyRegistered = await db.select().from(users).where(eq(users.email, email));
+    if (alreadyRegistered.length > 0 && alreadyRegistered[0].passwordHash) {
+      return { error: "Diese Email ist bereits registriert.", alreadyRegistered: true };
+    }
+
     try {
       // Token erstellen (15 Minuten gültig)
       const token = generateToken();
@@ -536,6 +548,126 @@ export async function handleAction(
     await setSessionCookie(user.id, user.email, newSessionVersion);
 
     return { success: "Passwort wurde geändert." };
+  }
+
+  // --- PASSWORT VERGESSEN: Link anfordern ---
+  if (actionType === "forgotPassword") {
+    const email = ((formData.get("email") as string) ?? "").trim().toLowerCase();
+    if (!email) return { error: "Ungültige Eingabe" };
+    if (email.length > 254) return { error: "Ungültige E-Mail Adresse" };
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) return { error: "Ungültige E-Mail Adresse" };
+
+    const rateLimit = await checkEmailRateLimit(email);
+    if (!rateLimit.success) {
+      return {
+        error: "Zu viele Anfragen für diese E-Mail. Bitte später erneut versuchen.",
+        retryAfter: rateLimit.resetAfter,
+      };
+    }
+
+    // Immer dieselbe Erfolgsmeldung, egal ob die Email existiert - sonst
+    // ließe sich über die Antwort erraten, welche Emails registriert sind
+    // (User-Enumeration).
+    const genericSuccess = {
+      success: "Falls ein Account mit dieser Email existiert, wurde eine Email zum Zurücksetzen verschickt.",
+    };
+
+    const existing = await db.select().from(users).where(eq(users.email, email));
+    // Kein Account, oder noch nie ein Passwort gesetzt (dann ist der
+    // normale "Zugang anfordern"-Weg der richtige, kein Reset nötig).
+    if (existing.length === 0 || !existing[0].passwordHash) return genericSuccess;
+    if (!resend) return { error: "E-Mail Dienst nicht konfiguriert." };
+
+    const token = generateToken();
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+    await db.delete(passwordResetTokens).where(eq(passwordResetTokens.email, email));
+    await db.insert(passwordResetTokens).values({ email, token, expiresAt });
+
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://mz-dev.de";
+    const resetLink = `${baseUrl}/passwort-zuruecksetzen?token=${token}`;
+
+    try {
+      await resend.emails.send({
+        from: "Bellator <noreply@mz-dev.de>",
+        to: email,
+        subject: "Bellator Store — Passwort zurücksetzen",
+        html: `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8">
+              <style>
+                body { font-family: 'Courier New', monospace; background: #000; color: #e0e0e0; margin: 0; padding: 0; }
+                .container { max-width: 600px; margin: 0 auto; padding: 40px 20px; }
+                .header { border-bottom: 3px solid white; padding-bottom: 20px; margin-bottom: 30px; }
+                .header h1 { margin: 0; font-size: 32px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.15em; color: white; }
+                .content { line-height: 1.6; color: #e0e0e0; }
+                .cta { display: inline-block; background: white; color: black !important; padding: 14px 32px; text-decoration: none; font-weight: bold; text-transform: uppercase; letter-spacing: 0.1em; margin: 20px 0; font-family: 'Courier New', monospace; }
+                .note { font-size: 11px; color: #666; margin-top: 10px; }
+                .footer { margin-top: 40px; padding-top: 20px; font-size: 11px; color: #555; border-top: 1px solid #222; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="header"><h1>BELLATOR.</h1></div>
+                <div class="content">
+                  <p>Hey,</p>
+                  <p>für deinen Account wurde ein Passwort-Reset angefordert. Klick auf den Button unten, um ein neues Passwort zu setzen.</p>
+                  <p style="text-align:center; margin: 30px 0;">
+                    <a href="${resetLink}" class="cta">Neues Passwort setzen</a>
+                  </p>
+                  <p class="note">⏱ Dieser Link ist 30 Minuten gültig.</p>
+                  <p class="note">Warst du das nicht? Dann kannst du diese Email einfach ignorieren - an deinem Account ändert sich nichts.</p>
+                </div>
+                <div class="footer">
+                  <p>© ${new Date().getFullYear()} Bellator Streetwear. Alle Rechte vorbehalten.</p>
+                </div>
+              </div>
+            </body>
+          </html>
+        `,
+      });
+    } catch (e) {
+      console.error("Passwort-Reset-Email fehlgeschlagen:", e);
+      return { error: "Email konnte nicht verschickt werden. Bitte später erneut versuchen." };
+    }
+
+    return genericSuccess;
+  }
+
+  // --- PASSWORT VERGESSEN: neues Passwort mit Token setzen ---
+  if (actionType === "resetPasswordWithToken") {
+    const token = ((formData.get("token") as string) ?? "").trim();
+    const newPassword = (formData.get("newPassword") as string) ?? "";
+    if (!token) return { error: "Ungültiger Link." };
+    if (newPassword.length < 8) return { error: "Passwort muss mindestens 8 Zeichen haben." };
+    if (newPassword.length > 72) return { error: "Passwort darf höchstens 72 Zeichen lang sein." };
+
+    const rows = await db.select().from(passwordResetTokens).where(eq(passwordResetTokens.token, token));
+    const record = rows[0];
+    if (!record || record.used) return { error: "Link ungültig oder bereits verwendet." };
+    if (new Date() > record.expiresAt) return { error: "Link abgelaufen. Bitte neu anfordern." };
+
+    const userRows = await db.select().from(users).where(eq(users.email, record.email));
+    const user = userRows[0];
+    if (!user) return { error: "Account nicht gefunden." };
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    const newSessionVersion = (user.sessionVersion ?? 0) + 1;
+    await db
+      .update(users)
+      .set({ passwordHash, sessionVersion: newSessionVersion, mustSetPassword: false })
+      .where(eq(users.id, user.id));
+    await db.update(passwordResetTokens).set({ used: true }).where(eq(passwordResetTokens.id, record.id));
+
+    // Setzt gleich ein, damit man nach dem Reset nicht nochmal separat
+    // einloggen muss - und zählt die Session-Version hoch, invalidiert
+    // also gleichzeitig jede Session, die mit dem alten (evtl.
+    // kompromittierten) Passwort noch offen war.
+    await setSessionCookie(user.id, user.email, newSessionVersion);
+
+    return { success: true };
   }
 
   // --- LOGOUT ---

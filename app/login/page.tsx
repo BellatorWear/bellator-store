@@ -67,6 +67,11 @@ function LoginForm() {
               {showPw ? <EyeOff size={16}/> : <Eye size={16}/>}
             </button>
           </div>
+          <div className="text-right -mt-2">
+            <a href={`/passwort-vergessen${nextQuery}`} className="text-[10px] text-white/50 uppercase tracking-widest hover:text-white transition">
+              Passwort vergessen?
+            </a>
+          </div>
           <button type="submit" disabled={loading}
             className="w-full border-2 border-white py-3 font-black text-xs uppercase tracking-widest text-white hover:bg-white hover:text-black transition-all disabled:opacity-50">
             {loading ? "..." : "Einloggen"}

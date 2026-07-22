@@ -62,6 +62,35 @@ export const emailVerifications = pgTable("email_verifications", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Getrennt von email_verifications, weil dieser Token-Typ bewusst erlaubt,
+// ein bereits gesetztes Passwort zu überschreiben (setPassword() lehnt das
+// für normale Magic-Links explizit ab, siehe app/actions.ts) - andere
+// Semantik verdient eine eigene Tabelle statt eines Flags, das die
+// Bedeutung von email_verifications verwässern würde.
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  used: boolean("used").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Admin-Audit-Log: wer hat wann was gemacht. actor_label ist ein
+// Snapshot von Username/Email zum Zeitpunkt der Aktion (nicht live über
+// actor_user_id nachgeschlagen), damit der Log auch nach einer späteren
+// Löschung/Anonymisierung des Actor-Accounts noch lesbar bleibt.
+export const auditLog = pgTable("audit_log", {
+  id: serial("id").primaryKey(),
+  actorUserId: integer("actor_user_id").references(() => users.id, { onDelete: "set null" }),
+  actorLabel: text("actor_label").notNull(),
+  action: text("action").notNull(), // z.B. "role.assign", "user.delete_requested"
+  targetType: text("target_type"), // z.B. "user", "product", "role"
+  targetId: text("target_id"),
+  details: jsonb("details"), // beliebige zusätzliche Infos, z.B. { from: "...", to: "..." }
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const accessKeys = pgTable("access_keys", {
   id: serial("id").primaryKey(),
   key: text("key").notNull().unique(),

@@ -33,6 +33,8 @@ import { publishDueScheduledPosts } from "@/app/utils/publishScheduled";
 import RoleManager from "./RoleManager";
 import TeamChatAccess from "./TeamChatAccess";
 import TicketManager from "./TicketManager";
+import AuditLogViewer from "./AuditLogViewer";
+import { getAuditLog } from "@/app/utils/auditLog";
 import { CHAT_ROLE_ACCESS_DEFAULT, type AdminSectionId } from "./permissions";
 import { getAllRoles, getRoleConfig } from "./roles";
 import {
@@ -114,6 +116,8 @@ export default async function AdminPage() {
       .from(supportTickets)
       .orderBy(desc(supportTickets.updatedAt), desc(supportTickets.createdAt)),
   ]);
+
+  const auditEntries = user.isAdmin ? await getAuditLog(300) : [];
 
   const userCount = userCountResult.length;
   const viewCount = viewCountResult.length;
@@ -310,6 +314,13 @@ export default async function AdminPage() {
             "Alle privaten Tickets aus Support, Development und Kontakt im Überblick",
           keywords: ["ticket", "support", "entwicklung", "kontakt", "admin"],
           content: <TicketManager tickets={allTickets} />,
+        },
+        {
+          id: "audit-log",
+          title: "Audit-Log",
+          description: "Wer hat wann welche sicherheitsrelevante Aktion im Adminpanel ausgeführt",
+          keywords: ["audit", "log", "protokoll", "sicherheit", "verlauf"],
+          content: <AuditLogViewer entries={auditEntries} />,
         },
       ],
     },
