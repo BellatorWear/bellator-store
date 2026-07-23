@@ -243,12 +243,15 @@ input[type="file"].hidden {
   display: none;
 }
 
-/* Gemeinsamer Hintergrund für alle Seiten mit background.webp. Wichtig:
-   background-attachment: fixed NUR auf Desktop - auf Mobile (v.a. iOS
-   Safari) sorgt "fixed" beim Scrollen für ein ruckelndes/eingezoomt
-   wirkendes Hintergrundbild, weil der Browser die Viewport-Höhe wegen der
-   ein-/ausblendenden Adressleiste laufend neu berechnet. Auf Mobile bleibt
-   es daher beim Standard (scroll), das Bild bewegt sich normal mit. */
+/* Gemeinsamer Hintergrund für alle Seiten mit background.webp. Auf
+   Desktop reicht background-attachment: fixed direkt (unverändert). Auf
+   Mobile (v.a. iOS Safari) sorgt dasselbe Property beim Scrollen für ein
+   ruckelndes/eingezoomt wirkendes Bild, weil der Browser die
+   Viewport-Höhe wegen der ein-/ausblendenden Adressleiste laufend neu
+   berechnet. Optisch soll sich das Bild trotzdem nicht mitbewegen -
+   deshalb dort stattdessen ein "position: fixed"-Element im Hintergrund
+   (::before), das denselben stehenbleibenden Effekt ganz ohne das
+   Scroll-Ruckeln erzielt. */
 .site-bg {
   background-image: url("/background.webp");
   background-size: cover;
@@ -264,6 +267,16 @@ input[type="file"].hidden {
    gleicher Breakpoint wie oben, damit beide Regeln synchron bleiben. */
 @media (max-width: 639px) {
   .site-bg {
+    background-image: none;
+    position: relative;
+  }
+  .site-bg::before {
+    content: "";
+    position: fixed;
+    inset: 0;
     background-image: url("/mobile-background.webp");
+    background-size: cover;
+    background-position: center;
+    z-index: -1;
   }
 }
