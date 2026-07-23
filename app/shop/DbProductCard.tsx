@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { addToCart } from "@/app/cart";
@@ -26,14 +26,40 @@ export default function DbProductCard({ product, variants, colors = [], isPreRel
   const [loading, setLoading] = useState(false);
   const [added, setAdded] = useState(false);
   const [err, setErr] = useState("");
+  const [imageIndex, setImageIndex] = useState(0);
+  const touchStartX = useRef<number | null>(null);
   const router = useRouter();
 
   const remaining = product.dropLimit ? product.dropLimit - (product.soldCount ?? 0) : null;
   const soldOut = remaining !== null && remaining <= 0;
-  const selectedColor = colors.find((c) => c.id === colorId);
-  // Bevorzugt das Bild der ausgewählten Farbe, sonst Fallback auf das
-  // generische Bilder-Array (für Produkte ohne Farb-System).
-  const displayImage = selectedColor?.frontImage ?? (product.images && product.images[0]);
+  // Hauptbild(er) des Produkts selbst - unabhängig von der Farbauswahl.
+  // War vorher fälschlich an die (immer standardmäßig erste) Farbe
+  // gekoppelt, dadurch wurde nie das eigentliche Hauptbild gezeigt.
+  const images = product.images && product.images.length > 0 ? product.images : [];
+  const displayImage = images[imageIndex] ?? images[0];
+
+  function showPrev(e: React.MouseEvent | React.TouchEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setImageIndex((i) => (i - 1 + images.length) % images.length);
+  }
+  function showNext(e: React.MouseEvent | React.TouchEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setImageIndex((i) => (i + 1) % images.length);
+  }
+
+  function handleTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX;
+  }
+  function handleTouchEnd(e: React.TouchEvent) {
+    if (touchStartX.current === null || images.length < 2) return;
+    const delta = e.changedTouches[0].clientX - touchStartX.current;
+    touchStartX.current = null;
+    const SWIPE_THRESHOLD = 40;
+    if (delta > SWIPE_THRESHOLD) setImageIndex((i) => (i - 1 + images.length) % images.length);
+    else if (delta < -SWIPE_THRESHOLD) setImageIndex((i) => (i + 1) % images.length);
+  }
 
   async function handleAdd() {
     if (loading) return;
@@ -81,11 +107,48 @@ export default function DbProductCard({ product, variants, colors = [], isPreRel
       </div>
 
       {displayImage && (
-        <Link href={`/shop/produkt/${product.slug}`} className="t-bg mb-5 overflow-hidden border t-border-s block">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={displayImage} alt={product.name}
-            className="w-full h-auto block grayscale hover:grayscale-0 transition-all duration-300" />
-        </Link>
+        <div
+          className="relative group t-bg mb-5 overflow-hidden border t-border-s"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          <Link href={`/shop/produkt/${product.slug}`} className="block">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={displayImage} alt={product.name}
+              className="w-full h-auto block grayscale hover:grayscale-0 transition-all duration-300" />
+          </Link>
+          {images.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={showPrev}
+                aria-label="Voriges Bild"
+                className="absolute left-0 top-0 h-full w-10 flex items-center justify-start pl-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gradient-to-r from-black/30 to-transparent"
+              >
+                <span
+                  className="block w-0 h-0"
+                  style={{ borderTop: "8px solid transparent", borderBottom: "8px solid transparent", borderRight: "10px solid white" }}
+                />
+              </button>
+              <button
+                type="button"
+                onClick={showNext}
+                aria-label="Nächstes Bild"
+                className="absolute right-0 top-0 h-full w-10 flex items-center justify-end pr-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gradient-to-l from-black/30 to-transparent"
+              >
+                <span
+                  className="block w-0 h-0"
+                  style={{ borderTop: "8px solid transparent", borderBottom: "8px solid transparent", borderLeft: "10px solid white" }}
+                />
+              </button>
+              <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                {images.map((_, i) => (
+                  <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === imageIndex ? "bg-white" : "bg-white/40"}`} />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       )}
 
       <Link href={`/shop/produkt/${product.slug}`} className="block hover:opacity-80 transition">

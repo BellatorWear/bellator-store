@@ -104,6 +104,7 @@ export async function getCurrentUser() {
     // lieber einmal zu viel zum Passwort-Setzen auffordern als einen
     // Account ganz ohne Passwort durchrutschen zu lassen.
     mustSetPassword: user.mustSetPassword ?? true,
+    bannerUrl: user.bannerUrl ?? null,
   };
 }
 

@@ -8,6 +8,7 @@ import { eq, and } from "drizzle-orm";
 import LogoutButton from "./LogoutButton";
 import ChangePasswordForm from "./ChangePasswordForm";
 import DeleteAccountButton from "./DeleteAccountButton";
+import BannerSection from "./BannerSection";
 
 export default async function Page() {
   const user = await getCurrentUser();
@@ -64,6 +65,8 @@ export default async function Page() {
             <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter mb-1">Mein Profil</h1>
             <p className="text-xs t-muted uppercase tracking-widest">Account verwalten</p>
           </div>
+
+          <BannerSection bannerUrl={user.bannerUrl} />
 
           {/* Accountdaten */}
           <section className="t-card border p-5 sm:p-6 mb-6 space-y-3 break-inside-avoid-column">

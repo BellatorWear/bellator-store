@@ -51,6 +51,9 @@ export const users = pgTable("users", {
   // gesetzt), damit ein bereits anonymisierter Account nicht nochmal
   // angefasst wird.
   anonymizedAt: timestamp("anonymized_at"),
+  // Selbst gestaltetes Profilbanner (v29) - PNG-Export aus dem
+  // Graffiti-Editor, als Blob-URL gespeichert.
+  bannerUrl: text("banner_url"),
 });
 
 export const emailVerifications = pgTable("email_verifications", {
