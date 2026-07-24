@@ -2,6 +2,8 @@ import { put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/app/actions";
 import { fileContentMatchesDeclaredType } from "@/app/utils/fileSignature";
+import { isTrustedOrigin } from "@/app/utils/origin";
+import { checkGeneralRateLimit } from "@/app/utils/ratelimit";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"];
 const MAX_SIZE = 4 * 1024 * 1024; // 4 MB - bewusst unter Vercels 4.5MB-Funktionslimit
@@ -14,9 +16,16 @@ const MAX_SIZE = 4 * 1024 * 1024; // 4 MB - bewusst unter Vercels 4.5MB-Funktion
 // einer client-seitigen Direktverbindung zu Blob-Storage, die von CSP,
 // Token-Konfiguration und Store-Verknüpfung gleichzeitig abhängt.
 export async function POST(request: Request): Promise<NextResponse> {
+  if (!(await isTrustedOrigin())) {
+    return NextResponse.json({ error: "Anfrage abgelehnt." }, { status: 403 });
+  }
   const user = await getCurrentUser();
   if (!user || !user.isAdmin) {
     return NextResponse.json({ error: "Keine Berechtigung." }, { status: 401 });
+  }
+  const rateLimit = await checkGeneralRateLimit();
+  if (!rateLimit.success) {
+    return NextResponse.json({ error: "Zu viele Anfragen - kurz warten." }, { status: 429 });
   }
 
   let formData: FormData;

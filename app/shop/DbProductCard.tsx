@@ -32,10 +32,20 @@ export default function DbProductCard({ product, variants, colors = [], isPreRel
 
   const remaining = product.dropLimit ? product.dropLimit - (product.soldCount ?? 0) : null;
   const soldOut = remaining !== null && remaining <= 0;
-  // Hauptbild(er) des Produkts selbst - unabhängig von der Farbauswahl.
-  // War vorher fälschlich an die (immer standardmäßig erste) Farbe
-  // gekoppelt, dadurch wurde nie das eigentliche Hauptbild gezeigt.
-  const images = product.images && product.images.length > 0 ? product.images : [];
+  // Hauptbild(er) des Produkts selbst - unabhängig von der Farbauswahl,
+  // WENN product.images gepflegt ist. Store-weit ist das Feld aber oft
+  // leer, weil die eigentlichen Fotos meist nur auf den Farben liegen
+  // (frontImage/backImage) - kompletter Verzicht auf den Farb-Fallback
+  // hat deshalb bei den meisten Produkten zu gar keinem Bild mehr geführt.
+  // Reihenfolge jetzt: product.images zuerst (falls gepflegt), sonst
+  // Fallback auf die Fotos der ausgewählten bzw. ersten Farbe.
+  const selectedColor = colors.find((c) => c.id === colorId) ?? colors[0];
+  const images: string[] =
+    product.images && product.images.length > 0
+      ? product.images
+      : selectedColor
+        ? [selectedColor.frontImage, selectedColor.backImage].filter((img): img is string => Boolean(img))
+        : [];
   const displayImage = images[imageIndex] ?? images[0];
 
   function showPrev(e: React.MouseEvent | React.TouchEvent) {

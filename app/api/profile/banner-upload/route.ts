@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/app/actions";
 import { fileContentMatchesDeclaredType } from "@/app/utils/fileSignature";
 import { checkGeneralRateLimit } from "@/app/utils/ratelimit";
+import { isTrustedOrigin } from "@/app/utils/origin";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const MAX_SIZE = 4 * 1024 * 1024; // 4 MB - Vercel Function Body Limit
@@ -11,6 +12,9 @@ const MAX_SIZE = 4 * 1024 * 1024; // 4 MB - Vercel Function Body Limit
 // nur Admins/Chat-Zugriff) - Fotos fürs eigene Profilbanner, und der
 // finale gemalte Banner-Export selbst (PNG aus dem Canvas).
 export async function POST(request: Request): Promise<NextResponse> {
+  if (!(await isTrustedOrigin())) {
+    return NextResponse.json({ error: "Anfrage abgelehnt." }, { status: 403 });
+  }
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Nicht eingeloggt." }, { status: 401 });
 

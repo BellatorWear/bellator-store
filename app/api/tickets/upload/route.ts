@@ -2,6 +2,8 @@ import { put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/app/actions";
 import { fileContentMatchesDeclaredType } from "@/app/utils/fileSignature";
+import { isTrustedOrigin } from "@/app/utils/origin";
+import { checkGeneralRateLimit } from "@/app/utils/ratelimit";
 
 // Bisher gab es hier gar keine Typ-Prüfung (nur Größe) - Liste an die
 // anderen Upload-Routen angeglichen (chat/admin-upload-attachment).
@@ -14,9 +16,16 @@ const ALLOWED_TYPES = [
 ];
 
 export async function POST(request: Request): Promise<NextResponse> {
+  if (!(await isTrustedOrigin())) {
+    return NextResponse.json({ error: "Anfrage abgelehnt." }, { status: 403 });
+  }
   const user = await getCurrentUser();
   if (!user)
     return NextResponse.json({ error: "Nicht eingeloggt." }, { status: 401 });
+  const rateLimit = await checkGeneralRateLimit();
+  if (!rateLimit.success) {
+    return NextResponse.json({ error: "Zu viele Anfragen - kurz warten." }, { status: 429 });
+  }
 
   const formData = await request.formData();
   const file = formData.get("file");
