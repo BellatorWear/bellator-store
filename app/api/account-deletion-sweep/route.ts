@@ -17,8 +17,15 @@ import { and, lte, isNull, isNotNull, eq } from "drizzle-orm";
 // (Email, Username, Passwort) bei gleichzeitigem Erhalt der Bestellhistorie
 // unter einer anonymisierten Kennung.
 export async function GET(req: NextRequest) {
+  // Fail closed: fehlt CRON_SECRET, wird abgelehnt statt (wie vorher)
+  // die Prüfung stillschweigend zu überspringen - sonst wäre die Route
+  // komplett offen, sobald die Env-Var mal vergessen wird zu setzen.
+  if (!process.env.CRON_SECRET) {
+    console.error("CRON_SECRET ist nicht gesetzt - Account-Löschungs-Sweep wird abgelehnt.");
+    return NextResponse.json({ error: "Server-Konfigurationsfehler." }, { status: 500 });
+  }
   const authHeader = req.headers.get("authorization");
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

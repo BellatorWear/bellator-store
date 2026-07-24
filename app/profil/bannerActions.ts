@@ -9,7 +9,22 @@ import { revalidatePath } from "next/cache";
 export async function saveProfileBanner(bannerUrl: string): Promise<{ error?: string; success?: boolean }> {
   const user = await getCurrentUser();
   if (!user) return { error: "Bitte einloggen." };
-  if (!bannerUrl.startsWith("https://") || !bannerUrl.includes(".public.blob.vercel-storage.com/")) {
+
+  let parsed: URL;
+  try {
+    parsed = new URL(bannerUrl);
+  } catch {
+    return { error: "Ungültige Banner-URL." };
+  }
+  // Nicht nur "irgendeine" öffentliche Blob-URL im Store akzeptieren
+  // (sonst könnte man sich fremde Uploads - z.B. das Foto eines anderen
+  // Users - einfach als eigenes Banner eintragen), sondern nur eine, die
+  // tatsächlich unter dem eigenen banner-upload-Präfix liegt.
+  if (
+    parsed.protocol !== "https:" ||
+    !parsed.hostname.endsWith(".public.blob.vercel-storage.com") ||
+    !parsed.pathname.includes(`/banners/${user.id}-`)
+  ) {
     return { error: "Ungültige Banner-URL." };
   }
 
