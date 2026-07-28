@@ -265,11 +265,22 @@ export async function redeemCode(formData: FormData) {
       .from(preReleaseRedemptions)
       .where(and(eq(preReleaseRedemptions.codeId, prc.id), eq(preReleaseRedemptions.userId, user.id)));
 
+    // Schneller Vorab-Check nur für eine freundliche Fehlermeldung im
+    // Normalfall - die eigentliche, race-sichere Durchsetzung des Limits
+    // passiert über den DB-Trigger (siehe migrations/add_v31), der auch
+    // bei gleichzeitigen Einlösungen desselben Codes korrekt zählt.
     if (prc.maxUsesPerAccount !== null && ownUses.length >= (prc.maxUsesPerAccount ?? 1)) {
       return { error: "Dieser Code wurde mit diesem Account bereits maximal oft eingelöst." };
     }
 
-    await db.insert(preReleaseRedemptions).values({ codeId: prc.id, userId: user.id });
+    try {
+      await db.insert(preReleaseRedemptions).values({ codeId: prc.id, userId: user.id });
+    } catch (e) {
+      if (e instanceof Error && e.message.includes("PRERELEASE_LIMIT_EXCEEDED")) {
+        return { error: "Dieser Code wurde mit diesem Account bereits maximal oft eingelöst." };
+      }
+      throw e;
+    }
     return { success: true, type: "prerelease" as const };
   }
 

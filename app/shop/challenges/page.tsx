@@ -7,8 +7,12 @@ import RedeemRewardButton from "./RedeemRewardButton";
 
 // Alle Challenge-Typen werden automatisch geprüft (über Stripe-Webhook,
 // Login, Einstellungen etc.). Es gibt keinen "Als erledigt markieren"-
-// Button mehr, weil Punkte direkt in Rabattcodes umwandelbar sind.
-// Die discord_join/review/referral Challenges sind per Migration deaktiviert.
+// Button mehr, weil Punkte direkt in Rabattcodes umwandelbar sind - eine
+// reine Selbstauskunft ohne serverseitige Prüfung hätte sich damit in
+// echten Gegenwert umwandeln lassen. Die discord_join/review/referral
+// Challenges sind aktuell per Migration deaktiviert UND der komplette
+// Server-Pfad dafür wurde entfernt (siehe app/actions.ts) - nicht nur
+// im UI versteckt.
 
 export default async function ChallengesPage() {
   const user = await getCurrentUser();

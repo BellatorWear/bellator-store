@@ -882,45 +882,21 @@ export async function handleAction(
     return { success: true };
   }
 
-  // --- CHALLENGE MANUELL ALS ERLEDIGT MARKIEREN ---
-  // Nur für Challenges, die wir nicht automatisch verifizieren können
-  // (z.B. "Discord beitreten" — wir haben keinen Bot, der das prüft).
-  if (actionType === "completeChallenge") {
-    const session = await getCurrentSession();
-    if (!session) return { error: "Nicht eingeloggt." };
-
-    const challengeId = Number(formData.get("challengeId"));
-    if (!challengeId) return { error: "Ungültige Challenge." };
-
-    const SELF_REPORT_TYPES = ["discord_join", "review", "referral"];
-
-    const found = await db
-      .select()
-      .from(challenges)
-      .where(eq(challenges.id, challengeId));
-    if (found.length === 0) return { error: "Challenge nicht gefunden." };
-    const challenge = found[0];
-
-    if (!SELF_REPORT_TYPES.includes(challenge.type)) {
-      return { error: "Diese Challenge wird automatisch erkannt." };
-    }
-
-    const already = await db
-      .select()
-      .from(userChallenges)
-      .where(
-        and(
-          eq(userChallenges.userId, session.userId),
-          eq(userChallenges.challengeId, challenge.id),
-        ),
-      );
-    if (already.length > 0) return { error: "Challenge bereits erledigt." };
-
-    const awarded = await awardChallengeByType(session.userId, challenge.type);
-    if (!awarded) return { error: "Challenge bereits erledigt." };
-
-    return { success: `+${awarded} Punkte erhalten!` };
-  }
+  // War: "Challenge manuell als erledigt markieren" für Typen, die wir
+  // nicht automatisch verifizieren (discord_join/review/referral) - reine
+  // Selbstauskunft ohne jede serverseitige Prüfung, jemand hätte sich
+  // damit einfach Punkte gutschreiben können, die sich in echte
+  // Rabattcodes/VIP-Zugang/physische Prämien umwandeln lassen (siehe
+  // redeemReward). Im UI schon lange nicht mehr verlinkt, aber der
+  // Server-Pfad war weiter direkt aufrufbar - komplett entfernt statt nur
+  // versteckt. Diese drei Challenge-Typen sind aktuell per Migration
+  // deaktiviert (challenges.active = false) und müssten für eine
+  // echte Wiedereinführung erst eine tatsächliche serverseitige
+  // Verifizierung bekommen (z.B. Discord-OAuth + Bot-Check für den
+  // Server-Beitritt, ein echtes On-Site-Review-System, ein Referral-Code
+  // mit Verifizierung über den geworbenen Account) - dann würde man sie
+  // wie first_order/theme_explorer/etc. über awardChallengeByType() an
+  // der Stelle des echten Ereignisses auslösen, nicht per Selbstauskunft.
 
   // --- PRÄMIE MIT PUNKTEN EINLÖSEN (kein echtes Geld) ---
   if (actionType === "redeemReward") {
