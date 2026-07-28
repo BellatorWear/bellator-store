@@ -139,6 +139,21 @@ export const orderItems = pgTable("order_items", {
   quantity: integer("quantity").notNull().default(1),
 });
 
+// Echte, kaufgebundene Produkt-Reviews (v32) - ersetzt die alte
+// Selbstauskunfts-"review"-Challenge. Jeder Review ist über order_id an
+// eine tatsächliche Bestellung gebunden, kein reines Vertrauen auf die
+// Behauptung des Users.
+export const productReviews = pgTable("product_reviews", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  orderId: integer("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  rating: integer("rating").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const pointTransactions = pgTable("point_transactions", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id),

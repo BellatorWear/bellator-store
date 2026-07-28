@@ -7,8 +7,15 @@ import ShopFilters from "./components/ShopFilters";
 import { getSetting, COUNTDOWN_KEY, COUNTDOWN_DEFAULT } from "@/app/utils/settings";
 import { getCurrentUser } from "@/app/actions";
 import { hasPreReleaseAccess } from "@/app/cart";
+import { getPendingReviewProducts } from "./reviews";
+import ReviewPopup from "./ReviewPopup";
 
-export default async function ShopPage() {
+export default async function ShopPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ checkout?: string }>;
+}) {
+  const { checkout } = await searchParams;
   const [dbProducts, allVariants, allColors, countdownSetting, user] = await Promise.all([
     db.select().from(products).where(eq(products.active, true)),
     db.select().from(productVariants),
@@ -17,6 +24,9 @@ export default async function ShopPage() {
     getCurrentUser(),
   ]);
   const hasAccess = await hasPreReleaseAccess(user?.id);
+  // Nur direkt nach einem erfolgreichen Checkout abfragen, nicht bei
+  // jedem Shop-Aufruf - unnötige DB-Last vermeiden.
+  const pendingReviews = checkout === "success" && user ? await getPendingReviewProducts() : [];
 
   const now = Date.now();
   const visibleProducts = dbProducts.filter((p) => {
@@ -62,6 +72,7 @@ export default async function ShopPage() {
     <main className="min-h-screen px-4 pt-4 pb-12 md:pt-6 md:pb-16">
       <CountdownBanner initialConfig={countdown} />
       <ShopFilters products={productsWithExtras} collections={collections as string[]} />
+      {pendingReviews.length > 0 && <ReviewPopup products={pendingReviews} />}
     </main>
   );
 }
