@@ -2,6 +2,7 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { handleAction } from "../actions";
+import { sanitizeNextPath } from "../utils/redirect";
 
 function RegistrierenForm() {
   const [msg, setMsg] = useState<{
@@ -10,7 +11,7 @@ function RegistrierenForm() {
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") || "/";
+  const next = sanitizeNextPath(searchParams.get("next"));
   const nextQuery = next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
 
   async function handleSubmit(formData: FormData) {

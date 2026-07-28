@@ -3,11 +3,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { handleAction } from "./actions";
+import { sanitizeNextPath } from "./utils/redirect";
 
 export default function MethodSelectClient() {
   const [loading, setLoading] = useState(false);
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") || "/";
+  const next = sanitizeNextPath(searchParams.get("next"));
   const nextQuery = next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
 
   async function handleGuest() {

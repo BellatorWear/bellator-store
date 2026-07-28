@@ -2,6 +2,7 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { handleAction } from "../actions";
+import { sanitizeNextPath } from "../utils/redirect";
 import { Eye, EyeOff } from "lucide-react";
 
 function LoginForm() {
@@ -9,7 +10,7 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") || "/";
+  const next = sanitizeNextPath(searchParams.get("next"));
   const nextQuery = next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
 
   // Nach erfolgreichem Login übernimmt AUSSCHLIESSLICH der globale

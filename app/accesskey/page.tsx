@@ -2,6 +2,7 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { handleAction } from "../actions";
+import { sanitizeNextPath } from "../utils/redirect";
 
 // Nach erfolgreichem Login übernimmt ausschließlich der globale
 // ProfileSetupGuard (Root-Layout) das Passwort/Username-Setup - siehe
@@ -10,7 +11,7 @@ function AccessKeyForm() {
   const [msg, setMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [loading, setLoading] = useState(false);
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") || "/";
+  const next = sanitizeNextPath(searchParams.get("next"));
   const nextQuery = next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
 
   async function handleSubmit(formData: FormData) {
