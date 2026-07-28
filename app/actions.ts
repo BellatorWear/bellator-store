@@ -203,15 +203,22 @@ export async function handleAction(
       return { error: "Ungültige Eingabe." };
 
     const result = await db.select().from(users).where(eq(users.email, email));
-    if (result.length === 0) return { error: "Ungültige Anmeldedaten." };
-
+    // Dummy-Hash: falls es den User gar nicht gibt, trotzdem einen
+    // bcrypt.compare gegen einen Fake-Hash laufen lassen, damit die
+    // Antwortzeit identisch zum "falsches Passwort"-Fall bleibt. Ohne das
+    // wäre "existiert die Email?" über die Antwortzeit erratbar (bcrypt
+    // ist bewusst langsam, ein sofortiger Return ohne Vergleich wäre
+    // messbar schneller).
+    const DUMMY_HASH = "$2b$12$CwTycUXWue0Thq9StjUM0uJ8xMx.znxoOzUUqRlrO8xIHmUQIm7C.";
     const user = result[0];
+    const valid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
+
+    if (result.length === 0) return { error: "Ungültige Anmeldedaten." };
 
     if (!user.emailVerified) return { error: "Email noch nicht bestätigt." };
     if (!user.passwordHash)
       return { error: "Bitte erst Passwort über den Magic Link setzen." };
 
-    const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return { error: "Ungültige Anmeldedaten." };
 
     if (user.pendingDeletionAt && new Date(user.pendingDeletionAt) > new Date()) {
