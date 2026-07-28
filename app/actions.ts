@@ -661,6 +661,17 @@ export async function handleAction(
     const user = userRows[0];
     if (!user) return { error: "Account nicht gefunden." };
 
+    // Ohne diese Prüfung könnte ein gesperrter Account (laufende
+    // Löschanfrage, siehe requestUserDeletion) die Sperre einfach über
+    // "Passwort vergessen" umgehen - dieser Pfad setzt am Ende direkt
+    // eine neue Session, genau wie ein normaler Login.
+    if (user.pendingDeletionAt && new Date(user.pendingDeletionAt) > new Date()) {
+      return {
+        error:
+          "Dieser Account ist derzeit gesperrt (ausstehende Löschanfrage). Bei Einwand bitte an kontakt@mz-dev.de wenden.",
+      };
+    }
+
     const passwordHash = await bcrypt.hash(newPassword, 12);
     const newSessionVersion = (user.sessionVersion ?? 0) + 1;
     await db
