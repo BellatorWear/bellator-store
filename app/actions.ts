@@ -19,7 +19,7 @@ import {
   preReleaseRedemptions,
   passwordResetTokens,
 } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql, gte } from "drizzle-orm";
 import { sanitizeText, isSuspiciousInput } from "./utils/inputSafety";
 import { USERNAME_RE, daysUntilUsernameChangeAllowed } from "./utils/username";
 import { isTrustedOrigin } from "./utils/origin";
@@ -120,21 +120,25 @@ export async function awardChallengeByType(userId: number, type: string) {
   if (found.length === 0) return null;
   const challenge = found[0];
 
-  const already = await db
-    .select()
-    .from(userChallenges)
-    .where(
-      and(
-        eq(userChallenges.userId, userId),
-        eq(userChallenges.challengeId, challenge.id),
-      ),
-    );
-  if (already.length > 0) return null; // schon erledigt
+  // War vorher ein SELECT-dann-INSERT (siehe Migration add_v30) - bei
+  // gleichzeitigen Requests konnten alle den SELECT als "noch nicht
+  // erledigt" sehen und mehrfach Punkte kassieren. onConflictDoNothing
+  // gegen den UNIQUE-Constraint ist atomar: nur der erste Versuch fügt
+  // wirklich eine Zeile ein, alle anderen laufen ins Leere, ganz
+  // unabhängig vom Timing.
+  const inserted = await db
+    .insert(userChallenges)
+    .values({ userId, challengeId: challenge.id })
+    .onConflictDoNothing()
+    .returning({ id: userChallenges.id });
+  if (inserted.length === 0) return null; // schon erledigt (oder gerade parallel erledigt worden)
 
-  await db.insert(userChallenges).values({ userId, challengeId: challenge.id });
+  // Atomares Increment statt "aktuellen Wert lesen, dann +X schreiben" -
+  // Letzteres hätte bei zwei gleichzeitigen Anfragen denselben
+  // veralteten Ausgangswert gelesen und einen der beiden Boni verloren.
   await db
     .update(users)
-    .set({ points: (await getPoints(userId)) + challenge.pointReward })
+    .set({ points: sql`${users.points} + ${challenge.pointReward}` })
     .where(eq(users.id, userId));
   await db.insert(pointTransactions).values({
     userId,
@@ -143,11 +147,6 @@ export async function awardChallengeByType(userId: number, type: string) {
   });
 
   return challenge.pointReward;
-}
-
-async function getPoints(userId: number): Promise<number> {
-  const result = await db.select().from(users).where(eq(users.id, userId));
-  return result[0]?.points ?? 0;
 }
 
 const resend = process.env.RESEND_API_KEY
@@ -946,17 +945,26 @@ export async function handleAction(
       .where(eq(users.id, session.userId));
     if (userResult.length === 0) return { error: "Account nicht gefunden." };
     const user = userResult[0];
-    const currentPoints = user.points ?? 0;
 
-    if (currentPoints < reward.costPoints) {
+    // War vorher "Punkte lesen, prüfen, dann abziehen" in getrennten
+    // Schritten - bei mehreren gleichzeitigen Anfragen (schnell mehrfach
+    // geklickt oder gezielt gescriptet) konnten alle denselben
+    // Vor-Abzug-Punktestand lesen, alle die Prüfung bestehen und alle
+    // eine Prämie bekommen (echter Rabattcode, VIP-Zugang, physischer
+    // Artikel), obwohl die Punkte nur für eine gereicht hätten. Die
+    // WHERE-Bedingung macht Prüfung+Abzug atomar - Postgres serialisiert
+    // konkurrierende UPDATEs auf dieselbe Zeile, es kann keine zwei
+    // Anfragen gleichzeitig "gewinnen".
+    const deducted = await db
+      .update(users)
+      .set({ points: sql`${users.points} - ${reward.costPoints}` })
+      .where(and(eq(users.id, session.userId), gte(users.points, reward.costPoints)))
+      .returning({ points: users.points });
+
+    if (deducted.length === 0) {
       return { error: "Nicht genug Punkte." };
     }
 
-    // Punkte abziehen
-    await db
-      .update(users)
-      .set({ points: currentPoints - reward.costPoints })
-      .where(eq(users.id, session.userId));
     await db.insert(pointTransactions).values({
       userId: session.userId,
       points: -reward.costPoints,
@@ -974,7 +982,10 @@ export async function handleAction(
         expiresInDays: 90,
       });
       if ("error" in result) {
-        await db.update(users).set({ points: currentPoints }).where(eq(users.id, session.userId));
+        await db
+          .update(users)
+          .set({ points: sql`${users.points} + ${reward.costPoints}` })
+          .where(eq(users.id, session.userId));
         await db.insert(pointTransactions).values({
           userId: session.userId,
           points: reward.costPoints,
