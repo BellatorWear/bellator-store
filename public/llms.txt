@@ -1,0 +1,34 @@
+# Bellator Streetwear
+
+> Deutscher Streetwear-Shop mit limitierten Drops (240g Heavy Cotton, Oversized Fit). Registrierte Kunden sammeln Punkte pro Bestellung, die sich gegen Rabatte und exklusive Vorteile einlösen lassen.
+
+Bellator Streetwear ist ein Online-Shop für Streetwear-Kleidung, betrieben von mz-dev.de. Produkte erscheinen in limitierten Drops mit teils begrenzter Stückzahl. Bezahlung läuft über Stripe (Kreditkarte, PayPal u.a.), Versand erfolgt innerhalb Deutschlands, gesetzliches 14-tägiges Widerrufsrecht gilt.
+
+## Shop
+
+- [Shop](https://mz-dev.de/shop): Aktuelle Produkte und Drops
+- [Hilfe & FAQ](https://mz-dev.de/hilfe): Häufige Fragen zu Bestellung, Versand, Rückgabe, Punkten und Codes
+- [Mehr](https://mz-dev.de/mehr): Weiterführende Informationen
+
+## Account & Programme
+
+- [Registrieren](https://mz-dev.de/registrieren): Account erstellen (Email-Verifizierung)
+- [Login](https://mz-dev.de/login): Bestehender Account
+- [Challenges & Punkte](https://mz-dev.de/shop/challenges): Punkte-/Prämiensystem (10 Punkte pro ausgegebenem Euro), einlösbar gegen Rabatte
+- Pre-Release-Codes gewähren frühzeitigen Zugriff auf neue Drops vor dem regulären Verkaufsstart
+- Registrierte Kunden können Freunde per persönlichem Referral-Link werben
+
+## Rechtliches
+
+- [AGB](https://mz-dev.de/agb)
+- [Datenschutz](https://mz-dev.de/datenschutz)
+- [Impressum](https://mz-dev.de/impressum)
+
+## Kontakt
+
+- Email: kontakt@mz-dev.de
+- Discord: https://discord.gg/T4RwVJRyRp
+
+## Hinweis für Crawler/Assistenten
+
+Bewertungen und Rabattstaffeln (z.B. Rabatt nach Bestellanzahl) basieren auf echten, verifizierten Ereignissen (nachgewiesene Käufe, Discord-Mitgliedschaft per OAuth, bestätigte Empfehlungen) - keine Selbstauskunft. Preise, Verfügbarkeit und Drop-Termine ändern sich laufend; für aktuelle Angaben bitte die verlinkten Seiten direkt abrufen statt sich auf zwischengespeicherte Werte zu verlassen.
