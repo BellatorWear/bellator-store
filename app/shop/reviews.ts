@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { orders, orderItems, products, productReviews } from "@/db/schema";
+import { orders, orderItems, products, productReviews, users } from "@/db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { getCurrentUser, awardChallengeByType } from "@/app/actions";
 import { sanitizeText } from "@/app/utils/inputSafety";
@@ -57,6 +57,43 @@ export async function getPendingReviewProducts(): Promise<PendingReviewProduct[]
     })
     // Pro Produkt nur einmal, falls mehrfach in derselben Bestellung.
     .filter((item, idx, arr) => arr.findIndex((x) => x.productId === item.productId) === idx);
+}
+
+export type FeaturedReview = {
+  id: number;
+  rating: number;
+  title: string;
+  body: string;
+  productName: string;
+  productSlug: string;
+  username: string | null;
+  createdAt: Date | null;
+};
+
+/**
+ * Reviews für die Startseiten-Banner - beste zuerst, dann neueste.
+ * Bewusst kein Bezug zum eingeloggten User (öffentliche Anzeige für
+ * alle Besucher).
+ */
+export async function getFeaturedReviews(limit = 20): Promise<FeaturedReview[]> {
+  const rows = await db
+    .select({
+      id: productReviews.id,
+      rating: productReviews.rating,
+      title: productReviews.title,
+      body: productReviews.body,
+      createdAt: productReviews.createdAt,
+      productName: products.name,
+      productSlug: products.slug,
+      username: users.username,
+    })
+    .from(productReviews)
+    .innerJoin(products, eq(productReviews.productId, products.id))
+    .leftJoin(users, eq(productReviews.userId, users.id))
+    .orderBy(desc(productReviews.rating), desc(productReviews.createdAt))
+    .limit(limit);
+
+  return rows;
 }
 
 export async function submitProductReview(formData: FormData): Promise<{ error?: string; success?: boolean }> {
