@@ -19,6 +19,7 @@ export const ADMIN_SECTION_IDS = [
   "team-chat",
   "tickets",
   "audit-log",
+  "reviews",
 ] as const;
 
 export type AdminSectionId = (typeof ADMIN_SECTION_IDS)[number];
@@ -40,6 +41,7 @@ export const ADMIN_SECTION_LABELS: Record<AdminSectionId, string> = {
   "team-chat": "Team-Chat-Zugriff",
   tickets: "Support-Tickets",
   "audit-log": "Audit-Log",
+  reviews: "Produkt-Reviews",
 };
 
 // ===================================================================

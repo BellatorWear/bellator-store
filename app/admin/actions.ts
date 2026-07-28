@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/db";
-import { products, productVariants, productColors, discountCodes, newsPosts, users, usernameHistory, preReleaseCodes, preReleaseRedemptions, homePosts, customRoles } from "@/db/schema";
+import { products, productVariants, productColors, discountCodes, newsPosts, users, usernameHistory, preReleaseCodes, preReleaseRedemptions, homePosts, customRoles, productReviews } from "@/db/schema";
 import { eq, ilike, desc } from "drizzle-orm";
 import { del, list } from "@vercel/blob";
 import { getCurrentUser } from "@/app/actions";
@@ -302,6 +302,48 @@ export async function deleteProduct(formData: FormData) {
       }
     }
   }
+
+  return { success: true };
+}
+
+// ===================================================================
+// Produkt-Reviews (Moderation)
+// ===================================================================
+export async function getAllReviewsForAdmin() {
+  return db
+    .select({
+      id: productReviews.id,
+      rating: productReviews.rating,
+      title: productReviews.title,
+      body: productReviews.body,
+      createdAt: productReviews.createdAt,
+      productId: productReviews.productId,
+      productName: products.name,
+      username: users.username,
+      userId: users.id,
+    })
+    .from(productReviews)
+    .innerJoin(products, eq(productReviews.productId, products.id))
+    .leftJoin(users, eq(productReviews.userId, users.id))
+    .orderBy(desc(productReviews.createdAt));
+}
+
+export async function deleteReview(formData: FormData) {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
+
+  const id = Number(formData.get("id"));
+  if (!id) return { error: "Ungültig." };
+
+  const [review] = await db.select().from(productReviews).where(eq(productReviews.id, id));
+  if (!review) return { error: "Review nicht gefunden." };
+
+  await db.delete(productReviews).where(eq(productReviews.id, id));
+  await logAuditEvent("review.delete", {
+    targetType: "review",
+    targetId: id,
+    details: { productId: review.productId, rating: review.rating, title: review.title },
+  });
 
   return { success: true };
 }

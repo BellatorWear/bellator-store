@@ -34,7 +34,9 @@ import RoleManager from "./RoleManager";
 import TeamChatAccess from "./TeamChatAccess";
 import TicketManager from "./TicketManager";
 import AuditLogViewer from "./AuditLogViewer";
+import ReviewManager from "./ReviewManager";
 import { getAuditLog } from "@/app/utils/auditLog";
+import { getAllReviewsForAdmin } from "./actions";
 import { CHAT_ROLE_ACCESS_DEFAULT, type AdminSectionId } from "./permissions";
 import { getAllRoles, getRoleConfig } from "./roles";
 import {
@@ -118,6 +120,7 @@ export default async function AdminPage() {
   ]);
 
   const auditEntries = user.isAdmin ? await getAuditLog(300) : [];
+  const allReviews = await getAllReviewsForAdmin();
 
   const userCount = userCountResult.length;
   const viewCount = viewCountResult.length;
@@ -321,6 +324,13 @@ export default async function AdminPage() {
           description: "Wer hat wann welche sicherheitsrelevante Aktion im Adminpanel ausgeführt",
           keywords: ["audit", "log", "protokoll", "sicherheit", "verlauf"],
           content: <AuditLogViewer entries={auditEntries} />,
+        },
+        {
+          id: "reviews",
+          title: "Produkt-Reviews",
+          description: "Alle Kundenbewertungen im Überblick, moderieren/löschen",
+          keywords: ["review", "bewertung", "sterne", "kommentar", "moderation"],
+          content: <ReviewManager reviews={allReviews} />,
         },
       ],
     },
