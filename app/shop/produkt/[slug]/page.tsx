@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/app/actions";
 import { hasPreReleaseAccess } from "@/app/cart";
 import ProductDetailClient from "./ProductDetailClient";
+import ProductReviewsSection from "./ProductReviewsSection";
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -35,5 +36,10 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   ]);
   const sortedColors = colors.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
-  return <ProductDetailClient product={product} variants={variants} colors={sortedColors} isAdmin={isAdmin} />;
+  return (
+    <>
+      <ProductDetailClient product={product} variants={variants} colors={sortedColors} isAdmin={isAdmin} />
+      <ProductReviewsSection productId={product.id} />
+    </>
+  );
 }
