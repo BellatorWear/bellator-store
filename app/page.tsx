@@ -10,6 +10,8 @@ import { publishDueScheduledPosts } from "./utils/publishScheduled";
 import CountdownBanner from "./shop/components/CountdownBanner";
 import { getSetting, COUNTDOWN_KEY, COUNTDOWN_DEFAULT } from "@/app/utils/settings";
 import { getCurrentUser } from "@/app/actions";
+import { getFeaturedReviews } from "./shop/reviews";
+import ReviewsBanner from "./ReviewsBanner";
 
 export const metadata = { title: "Bellator Streetwear — Home" };
 
@@ -23,11 +25,12 @@ const CATEGORY_LABELS: Record<string, string> = {
 export default async function HomePage() {
   await publishDueScheduledPosts();
   const user = await getCurrentUser();
-  const [posts, userCountResult, countdownSetting, upcomingDrops] = await Promise.all([
+  const [posts, userCountResult, countdownSetting, upcomingDrops, featuredReviews] = await Promise.all([
     db.select().from(homePosts).where(eq(homePosts.published, true)).orderBy(desc(homePosts.createdAt)),
     db.select({ id: users.id }).from(users),
     getSetting(COUNTDOWN_KEY, COUNTDOWN_DEFAULT),
     db.select({ dropDate: products.dropDate }).from(products),
+    getFeaturedReviews(),
   ]);
 
   const userCount = userCountResult.length;
@@ -85,6 +88,8 @@ export default async function HomePage() {
             </div>
           )}
         </section>
+
+        <ReviewsBanner reviews={featuredReviews} />
 
         {/* Blog Posts */}
         <section className="flex-1 w-full max-w-[1400px] mx-auto px-4 sm:px-8 md:px-16 pb-16">
