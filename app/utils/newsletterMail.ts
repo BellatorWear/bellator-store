@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { users, newsletter } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { Resend } from "resend";
+import { createUnsubscribeToken } from "@/app/utils/unsubscribeToken";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -65,6 +66,7 @@ export async function sendNewsletterEmailToAll(
                 </p>
                 <div style="margin-top:40px; padding-top:20px; font-size:11px; color:#555; border-top:1px solid #222;">
                   <p>© ${new Date().getFullYear()} Bellator Streetwear. Diese Mail wurde an ${email} gesendet, weil du den Bellator Newsletter abonniert hast.</p>
+                  <p><a href="${process.env.NEXT_PUBLIC_SITE_URL ?? "https://mz-dev.de"}/newsletter/abmelden?email=${encodeURIComponent(email)}&token=${createUnsubscribeToken(email)}" style="color:#888;">Newsletter abbestellen</a></p>
                 </div>
               </div>
             </body>
