@@ -96,6 +96,39 @@ export async function getFeaturedReviews(limit = 20): Promise<FeaturedReview[]> 
   return rows;
 }
 
+export type ProductReview = {
+  id: number;
+  rating: number;
+  title: string;
+  body: string;
+  username: string | null;
+  createdAt: Date | null;
+};
+
+/**
+ * Alle Reviews zu einem einzelnen Produkt, neueste zuerst, plus
+ * Durchschnittsbewertung - für die Produktdetailseite.
+ */
+export async function getProductReviews(productId: number): Promise<{ reviews: ProductReview[]; average: number | null }> {
+  const rows = await db
+    .select({
+      id: productReviews.id,
+      rating: productReviews.rating,
+      title: productReviews.title,
+      body: productReviews.body,
+      createdAt: productReviews.createdAt,
+      username: users.username,
+    })
+    .from(productReviews)
+    .leftJoin(users, eq(productReviews.userId, users.id))
+    .where(eq(productReviews.productId, productId))
+    .orderBy(desc(productReviews.createdAt));
+
+  const average = rows.length > 0 ? rows.reduce((sum, r) => sum + r.rating, 0) / rows.length : null;
+
+  return { reviews: rows, average };
+}
+
 export async function submitProductReview(formData: FormData): Promise<{ error?: string; success?: boolean }> {
   if (!(await isTrustedOrigin())) return { error: "Anfrage abgelehnt." };
   const user = await getCurrentUser();
