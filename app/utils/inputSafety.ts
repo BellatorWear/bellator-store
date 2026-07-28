@@ -63,21 +63,31 @@ export function sanitizeText(input: string, maxLength = MAX_INPUT_LENGTH): strin
  * Fall eines kompromittierten Admin-Accounts, keine Verteidigung gegen
  * die Admins selbst.
  */
+import DOMPurify from "isomorphic-dompurify";
+
+// War vorher ein handgeschriebener Regex-Filter - nachweislich umgehbar,
+// z.B. mit <img src=x/onerror=alert(1)> (kein Leerzeichen vor dem
+// Event-Handler, durch "/" statt " " getrennt - Browser parsen das trotzdem
+// als eigenes Attribut) oder HTML-Entities in javascript:-URLs
+// (jav&#97;script:...). Regex-basiertes HTML-Sanitizing ist ein bekanntes
+// Antipattern (siehe OWASP) - ein echter Parser wie DOMPurify kennt die
+// tatsächliche HTML-Grammatik statt nach bekannten Mustern zu suchen, und
+// arbeitet als Allowlist (nur explizit erlaubte Tags/Attribute kommen
+// durch) statt als Blockliste (die immer nur bekannte Angriffe kennt).
+const ALLOWED_TAGS = [
+  "p", "br", "strong", "b", "em", "i", "u", "s",
+  "h1", "h2", "h3", "h4",
+  "ul", "ol", "li",
+  "a", "img", "blockquote", "span", "div", "hr", "code", "pre",
+];
+const ALLOWED_ATTR = ["href", "src", "alt", "title", "style", "target", "rel", "class"];
+
 export function sanitizeHtml(input: string, maxLength = 20000): string {
-  let html = input.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").slice(0, maxLength);
-
-  // Komplett verbotene Tags samt Inhalt entfernen.
-  html = html.replace(/<(script|style|iframe|object|embed|link|meta)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
-  html = html.replace(/<(script|style|iframe|object|embed|link|meta)\b[^>]*\/?>/gi, "");
-
-  // Event-Handler-Attribute (onerror=, onclick=, ...) entfernen.
-  html = html.replace(/\son\w+\s*=\s*"[^"]*"/gi, "");
-  html = html.replace(/\son\w+\s*=\s*'[^']*'/gi, "");
-  html = html.replace(/\son\w+\s*=\s*[^\s>]+/gi, "");
-
-  // javascript:/data:text/html - URLs in href/src entschärfen.
-  html = html.replace(/(href|src)\s*=\s*"(?:\s*javascript:|\s*data:text\/html)[^"]*"/gi, '$1="#"');
-  html = html.replace(/(href|src)\s*=\s*'(?:\s*javascript:|\s*data:text\/html)[^']*'/gi, "$1='#'");
-
-  return html.trim();
+  const truncated = input.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").slice(0, maxLength);
+  const clean = DOMPurify.sanitize(truncated, {
+    ALLOWED_TAGS,
+    ALLOWED_ATTR,
+    ALLOW_DATA_ATTR: false,
+  });
+  return clean.trim();
 }
