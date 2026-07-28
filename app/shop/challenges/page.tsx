@@ -14,7 +14,22 @@ import RedeemRewardButton from "./RedeemRewardButton";
 // Server-Pfad dafür wurde entfernt (siehe app/actions.ts) - nicht nur
 // im UI versteckt.
 
-export default async function ChallengesPage() {
+const DISCORD_STATUS_MESSAGES: Record<string, { text: string; type: "success" | "error" }> = {
+  success: { text: "✓ Discord-Mitgliedschaft bestätigt - Punkte gutgeschrieben!", type: "success" },
+  not_member: { text: "Du bist noch nicht Mitglied in unserem Discord-Server. Erst beitreten, dann nochmal verbinden.", type: "error" },
+  cancelled: { text: "Discord-Verbindung abgebrochen.", type: "error" },
+  invalid_state: { text: "Verbindung ist abgelaufen. Bitte nochmal versuchen.", type: "error" },
+  not_configured: { text: "Discord-Verbindung ist gerade nicht verfügbar.", type: "error" },
+  error: { text: "Etwas ist schiefgelaufen. Bitte nochmal versuchen.", type: "error" },
+};
+
+export default async function ChallengesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ discord?: string }>;
+}) {
+  const { discord } = await searchParams;
+  const discordStatus = discord ? DISCORD_STATUS_MESSAGES[discord] : null;
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
@@ -41,6 +56,12 @@ export default async function ChallengesPage() {
           <p className="text-xs t-muted uppercase tracking-widest">Sammle Punkte durch Aktionen und löse sie für Prämien ein</p>
         </div>
 
+        {discordStatus && (
+          <div className={`border p-3 text-xs uppercase tracking-widest ${discordStatus.type === "success" ? "border-yellow-800 bg-yellow-900/10 text-yellow-400" : "border-red-900 bg-red-900/10 text-red-400"}`}>
+            {discordStatus.text}
+          </div>
+        )}
+
         <div className="t-card border p-4 flex justify-between items-center">
           <span className="text-xs t-muted uppercase tracking-widest">Deine Punkte</span>
           <span className="text-yellow-400 font-bold text-xl">{user.points} Pkt.</span>
@@ -61,7 +82,16 @@ export default async function ChallengesPage() {
                   </div>
                   <span className="text-sm font-bold whitespace-nowrap text-yellow-400">+{challenge.pointReward} Pkt.</span>
                 </div>
-                <p className="mt-3 text-[10px] t-faint uppercase tracking-widest">Wird automatisch erkannt</p>
+                {challenge.type === "discord_join" ? (
+                  <a
+                    href="/api/discord/start"
+                    className="mt-3 inline-block border t-border px-4 py-2 text-[10px] uppercase tracking-widest font-bold hover:bg-white hover:text-black transition-all duration-200 active:scale-[0.97]"
+                  >
+                    Mit Discord verbinden
+                  </a>
+                ) : (
+                  <p className="mt-3 text-[10px] t-faint uppercase tracking-widest">Wird automatisch erkannt</p>
+                )}
               </div>
             ))}
           </section>
