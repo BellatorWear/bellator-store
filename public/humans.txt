@@ -1,0 +1,15 @@
+/* TEAM */
+Development: mz-dev.de
+
+/* SITE */
+Last update: 2026
+Language: Deutsch
+Doctype: HTML5
+
+/* TECHNOLOGY */
+Next.js 16 (App Router) / React 19
+Drizzle ORM + PostgreSQL (Neon)
+Stripe (Payments)
+Pusher (Realtime)
+Resend (Email)
+Vercel (Hosting, Blob Storage)
