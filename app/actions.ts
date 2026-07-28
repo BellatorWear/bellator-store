@@ -705,6 +705,17 @@ export async function handleAction(
     const session = await getCurrentSession();
     if (!session) return { error: "Nicht eingeloggt." };
 
+    // Wer eine (z.B. gestohlene/liegengelassene) Session hat, aber nicht
+    // das echte Passwort kennt, könnte das sonst hier unbegrenzt
+    // durchprobieren - gleiche Bremse wie beim eigentlichen Login.
+    const rateLimit = await checkLoginRateLimit();
+    if (!rateLimit.success) {
+      return {
+        error: `Zu viele Versuche. Bitte in ${Math.ceil(rateLimit.resetAfter / 1000 / 60)} Minuten erneut versuchen.`,
+        retryAfter: rateLimit.resetAfter,
+      };
+    }
+
     const password = formData.get("password") as string;
     if (!password) return { error: "Passwort erforderlich." };
 
