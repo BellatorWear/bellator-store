@@ -158,6 +158,14 @@ export async function POST(req: NextRequest) {
 
         if (newOrderCount === 1) {
           await awardChallengeByType(userIdMeta, "first_order");
+
+          // Referral-Belohnung: erst bei der ersten ECHTEN Bestellung des
+          // geworbenen Freundes, nicht schon bei der Registrierung - sonst
+          // könnte man sich mit Fake-Accounts selbst Punkte geben.
+          if (user.referredBy && !user.referralRewarded) {
+            await awardChallengeByType(user.referredBy, "referral");
+            await db.update(users).set({ referralRewarded: true }).where(eq(users.id, userIdMeta));
+          }
         }
         if (newOrderCount === 3) {
           await awardChallengeByType(userIdMeta, "repeat_customer");

@@ -54,6 +54,14 @@ export const users = pgTable("users", {
   // Selbst gestaltetes Profilbanner (v29) - PNG-Export aus dem
   // Graffiti-Editor, als Blob-URL gespeichert.
   bannerUrl: text("banner_url"),
+  // Referral-System (v33): wer hat diesen User geworben (falls über
+  // einen Ref-Link registriert) - FK-Constraint kommt aus der Migration,
+  // hier bewusst ohne .references() um Drizzles Circular-Type-Problem bei
+  // selbst-referenzierenden Fremdschlüsseln zu vermeiden. referralRewarded
+  // verhindert doppelte Punktevergabe an den Werber, falls der Webhook
+  // mal zweimal für dieselbe erste Bestellung feuern sollte.
+  referredBy: integer("referred_by"),
+  referralRewarded: boolean("referral_rewarded").default(false),
 });
 
 export const emailVerifications = pgTable("email_verifications", {

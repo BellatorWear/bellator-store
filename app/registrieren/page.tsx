@@ -13,6 +13,7 @@ function RegistrierenForm() {
   const searchParams = useSearchParams();
   const next = sanitizeNextPath(searchParams.get("next"));
   const nextQuery = next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
+  const ref = (searchParams.get("ref") ?? "").trim();
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
@@ -43,6 +44,7 @@ function RegistrierenForm() {
           Registrieren
         </p>
         <form action={handleSubmit} className="space-y-4">
+          {ref && <input type="hidden" name="ref" value={ref} />}
           <input
             name="email"
             type="email"
@@ -50,6 +52,11 @@ function RegistrierenForm() {
             className="w-full bg-black/80 border-b border-zinc-600 p-2 focus:border-white outline-none transition uppercase text-center placeholder:text-zinc-600 text-white"
             placeholder="E-MAIL ADRESSE"
           />
+          {ref && (
+            <p className="text-[10px] text-zinc-500 uppercase tracking-widest text-center">
+              Eingeladen von {ref}
+            </p>
+          )}
           <button
             type="submit"
             disabled={loading}

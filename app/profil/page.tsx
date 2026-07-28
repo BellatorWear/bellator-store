@@ -9,6 +9,7 @@ import LogoutButton from "./LogoutButton";
 import ChangePasswordForm from "./ChangePasswordForm";
 import DeleteAccountButton from "./DeleteAccountButton";
 import BannerSection from "./BannerSection";
+import ReferralLink from "./ReferralLink";
 
 export default async function Page() {
   const user = await getCurrentUser();
@@ -67,6 +68,11 @@ export default async function Page() {
           </div>
 
           <BannerSection bannerUrl={user.bannerUrl} />
+
+          <div className="t-card border p-4 mb-6 [column-span:all] space-y-3">
+            <h2 className="text-xs font-bold uppercase tracking-widest t-muted">Freunde werben</h2>
+            <ReferralLink username={user.username} />
+          </div>
 
           {/* Accountdaten */}
           <section className="t-card border p-5 sm:p-6 mb-6 space-y-3 break-inside-avoid-column">

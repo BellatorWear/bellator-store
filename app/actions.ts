@@ -359,12 +359,26 @@ export async function handleAction(
       // Access Key schon generieren und speichern (wird in der Email angezeigt)
       const accessKey = generateAccessKey();
 
+      // Referral: falls über einen Ref-Link registriert (?ref=username),
+      // den Werber ermitteln. Nur beim tatsächlichen Neu-Anlegen relevant
+      // (siehe unten) - ein bestehender User bekommt nachträglich keinen
+      // referredBy mehr zugewiesen.
+      const refUsername = ((formData.get("ref") as string) ?? "").trim();
+      let referrerId: number | null = null;
+      if (refUsername) {
+        const referrerRows = await db.select().from(users).where(eq(users.username, refUsername));
+        if (referrerRows.length > 0) referrerId = referrerRows[0].id;
+      }
+
       // User anlegen falls nicht vorhanden. Atomarer Upsert statt
       // "select, dann insert falls leer" - bei zwei gleichzeitigen
       // Anfragen (Doppelklick, zwei Tabs) konnten vorher beide die
       // Existenzprüfung passieren, bevor die erste INSERT fertig war,
       // wodurch zwei User-Zeilen mit derselben Email entstanden.
-      await db.insert(users).values({ email }).onConflictDoNothing({ target: users.email });
+      await db
+        .insert(users)
+        .values({ email, referredBy: referrerId })
+        .onConflictDoNothing({ target: users.email });
       const existingUser = await db
         .select()
         .from(users)
