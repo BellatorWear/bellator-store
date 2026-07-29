@@ -63,17 +63,17 @@ export function sanitizeText(input: string, maxLength = MAX_INPUT_LENGTH): strin
  * Fall eines kompromittierten Admin-Accounts, keine Verteidigung gegen
  * die Admins selbst.
  */
-import DOMPurify from "isomorphic-dompurify";
+import sanitizeHtmlLib from "sanitize-html";
 
-// War vorher ein handgeschriebener Regex-Filter - nachweislich umgehbar,
-// z.B. mit <img src=x/onerror=alert(1)> (kein Leerzeichen vor dem
-// Event-Handler, durch "/" statt " " getrennt - Browser parsen das trotzdem
-// als eigenes Attribut) oder HTML-Entities in javascript:-URLs
-// (jav&#97;script:...). Regex-basiertes HTML-Sanitizing ist ein bekanntes
-// Antipattern (siehe OWASP) - ein echter Parser wie DOMPurify kennt die
-// tatsächliche HTML-Grammatik statt nach bekannten Mustern zu suchen, und
-// arbeitet als Allowlist (nur explizit erlaubte Tags/Attribute kommen
-// durch) statt als Blockliste (die immer nur bekannte Angriffe kennt).
+// War kurz auf isomorphic-dompurify (siehe Batch 51), das zieht aber
+// jsdom nach sich - eine Unterabhängigkeit davon (@exodus/bytes via
+// html-encoding-sniffer) ist rein ESM und bricht beim require() in
+// Next.js' Server-Bundle mit "ERR_REQUIRE_ESM". Das crashte JEDE Seite,
+// weil inputSafety.ts praktisch überall importiert wird (auch nur für
+// sanitizeText), wodurch die ganze jsdom-Kette schon beim Modul-Import
+// mitgeladen wurde - unabhängig davon, ob sanitizeHtml überhaupt
+// aufgerufen wurde. sanitize-html löst dasselbe Problem (echter
+// Allowlist-Parser statt Regex-Blockliste) ganz ohne DOM-Emulation.
 const ALLOWED_TAGS = [
   "p", "br", "strong", "b", "em", "i", "u", "s",
   "h1", "h2", "h3", "h4",
@@ -84,10 +84,12 @@ const ALLOWED_ATTR = ["href", "src", "alt", "title", "style", "target", "rel", "
 
 export function sanitizeHtml(input: string, maxLength = 20000): string {
   const truncated = input.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").slice(0, maxLength);
-  const clean = DOMPurify.sanitize(truncated, {
-    ALLOWED_TAGS,
-    ALLOWED_ATTR,
-    ALLOW_DATA_ATTR: false,
+  const clean = sanitizeHtmlLib(truncated, {
+    allowedTags: ALLOWED_TAGS,
+    allowedAttributes: { "*": ALLOWED_ATTR },
+    // Nur echte http(s)-Links/Bilder erlauben, kein javascript:/data: etc.
+    allowedSchemes: ["http", "https", "mailto"],
+    disallowedTagsMode: "discard",
   });
   return clean.trim();
 }
