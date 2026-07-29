@@ -3,10 +3,11 @@
 import { db } from "@/db";
 import { supportTickets, supportTicketMessages } from "@/db/schema";
 import { getCurrentUser } from "@/app/actions";
-import { put } from "@vercel/blob";
+import { put, del } from "@vercel/blob";
 import { eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { canAccessTicket, TICKET_CATEGORIES, type TicketCategory } from "./lib";
+import { logAuditEvent } from "@/app/utils/auditLog";
 
 type TicketAttachment = { url: string; name: string; type: string };
 
@@ -248,6 +249,45 @@ export async function setTicketStatus(formData: FormData): Promise<void> {
     .where(eq(supportTickets.id, ticketId));
   revalidatePath("/tickets");
   revalidatePath("/admin");
+}
+
+// Löscht ein Ticket samt aller Nachrichten (DB-seitig per ON DELETE
+// CASCADE auf support_ticket_messages.ticket_id) und räumt vorher
+// noch alle zugehörigen Blob-Anhänge auf (Ticket selbst + jede
+// einzelne Nachricht), sonst blieben verwaiste Dateien im Store.
+export async function deleteTicket(formData: FormData): Promise<{ error?: string; success?: boolean }> {
+  const user = await getUserOrThrow();
+  if (!user?.isAdmin) return { error: "Keine Berechtigung." };
+
+  const ticketId = Number(formData.get("ticketId") || 0);
+  if (!ticketId) return { error: "Ungültiges Ticket." };
+
+  const [ticket] = await db.select().from(supportTickets).where(eq(supportTickets.id, ticketId));
+  if (!ticket) return { error: "Ticket nicht gefunden." };
+
+  const messages = await db.select().from(supportTicketMessages).where(eq(supportTicketMessages.ticketId, ticketId));
+
+  const attachmentUrls = [ticket.attachmentUrl, ...messages.map((m) => m.attachmentUrl)].filter(
+    (url): url is string => Boolean(url),
+  );
+  for (const url of attachmentUrls) {
+    try {
+      await del(url, { token: process.env.BLOB2_READ_WRITE_TOKEN });
+    } catch (e) {
+      console.error("Konnte Ticket-Anhang nicht löschen:", url, e);
+    }
+  }
+
+  await db.delete(supportTickets).where(eq(supportTickets.id, ticketId));
+  await logAuditEvent("ticket.delete", {
+    targetType: "ticket",
+    targetId: ticketId,
+    details: { title: ticket.title, category: ticket.category, userId: ticket.userId },
+  });
+
+  revalidatePath("/tickets");
+  revalidatePath("/admin");
+  return { success: true };
 }
 
 export async function getTicketMessagesServer(ticketId: number) {
