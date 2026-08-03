@@ -62,6 +62,37 @@ export const users = pgTable("users", {
   // mal zweimal für dieselbe erste Bestellung feuern sollte.
   referredBy: integer("referred_by"),
   referralRewarded: boolean("referral_rewarded").default(false),
+  // 2FA/MFA (v35). totpSecretEncrypted ist AES-256-GCM-verschlüsselt (Key
+  // aus SESSION_SECRET abgeleitet, siehe lib/mfa.ts) - nie im Klartext
+  // in der DB. phoneNumber nur relevant für die SMS-Methode.
+  mfaEnabled: boolean("mfa_enabled").notNull().default(false),
+  mfaMethod: text("mfa_method"), // 'totp' | 'email' | 'sms'
+  totpSecretEncrypted: text("totp_secret_encrypted"),
+  phoneNumber: text("phone_number"),
+  phoneVerified: boolean("phone_verified").default(false),
+});
+
+// Kurzlebige Codes für Email-/SMS-2FA (Setup UND Login) - TOTP braucht
+// das nicht, da gegen das geteilte Secret zeitbasiert verifiziert wird.
+export const mfaChallenges = pgTable("mfa_challenges", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  method: text("method").notNull(), // 'email' | 'sms'
+  codeHash: text("code_hash").notNull(),
+  purpose: text("purpose").notNull(), // 'setup' | 'login'
+  attempts: integer("attempts").notNull().default(0),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Einmal-Backup-Codes, falls Authenticator-App/Telefon nicht verfügbar
+// ist. codeHash statt Klartext, usedAt markiert Verbrauch.
+export const mfaBackupCodes = pgTable("mfa_backup_codes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  codeHash: text("code_hash").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const emailVerifications = pgTable("email_verifications", {
@@ -463,8 +494,6 @@ export const customRoles = pgTable("custom_roles", {
     .notNull()
     .default(false),
   canAssignRoles: boolean("can_assign_roles").notNull().default(false),
-  // Reserviert, bis es eine tatsächliche User-Löschfunktion gibt.
-  canDeleteUsers: boolean("can_delete_users").notNull().default(false),
   // Team-Chat-Rechte (v23).
   chatCanCreateChannels: boolean("chat_can_create_channels")
     .notNull()

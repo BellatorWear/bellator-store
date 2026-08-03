@@ -26,6 +26,7 @@ function LoginForm() {
     try {
       const res = await handleAction(formData);
       if (res?.error) { setMsg({ text: res.error, type: "error" }); return; }
+      if (res?.mfaRequired) { window.location.href = "/mfa/verify"; return; }
       if (res?.success === true) window.location.href = next;
     } catch (e) {
       console.error("Login fehlgeschlagen:", e);

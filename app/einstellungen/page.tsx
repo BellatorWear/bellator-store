@@ -9,6 +9,7 @@ import NewsletterToggle from "./NewsletterToggle";
 import UsernameEditor from "./UsernameEditor";
 import Link from "next/link";
 import ChangePasswordForm from "@/app/profil/ChangePasswordForm";
+import MfaSettings from "./MfaSettings";
 import GdprExportButton from "./GdprExportButton";
 
 export default async function EinstellungenPage() {
@@ -50,6 +51,12 @@ export default async function EinstellungenPage() {
             <section className="t-card border p-4 mb-6 space-y-4 break-inside-avoid-column">
               <h2 className="text-xs font-bold uppercase tracking-widest t-muted">Passwort ändern</h2>
               <ChangePasswordForm />
+            </section>
+
+            {/* 2FA */}
+            <section className="t-card border p-4 mb-6 space-y-4 break-inside-avoid-column">
+              <h2 className="text-xs font-bold uppercase tracking-widest t-muted">Zwei-Faktor-Authentifizierung</h2>
+              <MfaSettings mfaEnabled={user.mfaEnabled} />
             </section>
 
             {/* Push */}
