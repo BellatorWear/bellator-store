@@ -167,6 +167,38 @@ export async function checkRedeemCodeRateLimit(): Promise<{
   }
 }
 
+// Rate Limiter für MFA-Code-Verifizierung (TOTP/Email/SMS/Backup-Codes).
+// Nur 6-stellige Codes (1 Mio. Kombinationen) - ohne Limit wäre das
+// Durchprobieren realistisch. 5 Versuche pro 5 Minuten sind für echte
+// Tippfehler mehr als genug.
+export const mfaVerifyRatelimit = new Ratelimit({
+  redis: redis,
+  limiter: Ratelimit.slidingWindow(5, "5 m"),
+  analytics: true,
+  prefix: "ratelimit:mfaverify",
+});
+
+export async function checkMfaVerifyRateLimit(userId: number): Promise<{
+  success: boolean;
+  remaining: number;
+  resetAfter: number;
+}> {
+  const identifier = `mfaverify:${userId}`;
+  try {
+    const { success, remaining, reset } = await mfaVerifyRatelimit.limit(identifier);
+    return {
+      success,
+      remaining: Math.max(0, remaining),
+      resetAfter: reset ? Math.max(0, reset - Date.now()) : 0,
+    };
+  } catch (error) {
+    console.error("Rate limit check failed:", error);
+    // Wie bei Login: im Zweifel lieber blockieren als durchlassen, da
+    // echter Missbrauchsvektor (Code-Brute-Force).
+    return { success: false, remaining: 0, resetAfter: 60000 };
+  }
+}
+
 /**
  * Prüfe allgemeinen Rate Limit
  */

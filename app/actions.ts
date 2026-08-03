@@ -35,6 +35,7 @@ import {
   SESSION_COOKIE_NAME,
   sessionCookieOptions,
 } from "@/lib/session";
+import { createMfaPendingToken } from "@/lib/mfa";
 
 type ActionResponse = {
   success?: string | boolean;
@@ -46,6 +47,7 @@ type ActionResponse = {
   code?: string | null;
   message?: string;
   alreadyRegistered?: boolean;
+  mfaRequired?: boolean;
 };
 
 // Liest die aktuell eingeloggte, verifizierte Session aus dem Cookie.
@@ -105,6 +107,7 @@ export async function getCurrentUser() {
     // Account ganz ohne Passwort durchrutschen zu lassen.
     mustSetPassword: user.mustSetPassword ?? true,
     bannerUrl: user.bannerUrl ?? null,
+    mfaEnabled: user.mfaEnabled ?? false,
   };
 }
 
@@ -225,6 +228,21 @@ export async function handleAction(
         error:
           "Dieser Account ist derzeit gesperrt (ausstehende Löschanfrage). Bei Einwand bitte an kontakt@mz-dev.de wenden.",
       };
+    }
+
+    if (user.mfaEnabled) {
+      // Passwort war richtig, aber 2FA steht noch aus - noch KEINE volle
+      // Session setzen, nur einen kurzlebigen Zwischen-Token, der allein
+      // keinen Zugriff gibt (siehe lib/mfa.ts).
+      const cookieStore = await cookies();
+      cookieStore.set("bellator-mfa-pending", createMfaPendingToken(user.id), {
+        httpOnly: true,
+        secure: true,
+        sameSite: "strict",
+        maxAge: 300,
+        path: "/",
+      });
+      return { success: true, mfaRequired: true };
     }
 
     await setSessionCookie(user.id, user.email, user.sessionVersion ?? 0);
