@@ -191,7 +191,6 @@ export default function RoleManager({ initialRoles }: { initialRoles: RoleConfig
             r.canEditPosts && "Posts bearbeiten",
             r.canManageDiscountCodes && "Rabattcodes",
             r.canAssignRoles && "Rollen vergeben",
-            r.canDeleteUsers && "User löschen (bald)",
             !r.chatCanCreateChannels && "Keine Channels anlegen",
             r.chatCanDeleteOthersMessages && "Chat-Moderation",
             r.chatCanKickMembers && "Chat-Kick",
@@ -366,7 +365,6 @@ function RoleForm({
   const [canEditPosts, setCanEditPosts] = useState(editing?.canEditPosts ?? false);
   const [canManageDiscountCodes, setCanManageDiscountCodes] = useState(editing?.canManageDiscountCodes ?? false);
   const [canAssignRoles, setCanAssignRoles] = useState(editing?.canAssignRoles ?? false);
-  const [canDeleteUsers, setCanDeleteUsers] = useState(editing?.canDeleteUsers ?? false);
   const [chatCanCreateChannels, setChatCanCreateChannels] = useState(editing?.chatCanCreateChannels ?? true);
   const [chatCanDeleteOthersMessages, setChatCanDeleteOthersMessages] = useState(editing?.chatCanDeleteOthersMessages ?? false);
   const [chatCanKickMembers, setChatCanKickMembers] = useState(editing?.chatCanKickMembers ?? false);
@@ -392,7 +390,6 @@ function RoleForm({
       fd.append("canEditPosts", String(canEditPosts));
       fd.append("canManageDiscountCodes", String(canManageDiscountCodes));
       fd.append("canAssignRoles", String(canAssignRoles));
-      fd.append("canDeleteUsers", String(canDeleteUsers));
       fd.append("chatCanCreateChannels", String(chatCanCreateChannels));
       fd.append("chatCanDeleteOthersMessages", String(chatCanDeleteOthersMessages));
       fd.append("chatCanKickMembers", String(chatCanKickMembers));
@@ -408,7 +405,6 @@ function RoleForm({
         canEditPosts,
         canManageDiscountCodes,
         canAssignRoles,
-        canDeleteUsers,
         chatCanCreateChannels,
         chatCanDeleteOthersMessages,
         chatCanKickMembers,
@@ -488,10 +484,6 @@ function RoleForm({
           <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
             <input type="checkbox" checked={canAssignRoles} onChange={(e) => setCanAssignRoles(e.target.checked)} className="accent-white" />
             Darf Rollen an User vergeben (nur Rollen mit niedrigerem Rang, nie die Admin-Rolle)
-          </label>
-          <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer opacity-60">
-            <input type="checkbox" checked={canDeleteUsers} onChange={(e) => setCanDeleteUsers(e.target.checked)} className="accent-white" />
-            Darf User löschen <span className="text-zinc-600">(Schalter vorhanden, Funktion folgt noch)</span>
           </label>
         </div>
       </div>

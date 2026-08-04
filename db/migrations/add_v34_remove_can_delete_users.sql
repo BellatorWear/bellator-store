@@ -1,0 +1,12 @@
+-- ===================================================================
+-- v34: canDeleteUsers-Rollenrecht komplett entfernt
+-- ===================================================================
+-- War als granulares Rollenrecht angelegt, hat aber nie eine echte
+-- Funktion dahinter gehabt (siehe Kommentar "reserviert, greift noch
+-- nirgends" im Code) und wurde später an requestUserDeletion/
+-- cancelUserDeletion gekoppelt. Aus rechtlichen Gründen soll das Sperren/
+-- Einleiten einer Account-Löschung ausschließlich vollen Admins
+-- vorbehalten sein, nicht an Rollen delegierbar - die eigentliche
+-- Löschung passiert ohnehin schon automatisch erst nach Ablauf der
+-- 7-Tage-Frist (siehe app/api/account-deletion-sweep).
+ALTER TABLE custom_roles DROP COLUMN IF EXISTS can_delete_users;

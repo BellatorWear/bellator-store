@@ -12,7 +12,6 @@ export type RoleConfig = {
   // Granulare Admin-Berechtigungen (v23).
   canManageDiscountCodes: boolean;
   canAssignRoles: boolean;
-  canDeleteUsers: boolean; // reserviert, greift noch nirgends
   // Team-Chat-Rechte (v23).
   chatCanCreateChannels: boolean;
   chatCanDeleteOthersMessages: boolean;
@@ -30,7 +29,6 @@ function toRoleConfig(row: typeof customRoles.$inferSelect): RoleConfig {
     canEditPosts: row.canEditPosts,
     canManageDiscountCodes: row.canManageDiscountCodes,
     canAssignRoles: row.canAssignRoles,
-    canDeleteUsers: row.canDeleteUsers,
     chatCanCreateChannels: row.chatCanCreateChannels,
     chatCanDeleteOthersMessages: row.chatCanDeleteOthersMessages,
     chatCanKickMembers: row.chatCanKickMembers,

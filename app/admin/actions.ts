@@ -46,7 +46,7 @@ async function requireAdmin() {
 // durch, die das übergebene Berechtigungs-Flag gesetzt hat (v23 granulare
 // Rollenattribute). Gibt bei can_assign_roles zusätzlich den Rang der Rolle
 // zurück, damit die aufrufende Funktion eine Hierarchie durchsetzen kann.
-type GrantablePermission = "canManageDiscountCodes" | "canAssignRoles" | "canDeleteUsers";
+type GrantablePermission = "canManageDiscountCodes" | "canAssignRoles";
 
 async function requireAdminOrPermission(flag: GrantablePermission) {
   if (!(await isTrustedOrigin())) return null;
@@ -597,9 +597,15 @@ const DELETION_GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
 // 4) Ohne Einwand räumt der tägliche Cron-Sweep (siehe
 //    app/api/account-deletion-sweep/route.ts) den Account nach Ablauf der
 //    Frist auf
+//
+// Bewusst nur volle Admins, nicht mehr als Rollenrecht delegierbar (siehe
+// entferntes canDeleteUsers) - aus rechtlichen Gründen soll die Sperrung/
+// Löschung eines Accounts keine Entscheidung sein, die sich beliebig an
+// Rollen weiterreichen lässt. Die eigentliche Löschung passiert ohnehin
+// erst automatisch nach Ablauf der Frist, nie sofort per Klick.
 export async function requestUserDeletion(formData: FormData) {
-  const actor = await requireAdminOrPermission("canDeleteUsers");
-  if (!actor) return { error: "Keine Berechtigung." };
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
 
   const userId = Number(formData.get("userId"));
   if (!userId) return { error: "Ungültig." };
@@ -642,8 +648,8 @@ export async function requestUserDeletion(formData: FormData) {
 
 // Admin bricht eine laufende Löschanfrage ab (z.B. nach Einwand per Mail).
 export async function cancelUserDeletion(formData: FormData) {
-  const actor = await requireAdminOrPermission("canDeleteUsers");
-  if (!actor) return { error: "Keine Berechtigung." };
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
 
   const userId = Number(formData.get("userId"));
   if (!userId) return { error: "Ungültig." };
@@ -706,11 +712,12 @@ export async function setUserRole(formData: FormData) {
 }
 
 export async function searchUserByUsername(formData: FormData) {
-  // Auch für Nicht-Admins mit can_assign_roles ODER can_delete_users offen,
-  // sonst könnten sie nie einen User finden, dem sie eine Rolle geben bzw.
-  // dessen Löschung sie einleiten wollen.
-  const actor =
-    (await requireAdminOrPermission("canAssignRoles")) ?? (await requireAdminOrPermission("canDeleteUsers"));
+  // Auch für Nicht-Admins mit can_assign_roles offen, sonst könnten sie
+  // nie einen User finden, dem sie eine Rolle geben wollen. Volle Admins
+  // kommen ohnehin über den isFullAdmin-Bypass in requireAdminOrPermission
+  // durch - auch für die Sperr-/Löschanfrage-Suche, die jetzt reines
+  // Admin-Recht ist (siehe requestUserDeletion).
+  const actor = await requireAdminOrPermission("canAssignRoles");
   if (!actor) return { error: "Keine Berechtigung." };
 
   const raw = ((formData.get("username") as string) ?? "").trim();
@@ -1135,7 +1142,6 @@ export async function createOrUpdateRole(formData: FormData) {
   const canEditPostsValue = formData.get("canEditPosts") === "true";
   const canManageDiscountCodesValue = formData.get("canManageDiscountCodes") === "true";
   const canAssignRolesValue = formData.get("canAssignRoles") === "true";
-  const canDeleteUsersValue = formData.get("canDeleteUsers") === "true";
   const chatCanCreateChannelsValue = formData.get("chatCanCreateChannels") === "true";
   const chatCanDeleteOthersMessagesValue = formData.get("chatCanDeleteOthersMessages") === "true";
   const chatCanKickMembersValue = formData.get("chatCanKickMembers") === "true";
@@ -1159,7 +1165,6 @@ export async function createOrUpdateRole(formData: FormData) {
     canEditPosts: canEditPostsValue,
     canManageDiscountCodes: canManageDiscountCodesValue,
     canAssignRoles: canAssignRolesValue,
-    canDeleteUsers: canDeleteUsersValue,
     chatCanCreateChannels: chatCanCreateChannelsValue,
     chatCanDeleteOthersMessages: chatCanDeleteOthersMessagesValue,
     chatCanKickMembers: chatCanKickMembersValue,
