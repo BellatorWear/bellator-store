@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { APP_VERSION } from "@/app/version";
 
 export default function GlobalFooter() {
   return (
@@ -33,7 +34,7 @@ export default function GlobalFooter() {
       </div>
       <div className="border-t border-zinc-900 px-4 sm:px-8 py-4 flex flex-col sm:flex-row justify-between items-center gap-2">
         <p className="text-[9px] text-zinc-600 uppercase tracking-widest">© {new Date().getFullYear()} Bellator Streetwear. Alle Rechte vorbehalten.</p>
-        <p className="text-[9px] text-zinc-700 uppercase tracking-widest">Made with obsession.</p>
+        <p className="text-[9px] text-zinc-700 uppercase tracking-widest">Made with obsession. · v{APP_VERSION}</p>
       </div>
     </footer>
   );
