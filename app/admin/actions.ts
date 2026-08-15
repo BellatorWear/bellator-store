@@ -15,6 +15,7 @@ import { syncTeamChannelMembership } from "@/app/chat/team";
 import { notifyRestockSubscribers } from "@/app/shop/restock";
 import { sendEmail } from "@/app/utils/email";
 import { logAuditEvent } from "@/app/utils/auditLog";
+import { isSafeEmbedUrl } from "@/app/utils/videoEmbed";
 
 const MAX_IMAGES_PER_PRODUCT = 4;
 
@@ -993,6 +994,10 @@ export async function createHomePost(formData: FormData) {
     }
   } catch { /* Anhänge sind optional, Fehler ignorieren */ }
 
+  if (videoUrl && !isSafeEmbedUrl(videoUrl)) {
+    return { error: "Video-URL muss ein YouTube-Embed-Link sein (https://www.youtube.com/embed/... oder https://www.youtube-nocookie.com/embed/...)." };
+  }
+
   await db.insert(homePosts).values({
     title,
     body: sanitizeText(bodyRaw, 5000) || null,
@@ -1039,6 +1044,10 @@ export async function updateHomePost(formData: FormData) {
         .map((a) => ({ url: sanitizeText(a.url, 500), name: sanitizeText(a.name, 200) }));
     }
   } catch { /* Anhänge sind optional, Fehler ignorieren */ }
+
+  if (videoUrl && !isSafeEmbedUrl(videoUrl)) {
+    return { error: "Video-URL muss ein YouTube-Embed-Link sein (https://www.youtube.com/embed/... oder https://www.youtube-nocookie.com/embed/...)." };
+  }
 
   await db.update(homePosts).set({
     title,

@@ -12,6 +12,7 @@ import { getSetting, COUNTDOWN_KEY, COUNTDOWN_DEFAULT } from "@/app/utils/settin
 import { getCurrentUser } from "@/app/actions";
 import { getFeaturedReviews } from "./shop/reviews";
 import ReviewsBanner from "./ReviewsBanner";
+import { isSafeEmbedUrl } from "@/app/utils/videoEmbed";
 
 export const metadata = { title: "Bellator Streetwear — Home" };
 
@@ -114,9 +115,19 @@ export default async function HomePage() {
                       <img src={post.imageUrl} alt={post.title} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" />
                     </div>
                   )}
-                  {post.videoUrl && !post.imageUrl && (
+                  {post.videoUrl && !post.imageUrl && isSafeEmbedUrl(post.videoUrl) && (
                     <div className="aspect-video border-b border-zinc-800 pointer-events-none">
-                      <iframe src={post.videoUrl} className="w-full h-full" allow="autoplay; encrypted-media" allowFullScreen tabIndex={-1} />
+                      {/* Sandbox-Isolation, siehe app/post/[id]/page.tsx für Details */}
+                      <iframe
+                        src={post.videoUrl}
+                        className="w-full h-full"
+                        allow="autoplay; encrypted-media"
+                        allowFullScreen
+                        tabIndex={-1}
+                        sandbox="allow-scripts allow-same-origin allow-presentation"
+                        referrerPolicy="strict-origin-when-cross-origin"
+                        loading="lazy"
+                      />
                     </div>
                   )}
                   <div className="p-5 flex-1 flex flex-col">

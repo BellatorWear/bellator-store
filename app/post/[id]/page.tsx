@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import InfoPageLayout from "@/app/components/InfoPageLayout";
 import { getCurrentUser } from "@/app/actions";
+import { isSafeEmbedUrl } from "@/app/utils/videoEmbed";
 
 const CATEGORY_LABELS: Record<string, string> = {
   article: "Artikel",
@@ -76,9 +77,26 @@ export default async function HomePostDetailPage({ params }: { params: Promise<{
           </div>
         )}
 
-        {post.videoUrl && (
+        {post.videoUrl && isSafeEmbedUrl(post.videoUrl) && (
           <div className="w-full aspect-video mb-8 border border-zinc-800">
-            <iframe src={post.videoUrl} className="w-full h-full" allow="autoplay; encrypted-media" allowFullScreen />
+            {/*
+              Sandbox-Isolation: Das eingebettete Video läuft in einer eigenen
+              Origin ohne Zugriff auf Parent-DOM, Cookies/Storage des Shops
+              oder Top-Level-Navigation. allow-scripts + allow-same-origin
+              sind für den YouTube-Player selbst nötig, allow-presentation
+              für Vollbild. isSafeEmbedUrl() oben stellt zusätzlich sicher,
+              dass hier überhaupt nur YouTube-Embed-Links ankommen (siehe
+              app/utils/videoEmbed.ts).
+            */}
+            <iframe
+              src={post.videoUrl}
+              className="w-full h-full"
+              allow="autoplay; encrypted-media"
+              allowFullScreen
+              sandbox="allow-scripts allow-same-origin allow-presentation"
+              referrerPolicy="strict-origin-when-cross-origin"
+              loading="lazy"
+            />
           </div>
         )}
 

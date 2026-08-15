@@ -26,7 +26,10 @@ const nextConfig: NextConfig = {
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
       "connect-src 'self' https://api.stripe.com https://www.google-analytics.com https://*.public.blob.vercel-storage.com wss://*.pusher.com https://*.pusher.com",
-      "frame-src https://js.stripe.com https://hooks.stripe.com https://buy.stripe.com",
+      // youtube(-nocookie).com: für die sandboxed Video-Embeds in News-/Home-Posts
+      // (siehe app/utils/videoEmbed.ts - Allowlist muss zu dieser CSP passen,
+      // sonst werden gültige Embeds vom Browser trotzdem geblockt).
+      "frame-src https://js.stripe.com https://hooks.stripe.com https://buy.stripe.com https://www.youtube.com https://www.youtube-nocookie.com",
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self' https://buy.stripe.com",
