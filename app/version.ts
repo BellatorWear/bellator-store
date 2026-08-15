@@ -3,4 +3,4 @@
 // hochgezählt - Michael bekommt die Versionsnummer ab jetzt nur noch im
 // Chat mitgeteilt (nicht mehr als komplette Versions.zip verschickt),
 // dieser Wert hier ist die Stelle, an der sie tatsächlich live geht.
-export const APP_VERSION = "4.2.0";
+export const APP_VERSION = "4.2.1";
