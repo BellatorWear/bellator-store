@@ -6,6 +6,7 @@ import {
   timestamp,
   integer,
   jsonb,
+  index,
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -167,7 +168,10 @@ export const orders = pgTable("orders", {
   stripeSessionId: text("stripe_session_id").unique(),
   createdAt: timestamp("created_at").defaultNow(),
   receiptData: text("receipt_data"),
-});
+}, (table) => [
+  // v36: Bestellhistorie im Profil filtert immer nach user_id.
+  index("idx_orders_user_id").on(table.userId),
+]);
 
 export const orderItems = pgTable("order_items", {
   id: serial("id").primaryKey(),
@@ -176,7 +180,11 @@ export const orderItems = pgTable("order_items", {
   productName: text("product_name").notNull(),
   price: integer("price").notNull(),
   quantity: integer("quantity").notNull().default(1),
-});
+}, (table) => [
+  // v36: Bestellpositionen werden immer pro Bestellung geladen.
+  index("idx_order_items_order_id").on(table.orderId),
+  index("idx_order_items_product_id").on(table.productId),
+]);
 
 // Echte, kaufgebundene Produkt-Reviews (v32) - ersetzt die alte
 // Selbstauskunfts-"review"-Challenge. Jeder Review ist über order_id an
@@ -191,7 +199,10 @@ export const productReviews = pgTable("product_reviews", {
   title: text("title").notNull(),
   body: text("body").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  // v36: Reviews werden auf jeder Produktseite pro product_id geladen.
+  index("idx_product_reviews_product_id").on(table.productId),
+]);
 
 export const pointTransactions = pgTable("point_transactions", {
   id: serial("id").primaryKey(),
@@ -268,7 +279,10 @@ export const products = pgTable("products", {
   isPreRelease: boolean("is_pre_release").default(false),
   dropDate: timestamp("drop_date"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  // v36: Shop-Listing/Sitemap filtern permanent auf aktive Produkte.
+  index("idx_products_active").on(table.active),
+]);
 
 // Varianten = Größen (z.B. "M", "L") - eigener Lagerbestand pro Größe.
 export const productVariants = pgTable("product_variants", {
@@ -316,7 +330,10 @@ export const cartItems = pgTable("cart_items", {
   colorId: integer("color_id").references(() => productColors.id),
   quantity: integer("quantity").default(1),
   addedAt: timestamp("added_at").defaultNow(),
-});
+}, (table) => [
+  // v36: Warenkorb wird bei jedem Request per owner_key (Cookie) geladen.
+  index("idx_cart_items_owner_key").on(table.ownerKey),
+]);
 
 // Pre-Release-Zugangscodes: schalten Produkte frei, die noch vor ihrem
 // dropDate stehen. maxUsesPerAccount begrenzt, wie oft EIN Account
@@ -450,7 +467,11 @@ export const chatChannelMembers = pgTable("chat_channel_members", {
     .references(() => users.id),
   lastReadAt: timestamp("last_read_at"),
   joinedAt: timestamp("joined_at").defaultNow(),
-});
+}, (table) => [
+  // v36: Mitgliederliste pro Channel + "in welchen Channels bin ich" pro User.
+  index("idx_chat_channel_members_channel_id").on(table.channelId),
+  index("idx_chat_channel_members_user_id").on(table.userId),
+]);
 
 export const chatMessages = pgTable("chat_messages", {
   id: serial("id").primaryKey(),
@@ -475,7 +496,10 @@ export const chatMessages = pgTable("chat_messages", {
   // Zeitstempel der letzten Bearbeitung (v24) - null = nie bearbeitet.
   editedAt: timestamp("edited_at"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  // v36: Nachrichten werden pro Channel geladen - höchste Polling-Frequenz im System.
+  index("idx_chat_messages_channel_id").on(table.channelId),
+]);
 
 // ===================================================================
 // Dynamische Rollen (v22) - Admin kann eigene Rollen mit frei wählbaren
@@ -521,7 +545,10 @@ export const restockNotifications = pgTable("restock_notifications", {
   userId: integer("user_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   notifiedAt: timestamp("notified_at"),
-});
+}, (table) => [
+  // v36: Restock-Cron fragt offene Benachrichtigungen pro Produkt ab.
+  index("idx_restock_notifications_product_id").on(table.productId),
+]);
 
 export const supportTickets = pgTable("support_tickets", {
   id: serial("id").primaryKey(),
@@ -536,7 +563,10 @@ export const supportTickets = pgTable("support_tickets", {
   attachmentType: text("attachment_type"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  // v36: "Meine Tickets" im Profil filtert nach user_id.
+  index("idx_support_tickets_user_id").on(table.userId),
+]);
 
 export const supportTicketMessages = pgTable("support_ticket_messages", {
   id: serial("id").primaryKey(),
@@ -550,7 +580,10 @@ export const supportTicketMessages = pgTable("support_ticket_messages", {
   attachmentType: text("attachment_type"),
   isInternal: boolean("is_internal").default(false),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  // v36: Ticketverlauf wird pro Ticket geladen.
+  index("idx_support_ticket_messages_ticket_id").on(table.ticketId),
+]);
 
 // Produkt-Erweiterungen: Kategorie, Geschlecht, Collection
 // (werden als ALTER TABLE in der Migration ergänzt, weil die Tabelle schon existiert)

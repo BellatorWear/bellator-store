@@ -49,6 +49,15 @@ const nextConfig: NextConfig = {
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
         ],
       },
+      {
+        // Browser sollen sw.js NIE aus dem HTTP-Cache bedienen - sonst
+        // bekommen wiederkehrende Besucher nach einem Deploy tagelang die
+        // alte Service-Worker-Version, obwohl der Browser selbst brav auf
+        // Updates prüft (der Update-Check greift nur, wenn die Datei
+        // überhaupt neu vom Server geholt wird statt aus dem HTTP-Cache).
+        source: "/sw.js",
+        headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }],
+      },
     ];
   },
 };

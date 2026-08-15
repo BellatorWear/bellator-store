@@ -6,6 +6,7 @@ import { addToCart } from "@/app/cart";
 import { updateProduct } from "@/app/admin/actions";
 import PriceDisplay from "@/app/shop/components/PriceDisplay";
 import { subscribeRestock } from "@/app/shop/restock";
+import { queueCartItem } from "@/app/utils/offlineQueue";
 
 type Variant = { id: number; label: string; stock: number | null };
 type Color = { id: number; name: string; hexColor: string; frontImage: string; backImage: string };
@@ -70,6 +71,36 @@ export default function ProductDetailClient({
     if (loading) return;
     setLoading(true);
     setErr("");
+
+    // Offline: gar nicht erst versuchen, die Server Action aufzurufen
+    // (die würde ohnehin nur mit einem Netzwerkfehler fehlschlagen) -
+    // stattdessen direkt in die lokale Queue schreiben. Wird automatisch
+    // synchronisiert, sobald wieder eine Verbindung besteht (siehe
+    // app/components/OfflineSync.tsx). Hinweis: setzt voraus, dass der
+    // User eingeloggt ist (wie beim normalen Kauf auch) - ist er es nicht,
+    // schlägt der Sync später mit "Nicht eingeloggt" fehl; das lässt sich
+    // ohne Netzwerk hier nicht vorab prüfen.
+    if (!navigator.onLine) {
+      try {
+        await queueCartItem({
+          clientId: crypto.randomUUID(),
+          productId: product.id,
+          variantId: variantId ?? null,
+          colorId: colorId ?? null,
+          quantity: 1,
+          productName: product.name,
+        });
+        setAdded(true);
+        setTimeout(() => setAdded(false), 2000);
+      } catch (e) {
+        console.error("Offline-Queue fehlgeschlagen:", e);
+        setErr("Du bist offline und dein Browser unterstützt keine Offline-Warenkorb-Speicherung.");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
       const fd = new FormData();
       fd.append("productId", String(product.id));
@@ -126,7 +157,7 @@ export default function ProductDetailClient({
   }
 
   return (
-    <main className="t-text font-mono">
+    <main className="t-text font-mono pb-20 sm:pb-0">
       <div className="max-w-[1000px] mx-auto py-8 px-4 md:py-16">
         <div className="flex justify-between items-center mb-8">
           <Link href="/shop" className="text-xs font-bold uppercase tracking-widest text-white bg-black/70 border border-zinc-500 px-3 py-1.5 hover:bg-white hover:text-black transition-all inline-block">
@@ -170,7 +201,7 @@ export default function ProductDetailClient({
                     <button key={i} onClick={() => setActiveImage(i)}
                       className={`w-16 h-16 border overflow-hidden ${i === activeImage ? "border-white" : "t-border-s opacity-60"}`}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={img} alt="" className="w-full h-full object-cover" />
+                      <img src={img} alt={`${product.name} – Ansicht ${i + 1}`} className="w-full h-full object-cover" />
                     </button>
                   ))}
                 </div>
@@ -276,6 +307,24 @@ export default function ProductDetailClient({
           </div>
         </div>
       </div>
+
+      {/* Sticky Mobile CTA: der normale "Zum Warenkorb"-Button liegt bei
+          längerer Produktbeschreibung oft weit unterhalb des sichtbaren
+          Bereichs. Auf Mobile (< sm) bleibt dieser Balken deshalb immer
+          am unteren Bildschirmrand sichtbar, damit der Kauf-Impuls nicht
+          erst durch Scrollen verpufft. Nur wenn nicht im Edit-Modus. */}
+      {!editing && (
+        <div className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-black/95 backdrop-blur border-t border-zinc-700 px-4 py-3 flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] uppercase tracking-widest t-muted truncate">{product.name}</p>
+            <PriceDisplay priceCents={product.priceCents} compareAtPriceCents={product.compareAtPriceCents} />
+          </div>
+          <button onClick={handleAdd} disabled={loading || soldOut || variantSoldOut}
+            className="shrink-0 py-3 px-5 t-btn-primary font-black uppercase tracking-widest transition text-xs disabled:opacity-50">
+            {soldOut || variantSoldOut ? "Ausverkauft" : added ? "✓" : loading ? "..." : "In den Warenkorb"}
+          </button>
+        </div>
+      )}
     </main>
   );
 }

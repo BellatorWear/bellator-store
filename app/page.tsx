@@ -1,6 +1,5 @@
 import { db } from "@/db";
-import { homePosts, users, products } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { users, products } from "@/db/schema";
 import Link from "next/link";
 import GlobalHeader from "./components/GlobalHeader";
 import GlobalFooter from "./components/GlobalFooter";
@@ -10,9 +9,9 @@ import { publishDueScheduledPosts } from "./utils/publishScheduled";
 import CountdownBanner from "./shop/components/CountdownBanner";
 import { getSetting, COUNTDOWN_KEY, COUNTDOWN_DEFAULT } from "@/app/utils/settings";
 import { getCurrentUser } from "@/app/actions";
-import { getFeaturedReviews } from "./shop/reviews";
 import ReviewsBanner from "./ReviewsBanner";
 import { isSafeEmbedUrl } from "@/app/utils/videoEmbed";
+import { getCachedHomeContent } from "@/app/utils/homeContentCache";
 
 export const metadata = { title: "Bellator Streetwear — Home" };
 
@@ -26,12 +25,11 @@ const CATEGORY_LABELS: Record<string, string> = {
 export default async function HomePage() {
   await publishDueScheduledPosts();
   const user = await getCurrentUser();
-  const [posts, userCountResult, countdownSetting, upcomingDrops, featuredReviews] = await Promise.all([
-    db.select().from(homePosts).where(eq(homePosts.published, true)).orderBy(desc(homePosts.createdAt)),
+  const [{ posts, featuredReviews }, userCountResult, countdownSetting, upcomingDrops] = await Promise.all([
+    getCachedHomeContent(),
     db.select({ id: users.id }).from(users),
     getSetting(COUNTDOWN_KEY, COUNTDOWN_DEFAULT),
     db.select({ dropDate: products.dropDate }).from(products),
-    getFeaturedReviews(),
   ]);
 
   const userCount = userCountResult.length;

@@ -60,6 +60,30 @@ export async function addToCart(formData: FormData) {
   const quantity = Math.max(1, Math.min(10, Number(formData.get("quantity")) || 1));
   if (!productId) return { error: "Ungültiges Produkt." };
 
+  const ownerKey = await initCartCookie();
+  return addToCartForUser(ownerKey, { productId, variantId, colorId, quantity });
+}
+
+/**
+ * Kernlogik von addToCart, OHNE cookies()/headers()-Zugriff - dadurch aus
+ * zwei verschiedenen Next.js-Kontexten aufrufbar:
+ * 1. Der addToCart Server Action oben (normaler "online"-Klick auf
+ *    "In den Warenkorb").
+ * 2. app/api/cart/sync/route.ts - verarbeitet Warenkorb-Aktionen, die im
+ *    Service Worker offline in der IndexedDB gesammelt wurden, sobald der
+ *    Client wieder online ist (siehe app/utils/offlineQueue.ts).
+ * ownerKey wird deshalb vom Aufrufer übergeben statt hier per
+ * initCartCookie() ermittelt zu werden - Route Handler und Service Worker
+ * arbeiten nur mit bereits eingeloggten Usern (ownerKey "user:<id>"), ein
+ * neuer Gast-Cart-Cookie wird hier nie angelegt.
+ */
+export async function addToCartForUser(
+  ownerKey: string,
+  { productId, variantId, colorId, quantity }: { productId: number; variantId: number | null; colorId: number | null; quantity: number },
+) {
+  if (!productId) return { error: "Ungültiges Produkt." };
+  const safeQuantity = Math.max(1, Math.min(10, quantity || 1));
+
   // Pre-Release-Schutz auch hier (nicht nur in der Anzeige) - sonst könnte
   // man ein gesperrtes Produkt einfach direkt per productId in den
   // Warenkorb legen, ohne es je gesehen zu haben.
@@ -67,12 +91,10 @@ export async function addToCart(formData: FormData) {
   const product = productRows[0];
   if (!product || !product.active) return { error: "Produkt nicht verfügbar." };
   if (product.isPreRelease && product.dropDate && new Date(product.dropDate).getTime() > Date.now()) {
-    const user = await getCurrentUser();
-    const access = await hasPreReleaseAccess(user?.id);
+    const userId = ownerKey.startsWith("user:") ? Number(ownerKey.slice(5)) : undefined;
+    const access = await hasPreReleaseAccess(userId);
     if (!access) return { error: "Dieses Produkt ist noch nicht freigegeben." };
   }
-
-  const ownerKey = await initCartCookie();
 
   const existing = await db
     .select()
@@ -83,10 +105,10 @@ export async function addToCart(formData: FormData) {
   if (match) {
     await db
       .update(cartItems)
-      .set({ quantity: (match.quantity ?? 1) + quantity, addedAt: new Date() })
+      .set({ quantity: (match.quantity ?? 1) + safeQuantity, addedAt: new Date() })
       .where(eq(cartItems.id, match.id));
   } else {
-    await db.insert(cartItems).values({ ownerKey, productId, variantId, colorId, quantity });
+    await db.insert(cartItems).values({ ownerKey, productId, variantId, colorId, quantity: safeQuantity });
   }
 
   return { success: true };
@@ -223,7 +245,7 @@ export async function createCheckoutSession() {
         ownerKey,
         userId: user?.id ? String(user.id) : "",
       },
-      success_url: `${origin}/shop?checkout=success`,
+      success_url: `${origin}/shop/danke?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/shop/warenkorb?checkout=cancelled`,
     });
 

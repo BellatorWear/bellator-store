@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Offline — Bellator Streetwear</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #000;
+      color: #fff;
+      font-family: ui-monospace, "Courier New", Menlo, Consolas, monospace;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 1rem;
+    }
+    .wrap { max-width: 420px; }
+    .eyebrow { font-size: 11px; letter-spacing: 0.4em; text-transform: uppercase; color: #71717a; margin-bottom: 16px; }
+    h1 { font-size: 28px; font-weight: 900; text-transform: uppercase; letter-spacing: -0.02em; margin: 0 0 16px; }
+    p { font-size: 14px; color: #a1a1aa; line-height: 1.6; margin: 0 0 24px; }
+    button {
+      background: #fff; color: #000; border: 3px solid #fff;
+      padding: 12px 24px; font-size: 12px; font-weight: 900;
+      text-transform: uppercase; letter-spacing: 0.1em; cursor: pointer;
+      font-family: inherit;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <p class="eyebrow">Bellator Streetwear</p>
+    <h1>Du bist offline</h1>
+    <p>
+      Diese Seite wurde noch nicht besucht und ist deshalb nicht offline
+      verfügbar. Bereits im Warenkorb liegende Aktionen werden automatisch
+      synchronisiert, sobald du wieder Verbindung hast.
+    </p>
+    <button onclick="location.reload()">Nochmal versuchen</button>
+  </div>
+</body>
+</html>

@@ -16,6 +16,31 @@ import { notifyRestockSubscribers } from "@/app/shop/restock";
 import { sendEmail } from "@/app/utils/email";
 import { logAuditEvent } from "@/app/utils/auditLog";
 import { isSafeEmbedUrl } from "@/app/utils/videoEmbed";
+import { FEATURE_FLAGS, getFeatureFlags, setFeatureFlag, type FeatureFlagKey } from "@/app/utils/featureFlags";
+import { revalidateTag } from "next/cache";
+import { HOME_CONTENT_CACHE_TAG } from "@/app/utils/homeContentCache";
+
+// Kill-Switch für nicht-kritische Features (Lastabwurf bei Traffic-Spitzen
+// oder Incidents). Bewusst requireAdmin() statt requireAdminOrPermission():
+// das ist ein System-weiter Schalter, kein normales Content-Management.
+export async function getFeatureFlagsForAdmin() {
+  const actor = await requireAdmin();
+  if (!actor) return null;
+  return getFeatureFlags();
+}
+
+export async function toggleFeatureFlag(flag: FeatureFlagKey, enabled: boolean) {
+  const actor = await requireAdmin();
+  if (!actor) return { error: "Keine Berechtigung." };
+  if (!(flag in FEATURE_FLAGS)) return { error: "Unbekanntes Feature." };
+
+  await setFeatureFlag(flag, enabled);
+  await logAuditEvent(enabled ? "feature_flag_enabled" : "feature_flag_disabled", {
+    targetType: "feature_flag",
+    targetId: FEATURE_FLAGS[flag].key,
+  });
+  return { success: true };
+}
 
 const MAX_IMAGES_PER_PRODUCT = 4;
 
@@ -345,6 +370,9 @@ export async function deleteReview(formData: FormData) {
     targetId: id,
     details: { productId: review.productId, rating: review.rating, title: review.title },
   });
+  // Gelöschte Review könnte Teil der Featured-Reviews auf der Homepage
+  // gewesen sein (siehe app/utils/homeContentCache.ts).
+  revalidateTag(HOME_CONTENT_CACHE_TAG, "max");
 
   return { success: true };
 }
@@ -1061,6 +1089,7 @@ export async function updateHomePost(formData: FormData) {
     updatedAt: new Date(),
   }).where(eq(homePosts.id, id));
 
+  revalidateTag(HOME_CONTENT_CACHE_TAG, "max");
   return { success: true };
 }
 
@@ -1075,6 +1104,7 @@ export async function toggleHomePostPublished(formData: FormData) {
   if (existing.length === 0) return { error: "Post nicht gefunden." };
 
   await db.update(homePosts).set({ published: !existing[0].published }).where(eq(homePosts.id, id));
+  revalidateTag(HOME_CONTENT_CACHE_TAG, "max");
   return { success: true };
 }
 
@@ -1085,6 +1115,7 @@ export async function deleteHomePost(formData: FormData) {
   const id = Number(formData.get("id"));
   if (!id) return { error: "Ungültig." };
   await db.delete(homePosts).where(eq(homePosts.id, id));
+  revalidateTag(HOME_CONTENT_CACHE_TAG, "max");
   return { success: true };
 }
 

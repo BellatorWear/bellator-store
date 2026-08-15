@@ -268,7 +268,21 @@ input[type="file"].hidden {
 @media (max-width: 639px) {
   .site-bg {
     background-image: none;
+    /* position:relative + z-index:0 erzeugt einen EIGENEN Stacking-Context
+       auf .site-bg. Wichtig für das ::before darunter: html/body haben
+       weiter oben ein opakes background-color (var(--bg)) gesetzt. Ohne
+       eigenen Stacking-Context hier würde ein fixed-positioniertes Kind
+       mit z-index:-1 nicht etwa "hinter .site-bg" landen, sondern nach
+       CSS-Spec direkt hinter den kompletten Seiten-Canvas-Hintergrund von
+       html/body rutschen - das Bild wäre unsichtbar, obwohl die Datei
+       korrekt geladen wird (genau das war der Bug: nichts fehlte, es lag
+       nur unter einer opaken schwarzen Fläche). Das gilt unabhängig davon,
+       dass position:fixed selbst weiterhin ganz normal am Viewport
+       positioniert wird - Containing-Block (Position) und
+       Stacking-Context-Zugehörigkeit (z-index-Reihenfolge) werden bei
+       fixed-Elementen von CSS getrennt behandelt. */
     position: relative;
+    z-index: 0;
   }
   .site-bg::before {
     content: "";

@@ -3,7 +3,16 @@ import { db } from "@/db";
 import { challenges, userChallenges, rewards, userRewards } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import RedeemRewardButton from "./RedeemRewardButton";
+
+// Login-only Bereich (siehe redirect unten) - kein Indexierungswert, da der
+// Inhalt pro User unterschiedlich ist und ohne Login eh nicht erreichbar.
+export const metadata: Metadata = {
+  title: "Challenges & Punkte",
+  robots: { index: false, follow: false },
+};
+
 
 // Alle Challenge-Typen werden automatisch geprüft (über Stripe-Webhook,
 // Login, Einstellungen etc.). Es gibt keinen "Als erledigt markieren"-

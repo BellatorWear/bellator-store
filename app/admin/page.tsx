@@ -30,6 +30,8 @@ import EmailLogViewer from "./EmailLogViewer";
 import HomePostManager from "./HomePostManager";
 import AdminDashboard, { type AdminFunctionGroup } from "./AdminDashboard";
 import { publishDueScheduledPosts } from "@/app/utils/publishScheduled";
+import { getFeatureFlags } from "@/app/utils/featureFlags";
+import FeatureFlagsConfig from "./FeatureFlagsConfig";
 import RoleManager from "./RoleManager";
 import TeamChatAccess from "./TeamChatAccess";
 import TicketManager from "./TicketManager";
@@ -80,6 +82,7 @@ export default async function AdminPage() {
     homePostList,
     chatRoleAccess,
     allTickets,
+    featureFlags,
   ] = await Promise.all([
     db.select().from(products),
     db.select().from(productVariants),
@@ -117,6 +120,7 @@ export default async function AdminPage() {
       })
       .from(supportTickets)
       .orderBy(desc(supportTickets.updatedAt), desc(supportTickets.createdAt)),
+    getFeatureFlags(),
   ]);
 
   const auditEntries = user.isAdmin ? await getAuditLog(300) : [];
@@ -271,6 +275,13 @@ export default async function AdminPage() {
           description: "Zieldatum & Label für den Drop-Countdown",
           keywords: ["countdown", "zeit", "drop", "timer"],
           content: <CountdownConfig initial={countdown} />,
+        },
+        {
+          id: "feature-flags",
+          title: "Feature-Flags",
+          description: "Nicht-kritische Features bei Bedarf abschalten (Lastabwurf)",
+          keywords: ["feature", "flag", "kill-switch", "last", "performance", "ausfall"],
+          content: <FeatureFlagsConfig initial={featureFlags} />,
         },
       ],
     },
