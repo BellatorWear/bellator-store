@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { removeFromCart, updateCartQuantity, createCheckoutSession } from "@/app/cart";
+import SmartImage from "@/app/components/SmartImage";
 
 type CartItem = {
   id: number;
@@ -74,8 +75,7 @@ export default function CartClient({ initialCart }: { initialCart: CartItem[] })
               {cart.map((item) => (
                 <div key={item.id} className="t-card border t-border p-4 flex gap-4 items-center relative">
                   {item.image && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.image} alt={item.name} className="w-16 h-16 object-cover border t-border-s shrink-0" />
+                    <SmartImage src={item.image} alt={item.name} width={64} height={64} className="w-16 h-16 object-cover border t-border-s shrink-0" />
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold uppercase tracking-widest t-text truncate">{item.name}</p>

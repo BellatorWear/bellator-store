@@ -7,8 +7,13 @@ import GlobalHeader from "@/app/components/GlobalHeader";
 import GlobalFooter from "@/app/components/GlobalFooter";
 import { getCurrentUser } from "@/app/actions";
 import { getPendingReviewProducts } from "@/app/shop/reviews";
-import ReviewPopup from "@/app/shop/ReviewPopup";
 import { isFeatureEnabled } from "@/app/utils/featureFlags";
+import dynamic from "next/dynamic";
+
+// Lazy geladen: das Popup-JS soll nur dann heruntergeladen werden, wenn
+// tatsächlich offene Bewertungen anstehen (pendingReviews.length > 0),
+// nicht bei jedem Besuch der Danke-Seite.
+const ReviewPopup = dynamic(() => import("@/app/shop/ReviewPopup"));
 
 export const metadata: Metadata = {
   title: "Danke für deine Bestellung",

@@ -12,6 +12,7 @@ import { getCurrentUser } from "@/app/actions";
 import ReviewsBanner from "./ReviewsBanner";
 import { isSafeEmbedUrl } from "@/app/utils/videoEmbed";
 import { getCachedHomeContent } from "@/app/utils/homeContentCache";
+import SmartImage from "@/app/components/SmartImage";
 
 export const metadata = { title: "Bellator Streetwear — Home" };
 
@@ -108,9 +109,8 @@ export default async function HomePage() {
               {posts.map((post) => (
                 <Link key={post.id} href={`/post/${post.id}`} className="border border-zinc-700 bg-black/80 flex flex-col hover:border-zinc-500 transition-all group">
                   {post.imageUrl && (
-                    <div className="aspect-video overflow-hidden border-b border-zinc-800">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={post.imageUrl} alt={post.title} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" />
+                    <div className="relative aspect-video overflow-hidden border-b border-zinc-800">
+                      <SmartImage src={post.imageUrl} alt={post.title} className="object-cover grayscale group-hover:grayscale-0 transition-all duration-500" />
                     </div>
                   )}
                   {post.videoUrl && !post.imageUrl && isSafeEmbedUrl(post.videoUrl) && (

@@ -2,11 +2,21 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { addToCart } from "@/app/cart";
-import { updateProduct } from "@/app/admin/actions";
 import PriceDisplay from "@/app/shop/components/PriceDisplay";
 import { subscribeRestock } from "@/app/shop/restock";
 import { queueCartItem } from "@/app/utils/offlineQueue";
+import SmartImage from "@/app/components/SmartImage";
+
+// Lazy geladen (next/dynamic) statt statisch importiert: das komplette
+// Admin-Bearbeiten-Formular (inkl. updateProduct-Action-Referenz) soll
+// nicht im JS-Bundle jeder Produktseite für jeden normalen Besucher
+// landen, sondern erst wenn ein Admin tatsächlich auf "Bearbeiten"
+// klickt. ssr:false, weil das Formular ohnehin nur nach einem Klick
+// (Client-Interaktion) sichtbar wird - serverseitiges Rendern bringt hier
+// keinen Vorteil, nur unnötigen Server-Aufwand.
+const ProductEditForm = dynamic(() => import("./ProductEditForm"), { ssr: false });
 
 type Variant = { id: number; label: string; stock: number | null };
 type Color = { id: number; name: string; hexColor: string; frontImage: string; backImage: string };
@@ -46,14 +56,6 @@ export default function ProductDetailClient({
 
   // --- Admin Inline-Edit ---
   const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(product.name);
-  const [description, setDescription] = useState(product.description);
-  const [price, setPrice] = useState((product.priceCents / 100).toString());
-  const [compareAtPrice, setCompareAtPrice] = useState(product.compareAtPriceCents ? (product.compareAtPriceCents / 100).toString() : "");
-  const [dropLabel, setDropLabel] = useState(product.dropLabel ?? "");
-  const [dropLimit, setDropLimit] = useState(product.dropLimit ? String(product.dropLimit) : "");
-  const [saving, setSaving] = useState(false);
-  const [saveErr, setSaveErr] = useState("");
 
   const remaining = product.dropLimit ? product.dropLimit - (product.soldCount ?? 0) : null;
   const soldOut = remaining !== null && remaining <= 0;
@@ -127,35 +129,6 @@ export default function ProductDetailClient({
     }
   }
 
-  async function saveEdit() {
-    if (saving) return;
-    setSaving(true);
-    setSaveErr("");
-    try {
-      const fd = new FormData();
-      fd.append("id", String(product.id));
-      fd.append("name", name);
-      fd.append("description", description);
-      fd.append("price", price);
-      fd.append("compareAtPrice", compareAtPrice);
-      fd.append("dropLabel", dropLabel);
-      fd.append("dropLimit", dropLimit);
-      fd.append("active", String(product.active ?? true));
-      const res = await updateProduct(fd);
-      if (res?.error) {
-        setSaveErr(res.error);
-        return;
-      }
-      setEditing(false);
-      router.refresh();
-    } catch (e) {
-      console.error("Speichern fehlgeschlagen:", e);
-      setSaveErr("Fehler. Bitte nochmal versuchen.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
     <main className="t-text font-mono pb-20 sm:pb-0">
       <div className="max-w-[1000px] mx-auto py-8 px-4 md:py-16">
@@ -180,10 +153,9 @@ export default function ProductDetailClient({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
           {/* Bilder */}
           <div className="flex flex-col">
-            <div className="t-card border aspect-square flex items-center justify-center mb-4 overflow-hidden">
+            <div className="t-card border aspect-square relative flex items-center justify-center mb-4 overflow-hidden">
               {mainImage ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={mainImage} alt={product.name} className="max-h-full w-full object-contain p-4" />
+                <SmartImage src={mainImage} alt={product.name} className="object-contain p-4" />
               ) : (
                 <span className="text-xs t-faint uppercase tracking-widest">Kein Bild</span>
               )}
@@ -200,8 +172,7 @@ export default function ProductDetailClient({
                   {images.map((img, i) => (
                     <button key={i} onClick={() => setActiveImage(i)}
                       className={`w-16 h-16 border overflow-hidden ${i === activeImage ? "border-white" : "t-border-s opacity-60"}`}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={img} alt={`${product.name} – Ansicht ${i + 1}`} className="w-full h-full object-cover" />
+                      <SmartImage src={img} alt={`${product.name} – Ansicht ${i + 1}`} width={64} height={64} className="w-full h-full object-cover" />
                     </button>
                   ))}
                 </div>
@@ -212,36 +183,7 @@ export default function ProductDetailClient({
           {/* Info / Edit */}
           <div className="flex flex-col justify-center t-card border p-5 sm:p-6 space-y-5">
             {editing ? (
-              <div className="space-y-3">
-                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name"
-                  className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white" />
-                <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Beschreibung"
-                  className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white resize-none" />
-                <div className="grid grid-cols-2 gap-2">
-                  <input value={price} onChange={(e) => setPrice(e.target.value)} type="number" step="0.01" placeholder="Preis (€)"
-                    className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white" />
-                  <input value={compareAtPrice} onChange={(e) => setCompareAtPrice(e.target.value)} type="number" step="0.01" placeholder="Alter Preis (€, opt.)"
-                    className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white" />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input value={dropLabel} onChange={(e) => setDropLabel(e.target.value)} placeholder="Drop-Label"
-                    className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white" />
-                  <input value={dropLimit} onChange={(e) => setDropLimit(e.target.value)} type="number" placeholder="Drop-Limit"
-                    className="w-full bg-zinc-900 border border-zinc-700 p-2 text-sm text-white" />
-                </div>
-                <p className="text-[9px] text-zinc-500">Größen & Farben lassen sich im Admin-Panel verwalten.</p>
-                {saveErr && <p className="text-[10px] text-red-500 uppercase tracking-widest">{saveErr}</p>}
-                <div className="flex gap-2">
-                  <button onClick={saveEdit} disabled={saving}
-                    className="flex-1 t-btn-primary py-2.5 font-black text-xs uppercase tracking-widest transition disabled:opacity-50">
-                    {saving ? "..." : "Speichern"}
-                  </button>
-                  <button onClick={() => setEditing(false)} disabled={saving}
-                    className="flex-1 t-btn-outline py-2.5 font-black text-xs uppercase tracking-widest transition">
-                    Abbrechen
-                  </button>
-                </div>
-              </div>
+              <ProductEditForm product={product} onCancel={() => setEditing(false)} />
             ) : (
               <>
                 <div>

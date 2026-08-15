@@ -3,6 +3,7 @@ import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { handleAction } from "../actions";
 import { sanitizeNextPath } from "../utils/redirect";
+import TurnstileWidget from "@/app/components/TurnstileWidget";
 
 function RegistrierenForm() {
   const [msg, setMsg] = useState<{
@@ -10,6 +11,7 @@ function RegistrierenForm() {
     type: "success" | "error";
   } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
   const searchParams = useSearchParams();
   const next = sanitizeNextPath(searchParams.get("next"));
   const nextQuery = next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
@@ -19,6 +21,7 @@ function RegistrierenForm() {
     setLoading(true);
     setMsg(null);
     formData.append("actionType", "request");
+    formData.append("turnstileToken", turnstileToken);
     const res = await handleAction(formData);
     setLoading(false);
     if (res?.error) {
@@ -57,6 +60,7 @@ function RegistrierenForm() {
               Eingeladen von {ref}
             </p>
           )}
+          <TurnstileWidget onVerify={setTurnstileToken} />
           <button
             type="submit"
             disabled={loading}

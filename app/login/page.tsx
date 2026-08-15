@@ -4,11 +4,13 @@ import { useSearchParams } from "next/navigation";
 import { handleAction } from "../actions";
 import { sanitizeNextPath } from "../utils/redirect";
 import { Eye, EyeOff } from "lucide-react";
+import TurnstileWidget from "@/app/components/TurnstileWidget";
 
 function LoginForm() {
   const [msg, setMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
   const searchParams = useSearchParams();
   const next = sanitizeNextPath(searchParams.get("next"));
   const nextQuery = next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
@@ -23,6 +25,7 @@ function LoginForm() {
     setLoading(true);
     setMsg(null);
     formData.append("actionType", "login");
+    formData.append("turnstileToken", turnstileToken);
     try {
       const res = await handleAction(formData);
       if (res?.error) { setMsg({ text: res.error, type: "error" }); return; }
@@ -74,6 +77,7 @@ function LoginForm() {
               Passwort vergessen?
             </a>
           </div>
+          <TurnstileWidget onVerify={setTurnstileToken} />
           <button type="submit" disabled={loading}
             className="w-full border-2 border-white py-3 font-black text-xs uppercase tracking-widest text-white hover:bg-white hover:text-black transition-all disabled:opacity-50">
             {loading ? "..." : "Einloggen"}

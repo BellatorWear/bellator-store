@@ -21,7 +21,9 @@ const nextConfig: NextConfig = {
   async headers() {
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://www.googletagmanager.com https://www.google-analytics.com",
+      // challenges.cloudflare.com: Turnstile Bot-Schutz (Login, Registrierung,
+      // Passwort-vergessen) - siehe app/components/TurnstileWidget.tsx.
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://www.googletagmanager.com https://www.google-analytics.com https://challenges.cloudflare.com",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
@@ -29,7 +31,7 @@ const nextConfig: NextConfig = {
       // youtube(-nocookie).com: für die sandboxed Video-Embeds in News-/Home-Posts
       // (siehe app/utils/videoEmbed.ts - Allowlist muss zu dieser CSP passen,
       // sonst werden gültige Embeds vom Browser trotzdem geblockt).
-      "frame-src https://js.stripe.com https://hooks.stripe.com https://buy.stripe.com https://www.youtube.com https://www.youtube-nocookie.com",
+      "frame-src https://js.stripe.com https://hooks.stripe.com https://buy.stripe.com https://www.youtube.com https://www.youtube-nocookie.com https://challenges.cloudflare.com",
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self' https://buy.stripe.com",

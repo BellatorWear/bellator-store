@@ -3,10 +3,12 @@ import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { handleAction } from "../actions";
 import { sanitizeNextPath } from "../utils/redirect";
+import TurnstileWidget from "@/app/components/TurnstileWidget";
 
 function ForgotPasswordForm() {
   const [msg, setMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
   const searchParams = useSearchParams();
   const next = sanitizeNextPath(searchParams.get("next"));
   const nextQuery = next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
@@ -15,6 +17,7 @@ function ForgotPasswordForm() {
     setLoading(true);
     setMsg(null);
     formData.append("actionType", "forgotPassword");
+    formData.append("turnstileToken", turnstileToken);
     const res = await handleAction(formData);
     setLoading(false);
     if (res?.error) setMsg({ text: res.error as string, type: "error" });
@@ -40,6 +43,7 @@ function ForgotPasswordForm() {
             className="w-full bg-black/80 border-b border-zinc-600 p-2 focus:border-white outline-none transition uppercase text-center placeholder:text-zinc-600 text-white"
             placeholder="E-MAIL ADRESSE"
           />
+          <TurnstileWidget onVerify={setTurnstileToken} />
           <button
             type="submit"
             disabled={loading}

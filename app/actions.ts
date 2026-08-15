@@ -23,8 +23,9 @@ import { eq, and, sql, gte } from "drizzle-orm";
 import { sanitizeText, isSuspiciousInput } from "./utils/inputSafety";
 import { USERNAME_RE, daysUntilUsernameChangeAllowed } from "./utils/username";
 import { isTrustedOrigin } from "./utils/origin";
+import { verifyTurnstile } from "./utils/turnstile";
 import { Resend } from "resend";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { checkLoginRateLimit, checkEmailRateLimit } from "./utils/ratelimit";
 import { createSingleUseStripeCode } from "./utils/stripeCodes";
 import crypto from "crypto";
@@ -184,6 +185,21 @@ export async function handleAction(
   if (!(await isTrustedOrigin())) {
     console.warn(`Blockierte Action von untrusted Origin: ${actionType}`);
     return { error: "Anfrage von nicht vertrauenswürdiger Quelle abgelehnt." };
+  }
+
+  // Bot-Schutz (Cloudflare Turnstile) nur für die öffentlich erreichbaren,
+  // missbrauchsanfälligen Einstiegspunkte - Login (Credential Stuffing),
+  // Registrierung/Magic-Link (Email-Spam) und Passwort-vergessen
+  // (Email-Spam/Enumeration). Fail-open, solange Michael die Turnstile-
+  // Keys noch nicht eingetragen hat (siehe app/utils/turnstile.ts).
+  const BOT_PROTECTED_ACTIONS = new Set(["login", "request", "forgotPassword"]);
+  if (BOT_PROTECTED_ACTIONS.has(actionType)) {
+    const turnstileToken = formData.get("turnstileToken") as string | null;
+    const h = await headers();
+    const ip = h.get("x-forwarded-for")?.split(",")[0].trim();
+    if (!(await verifyTurnstile(turnstileToken, ip))) {
+      return { error: "Bot-Verifizierung fehlgeschlagen. Bitte Seite neu laden und nochmal versuchen." };
+    }
   }
 
   // --- LOGIN MIT EMAIL + PASSWORT ---
