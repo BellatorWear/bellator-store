@@ -57,7 +57,7 @@ export default async function Page() {
 
   return (
     <div className="min-h-screen flex flex-col font-mono t-text site-bg">
-      <div className="relative z-10 flex flex-col min-h-screen t-invert">
+      <div className="relative z-10 flex flex-col min-h-screen">
         <GlobalHeader />
         <main className="flex-1 w-full max-w-[1400px] mx-auto px-4 sm:px-8 py-8">
         <div className="w-full columns-1 lg:columns-2 gap-6">

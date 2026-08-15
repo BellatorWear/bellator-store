@@ -16,7 +16,7 @@ export default async function TicketsPage() {
 
   return (
     <div className="min-h-screen flex flex-col font-mono t-text site-bg">
-      <div className="relative z-10 flex flex-col min-h-screen t-invert">
+      <div className="relative z-10 flex flex-col min-h-screen">
         <GlobalHeader />
         <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-8 py-8 sm:py-10 space-y-6">
           <div className="t-card border p-4 flex items-center justify-between gap-4 flex-wrap">

@@ -361,7 +361,7 @@ export default async function AdminPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-black text-white font-mono site-bg">
-      <div className="relative z-10 flex flex-col min-h-screen t-invert">
+      <div className="relative z-10 flex flex-col min-h-screen">
         <GlobalHeader />
         <main className="flex-1 w-full max-w-[1400px] mx-auto px-3 sm:px-6 py-8 space-y-8">
           <div className="flex justify-between items-center flex-wrap gap-3">

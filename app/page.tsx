@@ -51,7 +51,7 @@ export default async function HomePage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-black text-white font-mono site-bg">
-      <div className="relative z-10 flex flex-col min-h-screen t-invert">
+      <div className="relative z-10 flex flex-col min-h-screen">
         <GlobalHeader />
         <LandingSound />
         <PageViewTracker />

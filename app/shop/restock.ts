@@ -16,6 +16,18 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * angeben.
  */
 export async function subscribeRestock(formData: FormData): Promise<{ error?: string; success?: boolean }> {
+  // Honeypot statt vollem Turnstile-Widget: dieses kompakte Ein-Zeilen-
+  // Formular hätte durch ein sichtbares CAPTCHA-Widget deutlich an UX
+  // verloren, bei vergleichsweise geringem Missbrauchspotenzial
+  // (schlimmstenfalls ein paar verschwendete Restock-Mails, zusätzlich
+  // schon durch checkEmailRateLimit unten abgefangen). Das Feld "website"
+  // ist per CSS versteckt (siehe NotifyMeForm in ProductDetailClient.tsx)
+  // - echte Nutzer sehen und füllen es nie, einfache Bots, die
+  // Formularfelder blind ausfüllen, tappen rein.
+  if ((formData.get("website") as string)?.trim()) {
+    return { success: true }; // So tun als ob's geklappt hat, Bot nicht "warnen"
+  }
+
   const productId = Number(formData.get("productId"));
   const variantId = formData.get("variantId") ? Number(formData.get("variantId")) : null;
   if (!productId) return { error: "Ungültiges Produkt." };

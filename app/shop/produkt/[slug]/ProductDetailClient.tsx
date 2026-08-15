@@ -276,7 +276,7 @@ function NotifyMeForm({ productId, variantId }: { productId: number; variantId: 
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [err, setErr] = useState("");
 
-  async function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (state === "loading") return;
     setState("loading");
@@ -286,6 +286,11 @@ function NotifyMeForm({ productId, variantId }: { productId: number; variantId: 
       fd.append("productId", String(productId));
       if (variantId) fd.append("variantId", String(variantId));
       fd.append("email", email.trim());
+      // Honeypot-Wert mit übertragen (siehe Kommentar am Feld unten) -
+      // wird bei manuell gebautem FormData sonst nicht automatisch
+      // mitgeschickt.
+      const honeypot = new FormData(e.currentTarget).get("website");
+      fd.append("website", (honeypot as string) ?? "");
       const res = await subscribeRestock(fd);
       if (res?.error) {
         setErr(res.error);
@@ -310,6 +315,18 @@ function NotifyMeForm({ productId, variantId }: { productId: number; variantId: 
   return (
     <div className="space-y-1.5">
       <form onSubmit={submit} className="flex gap-2">
+        {/* Honeypot: für echte Nutzer per CSS unsichtbar, einfache Bots
+            füllen es trotzdem aus (siehe subscribeRestock in
+            app/shop/restock.ts). tabIndex -1 + autoComplete off, damit
+            auch Tab-Navigation und Passwortmanager es nie antasten. */}
+        <input
+          type="text"
+          name="website"
+          tabIndex={-1}
+          autoComplete="off"
+          aria-hidden="true"
+          className="absolute opacity-0 pointer-events-none w-0 h-0"
+        />
         <input
           type="email"
           value={email}

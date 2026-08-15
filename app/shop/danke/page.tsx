@@ -50,7 +50,7 @@ export default async function DankePage({
 
   return (
     <div className="min-h-screen flex flex-col bg-black text-white font-mono site-bg">
-      <div className="relative z-10 flex flex-col min-h-screen t-invert">
+      <div className="relative z-10 flex flex-col min-h-screen">
         <GlobalHeader />
         <main className="flex-1 w-full max-w-2xl mx-auto px-4 sm:px-8 py-16 md:py-24 text-center">
           <p className="text-[10px] uppercase tracking-[0.4em] text-zinc-500 mb-4">Bellator Streetwear</p>

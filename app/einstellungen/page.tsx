@@ -3,7 +3,6 @@ import GlobalHeader from "@/app/components/GlobalHeader";
 import GlobalFooter from "@/app/components/GlobalFooter";
 import { getCurrentUser } from "@/app/actions";
 import { daysUntilUsernameChangeAllowed } from "@/app/utils/username";
-import ThemeToggle from "./ThemeToggle";
 import NotificationToggle from "./NotificationToggle";
 import NewsletterToggle from "./NewsletterToggle";
 import UsernameEditor from "./UsernameEditor";
@@ -19,24 +18,13 @@ export default async function EinstellungenPage() {
 
   return (
     <div className="min-h-screen flex flex-col font-mono t-text site-bg">
-      <div className="relative z-10 flex flex-col min-h-screen t-invert">
+      <div className="relative z-10 flex flex-col min-h-screen">
         <GlobalHeader />
         <main className="flex-1 w-full max-w-[1400px] mx-auto px-4 sm:px-8 py-8">
           <div className="w-full columns-1 lg:columns-2 gap-6">
             <div className="t-card border p-4 mb-6 [column-span:all]">
               <h1 className="text-2xl font-black uppercase tracking-tighter">Einstellungen</h1>
             </div>
-
-            {/* Theme */}
-            <section className="t-card border p-4 mb-6 break-inside-avoid-column">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h2 className="text-xs font-bold uppercase tracking-widest t-muted">Erscheinungsbild</h2>
-                  <p className="text-xs t-faint mt-1">Dark / Light Mode</p>
-                </div>
-                <ThemeToggle currentTheme={user.theme ?? "dark"} />
-              </div>
-            </section>
 
             {/* Benutzername */}
             <section className="t-card border p-4 mb-6 space-y-4 break-inside-avoid-column">

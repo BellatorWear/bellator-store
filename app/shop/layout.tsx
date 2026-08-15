@@ -17,7 +17,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
           initialPushEnabled={user.pushEnabled ?? false}
         />
       )}
-      <div className="relative z-10 flex flex-col min-h-screen t-invert">
+      <div className="relative z-10 flex flex-col min-h-screen">
         <GlobalHeader />
         <main className="flex-grow">{children}</main>
         <GlobalFooter />

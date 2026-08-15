@@ -54,11 +54,11 @@ export default function HamburgerNav({
           <>
             {/* Backdrop */}
             <div
-              className="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm t-invert"
+              className="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm"
               onClick={() => setOpen(false)}
             />
             {/* Panel */}
-            <div className="fixed top-0 right-0 z-[401] h-full w-[80vw] sm:w-[340px] lg:w-[22vw] bg-black border-l border-zinc-700 flex flex-col font-mono t-invert">
+            <div className="fixed top-0 right-0 z-[401] h-full w-[80vw] sm:w-[340px] lg:w-[22vw] bg-black border-l border-zinc-700 flex flex-col font-mono">
               <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
                 <Link
                   href="/"

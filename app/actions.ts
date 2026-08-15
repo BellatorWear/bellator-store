@@ -837,28 +837,6 @@ export async function handleAction(
     return { success: true };
   }
 
-  // --- THEME SETZEN ---
-  if (actionType === "setTheme") {
-    const session = await getCurrentSession();
-    if (!session) return { error: "Nicht eingeloggt." };
-    const theme = formData.get("theme") as string;
-    if (theme !== "dark" && theme !== "light")
-      return { error: "Ungültiges Theme." };
-    await db.update(users).set({ theme }).where(eq(users.id, session.userId));
-    if (theme === "light") {
-      await awardChallengeByType(session.userId, "theme_explorer");
-    }
-    // Theme-Cookie setzen damit es beim Seitenaufruf sofort verfügbar ist
-    const cookieStore = await cookies();
-    cookieStore.set("bellator-theme", theme, {
-      maxAge: 60 * 60 * 24 * 365,
-      httpOnly: false, // Muss vom JS lesbar sein
-      path: "/",
-      sameSite: "strict",
-    });
-    return { success: true };
-  }
-
   // --- NEWSLETTER ANMELDEN/ABMELDEN (Popup + Einstellungen) ---
   if (actionType === "toggleNewsletter") {
     const session = await getCurrentSession();

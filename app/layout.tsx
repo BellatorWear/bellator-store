@@ -3,7 +3,6 @@ import "./globals.css";
 import { Providers } from "./providers";
 import CookieBanner from "./shop/components/CookieBanner";
 import GlobalSoundEffects from "./components/GlobalSoundEffects";
-import ThemeScript from "./ThemeScript";
 import { getCurrentUser } from "./actions";
 import ProfileSetupGuard from "./ProfileSetupGuard";
 import CustomValidationMessages from "./CustomValidationMessages";
@@ -91,7 +90,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
         />
-        <ThemeScript />
         <OfflineSync />
         <CustomValidationMessages />
         <Providers>{children}</Providers>

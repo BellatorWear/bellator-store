@@ -25,7 +25,7 @@ export default async function NewsletterUnsubscribePage({
 
   return (
     <div className="min-h-screen flex flex-col font-mono t-text site-bg">
-      <div className="relative z-10 flex flex-col min-h-screen t-invert items-center justify-center p-4">
+      <div className="relative z-10 flex flex-col min-h-screen items-center justify-center p-4">
         <div className="t-card border p-8 max-w-sm w-full text-center space-y-4">
           <h1 className="text-2xl font-black uppercase tracking-tighter">Bellator</h1>
           {valid ? (
