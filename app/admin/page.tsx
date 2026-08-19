@@ -32,6 +32,7 @@ import AdminDashboard, { type AdminFunctionGroup } from "./AdminDashboard";
 import { publishDueScheduledPosts } from "@/app/utils/publishScheduled";
 import { getFeatureFlags } from "@/app/utils/featureFlags";
 import FeatureFlagsConfig from "./FeatureFlagsConfig";
+import ResetChallengesButton from "./ResetChallengesButton";
 import RoleManager from "./RoleManager";
 import TeamChatAccess from "./TeamChatAccess";
 import TicketManager from "./TicketManager";
@@ -282,6 +283,13 @@ export default async function AdminPage() {
           description: "Nicht-kritische Features bei Bedarf abschalten (Lastabwurf)",
           keywords: ["feature", "flag", "kill-switch", "last", "performance", "ausfall"],
           content: <FeatureFlagsConfig initial={featureFlags} />,
+        },
+        {
+          id: "reset-challenges",
+          title: "Challenges & Punkte zurücksetzen",
+          description: "Destruktiv - alle User-Punkte, Challenges und Prämien auf null, danach automatische Neu-Prüfung",
+          keywords: ["challenges", "punkte", "reset", "zurücksetzen", "prämien", "rewards"],
+          content: <ResetChallengesButton />,
         },
       ],
     },

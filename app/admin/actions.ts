@@ -1,9 +1,9 @@
 "use server";
 import { db } from "@/db";
-import { products, productVariants, productColors, discountCodes, newsPosts, users, usernameHistory, preReleaseCodes, preReleaseRedemptions, homePosts, customRoles, productReviews } from "@/db/schema";
+import { products, productVariants, productColors, discountCodes, newsPosts, users, usernameHistory, preReleaseCodes, preReleaseRedemptions, homePosts, customRoles, productReviews, orders, userChallenges, pointTransactions, userRewards } from "@/db/schema";
 import { eq, ilike, desc } from "drizzle-orm";
 import { del, list } from "@vercel/blob";
-import { getCurrentUser } from "@/app/actions";
+import { getCurrentUser, awardChallengeByType } from "@/app/actions";
 import { sanitizeText, isSuspiciousInput, sanitizeHtml } from "@/app/utils/inputSafety";
 import { ADMIN_SECTION_IDS, type AdminSectionId, type ChatRoleAccess } from "./permissions";
 import { hasSectionAsync, canEditPostsAsync, getRoleConfig } from "./roles";
@@ -1238,4 +1238,129 @@ export async function deleteRole(formData: FormData) {
   await db.delete(customRoles).where(eq(customRoles.name, name));
   await logAuditEvent("role.delete", { targetType: "role", targetId: name });
   return { success: true };
+}
+
+// ===================================================================
+// CHALLENGES/PUNKTE/PRÄMIEN KOMPLETT ZURÜCKSETZEN
+// ===================================================================
+// Destruktiver Bulk-Vorgang auf Produktivdaten - nur erreichbar über
+// eine explizite Textbestätigung im Admin-Panel (siehe
+// ResetChallengesButton.tsx), keine versehentliche Ein-Klick-Aktion.
+//
+// WICHTIG - abgestimmt mit Michael:
+// - Prämien (user_rewards) werden MIT zurückgesetzt, nicht nur
+//   Punkte/Challenges. Bei bereits verschickten PHYSISCHEN Prämien
+//   heißt das: die Einlösung ist aus der DB weg, aber der Merch ist
+//   natürlich trotzdem real verschickt - das lässt sich nachträglich
+//   nicht synchronisieren, betrifft aber nur Prämien, die vor dem
+//   Reset eingelöst wurden.
+// - Neu-Prüfung läuft NUR für automatisch aus echten Daten ableitbare
+//   Challenges. Manuelle/einmalige Challenges (z.B. Admin-Klick
+//   "erledigt" ohne Datenspur) bleiben nach dem Reset unerledigt -
+//   sie lassen sich aus den vorhandenen Daten nicht rekonstruieren.
+// - "discord_join" ist NICHT neu prüfbar: die Mitgliedschaft wird nur
+//   einmalig live per Discord-API zum Verknüpfungszeitpunkt bestätigt,
+//   es gibt keine gespeicherte Discord-ID/Status in der DB. Betroffene
+//   Nutzer müssen sich einmal neu über Discord verknüpfen.
+//
+// Kein DB-Transaction-Wrapper möglich (Neon HTTP-Treiber unterstützt
+// keine Transaktionen) - die Operation ist aber bewusst idempotent
+// aufgebaut: ein Abbruch mittendrin und erneutes Ausführen führt zu
+// keinem inkonsistenten Zustand (Löschungen sind no-ops bei bereits
+// leeren Tabellen, awardChallengeByType() prüft selbst auf bereits
+// vergebene Challenges).
+export async function resetAllChallengesAndPoints(formData: FormData) {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Keine Berechtigung." };
+
+  const confirmation = (formData.get("confirmation") as string) ?? "";
+  if (confirmation !== "RESET BESTÄTIGEN") {
+    return { error: "Bestätigungstext stimmt nicht überein. Nichts wurde verändert." };
+  }
+
+  try {
+    // --- 1. WIPE ---
+    await db.delete(userRewards);
+    await db.delete(userChallenges);
+    await db.delete(pointTransactions);
+    await db.update(users).set({ points: 0, referralRewarded: false });
+
+    // --- 2. NEU PRÜFEN (nur automatisch ableitbare Challenges) ---
+    const allUsers = await db.select().from(users);
+    let usersProcessed = 0;
+    let pointsRestored = 0;
+
+    for (const u of allUsers) {
+      // Profil vervollständigt: Email verifiziert + Passwort gesetzt.
+      if (u.emailVerified && !u.mustSetPassword) {
+        await awardChallengeByType(u.id, "complete_profile");
+      }
+      // Unter den ersten 100 (User-ID = Beitritts-Reihenfolge).
+      if (u.id <= 100) {
+        await awardChallengeByType(u.id, "first_100");
+      }
+      // Newsletter/Push: aktueller Opt-in-Status.
+      if (u.newsletterOptIn) await awardChallengeByType(u.id, "newsletter");
+      if (u.pushEnabled) await awardChallengeByType(u.id, "push");
+
+      // Reviews: hat der User mindestens eine geschrieben.
+      const reviewRows = await db.select({ id: productReviews.id }).from(productReviews).where(eq(productReviews.userId, u.id));
+      if (reviewRows.length > 0) await awardChallengeByType(u.id, "review");
+
+      // Bestellbasierte Challenges + Punkte-Wiederherstellung: JEDE Zeile
+      // in orders ist bereits ein erfolgreich bezahlter Kauf (wird
+      // ausschließlich im Stripe-Webhook nach Zahlungsbestätigung
+      // angelegt, es gibt keinen "pending"/Warenkorb-Zwischenzustand in
+      // dieser Tabelle) - kein zusätzlicher Status-Filter nötig.
+      const userOrders = await db.select().from(orders).where(eq(orders.userId, u.id));
+      if (userOrders.length >= 1) await awardChallengeByType(u.id, "first_order");
+      if (userOrders.length >= 3) await awardChallengeByType(u.id, "repeat_customer");
+      if (userOrders.length >= 5) await awardChallengeByType(u.id, "order_5");
+      if (userOrders.length >= 10) await awardChallengeByType(u.id, "order_10");
+
+      // Punkte wiederherstellen: 10 Punkte pro Euro (siehe
+      // app/api/stripe-webhook/route.ts) - ein pointTransactions-Eintrag
+      // pro historischer Bestellung, damit die Übersicht im Profil
+      // weiterhin nachvollziehbare Einzelposten zeigt statt nur einer
+      // Sammelbuchung.
+      let userPoints = 0;
+      for (const order of userOrders) {
+        const earned = Math.floor(order.total / 10);
+        if (earned > 0) {
+          await db.insert(pointTransactions).values({
+            userId: u.id,
+            points: earned,
+            reason: `Bestellung #${order.id} — ${(order.total / 100).toFixed(2)}€ (Reset-Wiederherstellung)`,
+          });
+          userPoints += earned;
+        }
+      }
+      if (userPoints > 0) {
+        await db.update(users).set({ points: userPoints }).where(eq(users.id, u.id));
+        pointsRestored += userPoints;
+      }
+
+      // Referral: wenn der User geworben wurde UND mindestens eine
+      // Bestellung hat, bekommt der WERBENDE User die Challenge (nicht
+      // der Geworbene selbst) - gleiche Logik wie im Stripe-Webhook.
+      if (u.referredBy && userOrders.length >= 1) {
+        await awardChallengeByType(u.referredBy, "referral");
+        await db.update(users).set({ referralRewarded: true }).where(eq(users.id, u.id));
+      }
+
+      usersProcessed++;
+    }
+
+    await logAuditEvent("challenges.reset_all", {
+      details: { usersProcessed, pointsRestored },
+    });
+
+    return {
+      success: true,
+      message: `${usersProcessed} User verarbeitet, ${pointsRestored} Punkte aus Bestellhistorie wiederhergestellt. Discord-Beitritt und manuelle Challenges müssen von den betroffenen Usern erneut ausgelöst werden.`,
+    };
+  } catch (e) {
+    console.error("Reset fehlgeschlagen:", e);
+    return { error: "Fehler beim Zurücksetzen - siehe Server-Log. Teilweise Änderungen können bereits angewendet sein (Vorgang ist gefahrlos erneut ausführbar)." };
+  }
 }
