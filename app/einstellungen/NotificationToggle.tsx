@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { handleAction } from "@/app/actions";
+import { isNativeApp, registerNativePush, unregisterNativePush } from "@/app/utils/nativePush";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -23,6 +24,30 @@ export default function NotificationToggle({ initialEnabled }: { initialEnabled:
 
     try {
       if (!enabled) {
+        // In der nativen App (Capacitor) läuft ein komplett anderer Weg
+        // als im Browser - kein Service Worker/VAPID/Web-Push-API, sondern
+        // native FCM/APNs-Registrierung über @capacitor/push-notifications.
+        if (await isNativeApp()) {
+          const result = await registerNativePush();
+          if (!result.success) {
+            setMsg(result.error);
+            return;
+          }
+          const fd = new FormData();
+          fd.append("actionType", "togglePush");
+          fd.append("enable", "true");
+          fd.append("nativeToken", result.token);
+          fd.append("nativePlatform", result.platform);
+          const res = await handleAction(fd);
+          if (res?.error) {
+            setMsg(res.error);
+            return;
+          }
+          setEnabled(true);
+          setMsg("Push-Benachrichtigungen aktiviert!");
+          return;
+        }
+
         if (!window.isSecureContext) {
           setMsg("Push braucht eine sichere Verbindung (HTTPS).");
           return;
@@ -72,7 +97,9 @@ export default function NotificationToggle({ initialEnabled }: { initialEnabled:
         setEnabled(true);
         setMsg("Push-Benachrichtigungen aktiviert!");
       } else {
-        if ("serviceWorker" in navigator) {
+        if (await isNativeApp()) {
+          await unregisterNativePush();
+        } else if ("serviceWorker" in navigator) {
           const registration = await navigator.serviceWorker.getRegistration("/sw.js");
           const sub = await registration?.pushManager.getSubscription();
           if (sub) await sub.unsubscribe();

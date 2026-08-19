@@ -996,14 +996,31 @@ export async function handleAction(
 
     const enable = formData.get("enable") === "true";
     const subscriptionRaw = formData.get("subscription") as string | null;
+    // v38: native App (Capacitor) schickt statt einer Web-Push-
+    // Subscription einen FCM/APNs-Gerätetoken + Plattform - siehe
+    // app/utils/nativePush.ts und NotificationToggle.tsx.
+    const nativeToken = formData.get("nativeToken") as string | null;
+    const nativePlatform = formData.get("nativePlatform") as string | null;
 
-    await db
-      .update(users)
-      .set({
-        pushEnabled: enable,
-        pushSubscription: enable ? (subscriptionRaw ?? null) : null,
-      })
-      .where(eq(users.id, session.userId));
+    if (!enable) {
+      // Ausschalten: BEIDE Kanäle leeren, unabhängig davon welcher
+      // gerade aktiv war - ein User soll nicht über den jeweils anderen
+      // Kanal weiter Nachrichten bekommen, nur weil der falsche geleert wurde.
+      await db
+        .update(users)
+        .set({ pushEnabled: false, pushSubscription: null, nativePushToken: null, nativePushPlatform: null })
+        .where(eq(users.id, session.userId));
+    } else if (nativeToken) {
+      await db
+        .update(users)
+        .set({ pushEnabled: true, pushSubscription: null, nativePushToken: nativeToken, nativePushPlatform: nativePlatform })
+        .where(eq(users.id, session.userId));
+    } else {
+      await db
+        .update(users)
+        .set({ pushEnabled: true, pushSubscription: subscriptionRaw ?? null, nativePushToken: null, nativePushPlatform: null })
+        .where(eq(users.id, session.userId));
+    }
 
     if (enable) {
       await awardChallengeByType(session.userId, "push");

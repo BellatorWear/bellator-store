@@ -29,6 +29,10 @@ export const users = pgTable("users", {
   discountPercent: integer("discount_percent").default(0), // Rabatt in % (berechnet)
   pushSubscription: text("push_subscription"), // JSON Web Push subscription
   pushEnabled: boolean("push_enabled").default(false),
+  // v38: nativer Push-Kanal für die Capacitor-App (FCM/APNs), getrennt
+  // von der Web-Push-Subscription oben - siehe app/utils/nativePush.ts.
+  nativePushToken: text("native_push_token"),
+  nativePushPlatform: text("native_push_platform"), // 'ios' | 'android'
   newsletterOptIn: boolean("newsletter_opt_in").default(false),
   username: text("username").unique(),
   usernameChangedAt: timestamp("username_changed_at"),

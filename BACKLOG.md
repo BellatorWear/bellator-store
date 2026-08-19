@@ -10,20 +10,7 @@ Stand: nach v4.2.3 (Batch 80)
 
 ## Offen
 
-### 1. Challenges/Punkte/Einlösungen für alle User zurücksetzen und neu prüfen lassen
-Admin-Funktion: alle `user_challenges`, `point_transactions`, `user_rewards`
-zurücksetzen und die Challenge-Bedingungen für jeden User neu gegen den
-aktuellen Stand (Bestellungen, Reviews, etc.) evaluieren. Braucht sorgfältige
-Planung - ist ein destruktiver Bulk-Vorgang auf Produktivdaten, sollte mit
-Backup/Bestätigungsdialog abgesichert werden.
-
-### 2. Native Mobile Apps (iOS & Android) via React Native/Expo
-Größeres Vorhaben, eigene Codebase-Erweiterung. Bereits besprochen: PWA
-(Batch 74) deckt einen Teil des Werts bereits ab (installierbar, Offline,
-Sync), aber echte App-Store-Präsenz + volle native Push-Notifications
-(besonders iOS) bräuchte tatsächlich Capacitor oder React Native/Expo.
-Braucht eigene Entscheidung zu Aufwand/Budget (Apple Developer Program
-99$/Jahr, Google Play 25$ einmalig), bevor hier Code geschrieben wird.
+_(Keine offenen Punkte mehr aus der letzten Anforderungsliste.)_
 
 ---
 
@@ -53,3 +40,21 @@ Braucht eigene Entscheidung zu Aufwand/Budget (Apple Developer Program
   kein weiterer Handlungsbedarf. Homepage-Hero bewusst NICHT geboxt (große
   Headline-Typografie, klares Design-Statement, keine
   Lesbarkeits-Schwäche wie bei kleiner Meta-Info) — Batch 82 (v4.3.1)
+- Challenges/Punkte/Prämien-Reset für alle User im Admin-Panel, mit
+  Textbestätigung gegen Versehen. Wipe + automatische Neu-Prüfung aller
+  aus echten Daten ableitbaren Challenges (Bestellungen, Reviews,
+  Newsletter, Push, Profil-Vollständigkeit, Referral) inkl. korrekter
+  Punkte-Wiederherstellung aus der Bestellhistorie (10 Punkte/Euro).
+  Bewusst NICHT automatisch wiederherstellbar: Discord-Beitritt (keine
+  gespeicherte Discord-ID, nur einmalige Live-Prüfung beim Verknüpfen)
+  und manuelle/einmalige Challenges ohne Datenspur — Batch 83 (v4.4.0)
+- Native Mobile App (iOS & Android) via Capacitor: Remote-URL-Modus (App
+  lädt die echte, live laufende Website statt eines statischen Exports -
+  Server Actions/DB/Sessions bleiben dadurch unverändert funktionsfähig).
+  Native Push-Notifications über Firebase Cloud Messaging (getrennter
+  Kanal neben Web Push, User kann beides parallel haben). App-Icons/
+  Splash-Screen aus dem bestehenden Branding generiert.
+  MOBILE_APP_SETUP.md mit vollständiger Anleitung für den Rest (Xcode/
+  Android-Studio-Setup, Firebase-Projekt, Store-Einreichung) - die
+  Teile, die zwangsläufig auf Michaels eigenem Rechner/Account passieren
+  müssen — Batch 84 (v4.5.0)
