@@ -39,6 +39,10 @@ export default async function HomePostDetailPage({ params }: { params: Promise<{
   // direkte URL einsehbar - genau wie beim analogen Muster bei Produkten.
   if (found.length === 0 || (!found[0].published && !isAdmin)) notFound();
   const post = found[0];
+  // Einmal berechnet statt Date.now() direkt im JSX aufzurufen - sonst
+  // "impure function during render" (Date.now() liefert bei jedem Aufruf
+  // ein anderes Ergebnis, React verlangt reine Render-Funktionen).
+  const displayDate = post.createdAt ?? new Date();
 
   const contentHtml = post.bodyHtml?.trim()
     ? post.bodyHtml
@@ -49,7 +53,7 @@ export default async function HomePostDetailPage({ params }: { params: Promise<{
   return (
     <InfoPageLayout>
       <div className="max-w-3xl mx-auto">
-        <Link href="/news" className="text-[10px] uppercase tracking-widest text-zinc-500 hover:text-white transition inline-block mb-6">
+        <Link href="/news" className="text-[10px] uppercase tracking-widest text-zinc-500 hover:text-white transition inline-block mb-4">
           ← Zurück zur Übersicht
         </Link>
 
@@ -59,16 +63,18 @@ export default async function HomePostDetailPage({ params }: { params: Promise<{
           </div>
         )}
 
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-[9px] uppercase tracking-widest text-zinc-500 border border-zinc-700 px-2 py-0.5">
-            {CATEGORY_LABELS[post.category ?? "article"] ?? post.category}
-          </span>
-          <span className="text-[9px] text-zinc-600 uppercase tracking-widest">
-            {new Date(post.createdAt ?? Date.now()).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}
-          </span>
-        </div>
+        <div className="t-card border p-5 sm:p-6 mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-[9px] uppercase tracking-widest text-zinc-500 border border-zinc-700 px-2 py-0.5">
+              {CATEGORY_LABELS[post.category ?? "article"] ?? post.category}
+            </span>
+            <span className="text-[9px] text-zinc-600 uppercase tracking-widest">
+              {displayDate.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}
+            </span>
+          </div>
 
-        <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter text-white mb-6">{post.title}</h1>
+          <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter text-white">{post.title}</h1>
+        </div>
 
         {post.imageUrl && (
           <div className="w-full mb-8 border border-zinc-800">
