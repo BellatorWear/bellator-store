@@ -1,6 +1,6 @@
 {
   "name": "bellator-store",
-  "version": "4.4.0",
+  "version": "4.5.0",
   "private": true,
   "overrides": {
     "postcss": "^8.5.10",
@@ -14,9 +14,19 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "grant-admin": "node scripts/grant-admin.mjs"
+    "grant-admin": "node scripts/grant-admin.mjs",
+    "app:add-ios": "cap add ios",
+    "app:add-android": "cap add android",
+    "app:sync": "cap sync",
+    "app:assets": "capacitor-assets generate",
+    "app:open-ios": "cap open ios",
+    "app:open-android": "cap open android"
   },
   "dependencies": {
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/push-notifications": "^8.1.2",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
     "@neondatabase/serverless": "^1.1.0",
     "@types/js-cookie": "^3.0.6",
     "@upstash/ratelimit": "^2.0.8",
@@ -24,6 +34,7 @@
     "@vercel/blob": "^2.5.0",
     "bcryptjs": "^2.4.3",
     "drizzle-orm": "^0.45.2",
+    "firebase-admin": "^14.2.0",
     "js-cookie": "^3.0.8",
     "lucide-react": "^0.474.0",
     "next": "16.2.11",
@@ -39,6 +50,8 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.0",
     "@tailwindcss/postcss": "^4.3.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
@@ -46,6 +59,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/sanitize-html": "^2.16.1",
+    "@types/web-push": "^3.6.4",
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
