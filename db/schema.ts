@@ -73,6 +73,30 @@ export const users = pgTable("users", {
   phoneVerified: boolean("phone_verified").default(false),
 });
 
+// Einzeln verwaltbare Sessions (v37) - ergänzt session_version oben, das
+// bleibt der grobe "alles auf einmal invalidieren"-Hebel. Diese Tabelle
+// erlaubt zusätzlich das gezielte Einsehen/Ausloggen einzelner Geräte
+// ("Aktive Sitzungen" im Profil, siehe app/einstellungen/ActiveSessions.tsx).
+// sessionId ist zufällig generiert und steckt zusätzlich signiert im
+// Cookie selbst (siehe lib/session.ts) - der DB-Eintrag ist die einzige
+// Stelle, an der eine Session GEZIELT für ungültig erklärt werden kann,
+// ohne gleich alle anderen mit rauszuwerfen.
+export const sessions = pgTable("sessions", {
+  id: serial("id").primaryKey(),
+  sessionId: text("session_id").notNull().unique(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  // Gehashte IP (nie im Klartext) - dient dem Erkennen eines drastischen
+  // Standortwechsels, nicht der Anzeige eines konkreten Orts.
+  ipHash: text("ip_hash"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow(),
+  lastSeenAt: timestamp("last_seen_at").defaultNow(),
+  revokedAt: timestamp("revoked_at"), // null = aktiv
+}, (table) => [
+  index("idx_sessions_user_id").on(table.userId),
+  index("idx_sessions_session_id").on(table.sessionId),
+]);
+
 // Kurzlebige Codes für Email-/SMS-2FA (Setup UND Login) - TOTP braucht
 // das nicht, da gegen das geteilte Secret zeitbasiert verifiziert wird.
 export const mfaChallenges = pgTable("mfa_challenges", {

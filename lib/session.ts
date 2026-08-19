@@ -42,6 +42,11 @@ export type SessionPayload = {
   email: string;
   iat: number; // issued at, ms since epoch
   sessionVersion: number;
+  // v37: eindeutige Session-ID (auch in der sessions-Tabelle gespeichert).
+  // Erlaubt, GENAU diese eine Session gezielt zu widerrufen (siehe
+  // "Aktive Sitzungen"), ohne wie sessionVersion gleich alle Sessions
+  // des Users auf einmal zu invalidieren.
+  sessionId: string;
 };
 
 function sign(payloadB64: string): string {
@@ -51,8 +56,8 @@ function sign(payloadB64: string): string {
     .digest("base64url");
 }
 
-export function createSessionToken(userId: number, email: string, sessionVersion: number): string {
-  const payload: SessionPayload = { userId, email, iat: Date.now(), sessionVersion };
+export function createSessionToken(userId: number, email: string, sessionVersion: number, sessionId: string): string {
+  const payload: SessionPayload = { userId, email, iat: Date.now(), sessionVersion, sessionId };
   const payloadB64 = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const signature = sign(payloadB64);
   return `${payloadB64}.${signature}`;
@@ -87,7 +92,8 @@ export function verifySessionToken(
       typeof payload.userId !== "number" ||
       typeof payload.email !== "string" ||
       typeof payload.iat !== "number" ||
-      typeof payload.sessionVersion !== "number"
+      typeof payload.sessionVersion !== "number" ||
+      typeof payload.sessionId !== "string"
     ) {
       return null;
     }

@@ -9,7 +9,7 @@ import { cookies } from "next/headers";
 import { getCurrentUser } from "@/app/actions";
 import { isTrustedOrigin } from "@/app/utils/origin";
 import { checkMfaVerifyRateLimit } from "@/app/utils/ratelimit";
-import { createSessionToken, SESSION_COOKIE_NAME, sessionCookieOptions } from "@/lib/session";
+import { createUserSession } from "@/app/utils/createUserSession";
 import {
   generateTotpSecret,
   totpKeyUri,
@@ -167,8 +167,7 @@ export async function verifyMfaLogin(formData: FormData): Promise<{ error?: stri
   if (!valid) return { error: "Code ungültig." };
 
   // Echte Session erst jetzt, nach bestandener 2FA.
-  const token = createSessionToken(user.id, user.email, user.sessionVersion ?? 0);
-  cookieStore.set(SESSION_COOKIE_NAME, token, sessionCookieOptions());
+  await createUserSession(user.id, user.email, user.sessionVersion ?? 0);
   cookieStore.delete(MFA_PENDING_COOKIE);
 
   return { success: true };

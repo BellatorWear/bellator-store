@@ -2,12 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { emailVerifications, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { cookies } from "next/headers";
-import {
-  createSessionToken,
-  SESSION_COOKIE_NAME,
-  sessionCookieOptions,
-} from "@/lib/session";
+import { createUserSession } from "@/app/utils/createUserSession";
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
@@ -64,9 +59,7 @@ export async function GET(req: NextRequest) {
 
   // Signierte Session setzen (statt eines unsignierten "authorized"-Strings,
   // der von jedem Browser selbst gesetzt werden konnte)
-  const cookieStore = await cookies();
-  const sessionToken = createSessionToken(user.id, user.email, user.sessionVersion ?? 0);
-  cookieStore.set(SESSION_COOKIE_NAME, sessionToken, sessionCookieOptions());
+  await createUserSession(user.id, user.email, user.sessionVersion ?? 0);
 
   return NextResponse.json({
     success: true,

@@ -8,6 +8,8 @@ import { eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { canAccessTicket, TICKET_CATEGORIES, type TicketCategory } from "./lib";
 import { logAuditEvent } from "@/app/utils/auditLog";
+import { verifyTurnstile } from "@/app/utils/turnstile";
+import { headers } from "next/headers";
 
 type TicketAttachment = { url: string; name: string; type: string };
 
@@ -26,6 +28,21 @@ export async function createTicket(formData: FormData): Promise<void> {
     console.error(
       "Ticket-Erstellung fehlgeschlagen: Benutzer nicht eingeloggt.",
     );
+    return;
+  }
+
+  // Bot-Schutz: Ticket-Erstellung verschickt Support-Benachrichtigungen
+  // und erzeugt Arbeitsaufwand fürs Team - auch für eingeloggte User
+  // relevant, falls ein Account kompromittiert wurde oder ein Bot sich
+  // selbst registriert hat (Registrierung ist bereits per Turnstile
+  // geschützt, das hier ist eine zusätzliche Schicht direkt am
+  // Aktions-Punkt). Silent-Fail statt Fehlermeldung, konsistent mit den
+  // bestehenden Validierungen weiter unten in dieser Funktion.
+  const turnstileToken = formData.get("turnstileToken") as string | null;
+  const h = await headers();
+  const ip = h.get("x-forwarded-for")?.split(",")[0].trim();
+  if (!(await verifyTurnstile(turnstileToken, ip))) {
+    console.error("Ticket-Erstellung fehlgeschlagen: Bot-Verifizierung nicht bestanden.");
     return;
   }
 

@@ -7,6 +7,7 @@ import { createTicket } from "./actions";
 import GlobalHeader from "@/app/components/GlobalHeader";
 import GlobalFooter from "@/app/components/GlobalFooter";
 import AttachmentPickerWithPreview from "@/app/components/AttachmentPickerWithPreview";
+import TurnstileHiddenField from "@/app/components/TurnstileHiddenField";
 
 export default async function TicketsPage() {
   const user = await getCurrentUser();
@@ -92,6 +93,7 @@ export default async function TicketsPage() {
                 Als <span className="text-red-500 font-bold">wichtig</span> markieren (dringend, blockierend o.ä.)
               </span>
             </label>
+            <TurnstileHiddenField />
             <button
               type="submit"
               className="t-btn-primary px-5 py-2.5 text-xs uppercase tracking-widest font-black transition-all duration-200 active:scale-[0.97]"

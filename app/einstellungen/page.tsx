@@ -10,6 +10,7 @@ import Link from "next/link";
 import ChangePasswordForm from "@/app/profil/ChangePasswordForm";
 import MfaSettings from "./MfaSettings";
 import GdprExportButton from "./GdprExportButton";
+import ActiveSessions from "./ActiveSessions";
 
 export default async function EinstellungenPage() {
   const user = await getCurrentUser();
@@ -45,6 +46,15 @@ export default async function EinstellungenPage() {
             <section className="t-card border p-4 mb-6 space-y-4 break-inside-avoid-column">
               <h2 className="text-xs font-bold uppercase tracking-widest t-muted">Zwei-Faktor-Authentifizierung</h2>
               <MfaSettings mfaEnabled={user.mfaEnabled} />
+            </section>
+
+            {/* Aktive Sitzungen */}
+            <section className="t-card border p-4 mb-6 space-y-4 break-inside-avoid-column">
+              <div>
+                <h2 className="text-xs font-bold uppercase tracking-widest t-muted">Aktive Sitzungen</h2>
+                <p className="text-xs t-faint mt-1">Geräte, auf denen du aktuell eingeloggt bist</p>
+              </div>
+              <ActiveSessions />
             </section>
 
             {/* Push */}

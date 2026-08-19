@@ -18,8 +18,9 @@ import {
   preReleaseCodes,
   preReleaseRedemptions,
   passwordResetTokens,
+  sessions,
 } from "@/db/schema";
-import { eq, and, sql, gte } from "drizzle-orm";
+import { eq, and, sql, gte, desc, ne, isNull } from "drizzle-orm";
 import { sanitizeText, isSuspiciousInput } from "./utils/inputSafety";
 import { USERNAME_RE, daysUntilUsernameChangeAllowed } from "./utils/username";
 import { isTrustedOrigin } from "./utils/origin";
@@ -31,11 +32,11 @@ import { createSingleUseStripeCode } from "./utils/stripeCodes";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import {
-  createSessionToken,
   verifySessionToken,
   SESSION_COOKIE_NAME,
-  sessionCookieOptions,
 } from "@/lib/session";
+import { createUserSession } from "./utils/createUserSession";
+import { parseUserAgent } from "./utils/userAgent";
 import { createMfaPendingToken } from "@/lib/mfa";
 
 type ActionResponse = {
@@ -49,6 +50,13 @@ type ActionResponse = {
   message?: string;
   alreadyRegistered?: boolean;
   mfaRequired?: boolean;
+  sessions?: {
+    sessionId: string;
+    userAgent: string | null;
+    createdAt: Date | null;
+    lastSeenAt: Date | null;
+    isCurrent: boolean;
+  }[];
 };
 
 // Liest die aktuell eingeloggte, verifizierte Session aus dem Cookie.
@@ -61,9 +69,7 @@ async function getCurrentSession() {
 }
 
 async function setSessionCookie(userId: number, email: string, sessionVersion: number) {
-  const cookieStore = await cookies();
-  const token = createSessionToken(userId, email, sessionVersion);
-  cookieStore.set(SESSION_COOKIE_NAME, token, sessionCookieOptions());
+  await createUserSession(userId, email, sessionVersion);
 }
 
 // Für Server Components (z.B. Profilseite), um den eingeloggten User sicher
@@ -84,6 +90,48 @@ export async function getCurrentUser() {
   // zwischenzeitlich gesperrt wurde) -> nicht mehr gültig, obwohl die
   // Signatur technisch noch stimmt und das Ablaufdatum noch nicht erreicht ist.
   if (session.sessionVersion !== (user.sessionVersion ?? 0)) return null;
+
+  // v37: zusätzlich GEZIELT prüfen, ob genau DIESE Session (per sessionId)
+  // noch existiert und nicht widerrufen wurde - das ist der Hebel für
+  // "Aktive Sitzungen" -> "Dieses Gerät ausloggen", ohne alle anderen
+  // Sessions des Users mit zu invalidieren.
+  const [sessionRow] = await db.select().from(sessions).where(eq(sessions.sessionId, session.sessionId));
+  if (!sessionRow || sessionRow.revokedAt) return null;
+
+  // Automatischer Kill bei komplett anderem Browser/Betriebssystem als
+  // beim Session-Erstellen - starkes Signal für ein gestohlenes Cookie
+  // (z.B. per bösartiger Browser-Extension exfiltriert und woanders
+  // wiederverwendet). BEWUSST NICHT bei reinem IP-Wechsel: IPs wechseln
+  // bei normalen Nutzern ständig (Mobilfunknetz, Home-WLAN, VPN) - ein
+  // stures "IP anders -> Session tot" würde ständig echte Nutzer
+  // aussperren. Die IP wird trotzdem gehasht gespeichert, aber nur zur
+  // Anzeige/manuellen Prüfung in "Aktive Sitzungen", nicht als
+  // Auto-Kill-Kriterium.
+  //
+  // Vergleich läuft über parseUserAgent() (grobe Browser+OS-Kategorie),
+  // NICHT über exakten String-Vergleich: Browser wie Chrome ändern ihre
+  // UA-Versionsnummer bei jedem Auto-Update, ein 1:1-String-Vergleich
+  // würde völlig normale Nutzer bei jedem Browser-Update aussperren.
+  const currentUserAgent = (await headers()).get("user-agent") ?? null;
+  if (
+    sessionRow.userAgent &&
+    currentUserAgent &&
+    parseUserAgent(sessionRow.userAgent) !== parseUserAgent(currentUserAgent)
+  ) {
+    await db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.id, sessionRow.id));
+    console.warn(`[session] Auto-Invalidierung wegen Browser/OS-Wechsel: user=${user.id} session=${sessionRow.sessionId}`);
+    return null;
+  }
+
+  // lastSeenAt nur throttled aktualisieren (nicht bei jedem einzelnen
+  // Request schreiben) - reicht für die "zuletzt aktiv"-Anzeige locker,
+  // spart aber die meisten Schreib-Requests.
+  const lastSeen = sessionRow.lastSeenAt ? new Date(sessionRow.lastSeenAt).getTime() : 0;
+  if (Date.now() - lastSeen > 5 * 60 * 1000) {
+    db.update(sessions).set({ lastSeenAt: new Date() }).where(eq(sessions.id, sessionRow.id)).catch((e) => {
+      console.error("lastSeenAt-Update fehlgeschlagen:", e);
+    });
+  }
 
   // Passwort-Hash niemals an den Client geben
   return {
@@ -738,8 +786,64 @@ export async function handleAction(
 
   // --- LOGOUT ---
   if (actionType === "logout") {
+    const session = await getCurrentSession();
     const cookieStore = await cookies();
     cookieStore.delete(SESSION_COOKIE_NAME);
+    // v37: auch die DB-Session-Zeile widerrufen, nicht nur das Cookie
+    // löschen - sonst würde "Aktive Sitzungen" dieses Gerät fälschlich
+    // noch als aktiv anzeigen, bis es über session_version mit-invalidiert wird.
+    if (session) {
+      await db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.sessionId, session.sessionId));
+    }
+    return { success: true };
+  }
+
+  // --- AKTIVE SITZUNGEN ---
+  if (actionType === "getActiveSessions") {
+    const session = await getCurrentSession();
+    if (!session) return { error: "Nicht eingeloggt." };
+    const rows = await db
+      .select()
+      .from(sessions)
+      .where(and(eq(sessions.userId, session.userId), isNull(sessions.revokedAt)))
+      .orderBy(desc(sessions.lastSeenAt));
+    return {
+      success: true,
+      sessions: rows.map((s) => ({
+        sessionId: s.sessionId,
+        userAgent: s.userAgent,
+        createdAt: s.createdAt,
+        lastSeenAt: s.lastSeenAt,
+        isCurrent: s.sessionId === session.sessionId,
+      })),
+    };
+  }
+
+  if (actionType === "revokeSession") {
+    const session = await getCurrentSession();
+    if (!session) return { error: "Nicht eingeloggt." };
+    const targetSessionId = formData.get("sessionId") as string;
+    if (!targetSessionId) return { error: "Ungültig." };
+    // WHERE userId = eigene ID: verhindert, dass man per manipulierter
+    // sessionId fremde Sessions widerruft, nicht nur die eigenen.
+    await db
+      .update(sessions)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(sessions.sessionId, targetSessionId), eq(sessions.userId, session.userId)));
+    return { success: true };
+  }
+
+  if (actionType === "revokeAllOtherSessions") {
+    const session = await getCurrentSession();
+    if (!session) return { error: "Nicht eingeloggt." };
+    await db
+      .update(sessions)
+      .set({ revokedAt: new Date() })
+      .where(and(
+        eq(sessions.userId, session.userId),
+        ne(sessions.sessionId, session.sessionId),
+        isNull(sessions.revokedAt),
+      ));
     return { success: true };
   }
 

@@ -10,7 +10,21 @@ Stand: nach v4.2.3 (Batch 80)
 
 ## Offen
 
-### 1. Native Mobile Apps (iOS & Android) via React Native/Expo
+### 1. Frei schwebender Text bekommt eine Box (Lesbarkeit)
+Beispiel: "← Zurück zur Übersicht" + Artikel-Metadaten (Datum, Titel) auf
+`app/post/[id]/page.tsx` und ähnlich auf `app/shop/produkt/[slug]/
+ProductDetailClient.tsx` ("← Zurück zum Shop") - liegt aktuell ohne
+Hintergrund-Box direkt auf dem Seitenhintergrund. Soll überall im Projekt
+geprüft werden, nicht nur an den zwei genannten Stellen.
+
+### 2. Challenges/Punkte/Einlösungen für alle User zurücksetzen und neu prüfen lassen
+Admin-Funktion: alle `user_challenges`, `point_transactions`, `user_rewards`
+zurücksetzen und die Challenge-Bedingungen für jeden User neu gegen den
+aktuellen Stand (Bestellungen, Reviews, etc.) evaluieren. Braucht sorgfältige
+Planung - ist ein destruktiver Bulk-Vorgang auf Produktivdaten, sollte mit
+Backup/Bestätigungsdialog abgesichert werden.
+
+### 3. Native Mobile Apps (iOS & Android) via React Native/Expo
 Größeres Vorhaben, eigene Codebase-Erweiterung. Bereits besprochen: PWA
 (Batch 74) deckt einen Teil des Werts bereits ab (installierbar, Offline,
 Sync), aber echte App-Store-Präsenz + volle native Push-Notifications
@@ -39,18 +53,3 @@ Braucht eigene Entscheidung zu Aufwand/Budget (Apple Developer Program
 - CAPTCHA auf Ticket-Erstellung ausgeweitet. Bewusst NICHT auf Chat
   (bereits login-pflichtig + eigenes Rate-Limiting pro Nachricht, CAPTCHA
   pro Chat-Nachricht wäre unpraktikable UX) — Batch 81 (v4.3.0)
-- Frei schwebender Text bekommt Box: Artikel-Seite (Breadcrumb + Kategorie/
-  Datum + Titel) gefixt. Alle anderen "Zurück"-Links/Seiten im Projekt
-  systematisch geprüft (Produktseite, Belege, Tickets, Login-Varianten,
-  Admin, News-Karten, Challenges) - hatten bereits Border/Hintergrund,
-  kein weiterer Handlungsbedarf. Homepage-Hero bewusst NICHT geboxt (große
-  Headline-Typografie, klares Design-Statement, keine
-  Lesbarkeits-Schwäche wie bei kleiner Meta-Info) — Batch 82 (v4.3.1)
-- Challenges/Punkte/Prämien-Reset für alle User im Admin-Panel, mit
-  Textbestätigung gegen Versehen. Wipe + automatische Neu-Prüfung aller
-  aus echten Daten ableitbaren Challenges (Bestellungen, Reviews,
-  Newsletter, Push, Profil-Vollständigkeit, Referral) inkl. korrekter
-  Punkte-Wiederherstellung aus der Bestellhistorie (10 Punkte/Euro).
-  Bewusst NICHT automatisch wiederherstellbar: Discord-Beitritt (keine
-  gespeicherte Discord-ID, nur einmalige Live-Prüfung beim Verknüpfen)
-  und manuelle/einmalige Challenges ohne Datenspur — Batch 83 (v4.4.0)
